@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/aiGateway";
 
+const AI_GATEWAY_URL =
+  process.env.AI_GATEWAY_URL ||
+  "https://ai-gateway20251125.up.railway.app";
+
+// TODO: Gateway에 /api/ai/image 추가 후 활성화
+// → AI_IMAGE_GENERATION_REQUEST.md 참조
+const USE_IMAGE_GENERATION = false;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -12,6 +20,35 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // ─── 이미지 생성 모드 (Gateway 준비 후 USE_IMAGE_GENERATION = true) ───
+    if (USE_IMAGE_GENERATION) {
+      const kw = keywords.length > 0 ? keywords.join(", ") : "peaceful";
+      const prompt = `A serene ${kw} landscape, spiritual atmosphere, suitable for text overlay, Bible verse card background, 4:5 portrait orientation`;
+
+      const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt,
+          size: "1080x1350",
+          style: "natural",
+          caller: "yebom-card:background",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        return NextResponse.json({
+          type: "image",
+          url: data.url || data.data,
+          provider: data.provider,
+        });
+      }
+      // 이미지 생성 실패 → gradient fallback
+    }
+
+    // ─── Gradient fallback (현재 기본 모드) ───
 
     const kw = keywords.length > 0 ? keywords.join(",") : "";
 

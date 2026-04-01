@@ -37,7 +37,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
   const [selectedFont, setSelectedFont] = useState<FontChoice>("gowun-dodum");
   const [gradient, setGradient] = useState<GradientPreset | null>(null);
-  const [photo, setPhoto] = useState<UnsplashImage | null>(null);
+  const [photos, setPhotos] = useState<UnsplashImage[]>([]);
+  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [aiBackground, setAiBackground] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -88,19 +89,19 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     setGradient(findGradient(koreanText));
   }, [koreanText]);
 
-  // 2. Unsplash
+  // 2. Unsplash — 5장 로드
   useEffect(() => {
-    if (activeCard !== "photo" || photo) return;
-    async function loadPhoto() {
+    if (activeCard !== "photo" || photos.length > 0) return;
+    async function loadPhotos() {
       setPhotoLoading(true);
       try {
         const query = getUnsplashQuery(keywords);
         const res = await fetch(
-          `/api/unsplash?query=${encodeURIComponent(query)}&per_page=1`
+          `/api/unsplash?query=${encodeURIComponent(query)}&per_page=5`
         );
         if (res.ok) {
           const data = await res.json();
-          if (data.length > 0) setPhoto(data[0]);
+          if (data.length > 0) setPhotos(data);
         }
       } catch {
         /* silent */
@@ -108,8 +109,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         setPhotoLoading(false);
       }
     }
-    loadPhoto();
-  }, [activeCard, photo, keywords]);
+    loadPhotos();
+  }, [activeCard, photos.length, keywords]);
 
   // 3. AI Background
   useEffect(() => {
@@ -144,9 +145,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     cardStyle = { background: gradient.gradient };
     textColorClass =
       gradient.textColor === "dark" ? "text-gray-900" : "text-white";
-  } else if (activeCard === "photo" && photo) {
+  } else if (activeCard === "photo" && photos.length > 0) {
+    const selectedPhoto = photos[selectedPhotoIdx];
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url(${photo.url})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url(${selectedPhoto.url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -155,12 +157,12 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       <span className="text-[9px] opacity-50">
         Photo by{" "}
         <a
-          href={photo.credit.profileUrl}
+          href={selectedPhoto.credit.profileUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="underline"
         >
-          {photo.credit.name}
+          {selectedPhoto.credit.name}
         </a>{" "}
         on Unsplash
       </span>
@@ -308,6 +310,25 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         <p className="text-center text-xs text-gray-400 mt-2">
           &ldquo;{aiBackground.name}&rdquo;
         </p>
+      )}
+
+      {/* Photo thumbnails */}
+      {activeCard === "photo" && photos.length > 1 && (
+        <div className="flex gap-2 mt-3 justify-center">
+          {photos.map((p, i) => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedPhotoIdx(i)}
+              className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+                i === selectedPhotoIdx
+                  ? "border-gray-900 scale-105"
+                  : "border-transparent opacity-60 hover:opacity-80"
+              }`}
+            >
+              <img src={p.url} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
       )}
 
       {/* Font selector */}
