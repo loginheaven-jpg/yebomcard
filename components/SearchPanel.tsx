@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
-import type { BibleVerse, BibleVersion, SearchMode } from "@/lib/types";
+import type { BibleVerse, BibleVersion, SearchMode, AIRecommendation } from "@/lib/types";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
@@ -50,6 +50,13 @@ export default function SearchPanel({
   const [wordResults, setWordResults] = useState<BibleVerse[]>([]);
   const [wordLoading, setWordLoading] = useState(false);
   const [wordError, setWordError] = useState("");
+
+  // Topic recommendation state (AI)
+  const [topicInput, setTopicInput] = useState("");
+  const [topicRecommendations, setTopicRecommendations] = useState<AIRecommendation[]>([]);
+  const [topicResults, setTopicResults] = useState<BibleVerse[]>([]);
+  const [topicLoading, setTopicLoading] = useState(false);
+  const [topicError, setTopicError] = useState("");
 
   // ─── 말씀 찾기 (Reference search) ───
   const searchReference = useCallback(async () => {
@@ -222,6 +229,70 @@ export default function SearchPanel({
     }
   }, [wordInput, version]);
 
+  // ─── 주제 추천 (AI topic recommendation) ───
+  const searchTopic = useCallback(async () => {
+    const trimmed = topicInput.trim();
+    if (trimmed.length < 1) {
+      setTopicError("주제를 입력해주세요 (예: 감사, 위로, 결혼)");
+      return;
+    }
+
+    setTopicError("");
+    setTopicLoading(true);
+    setTopicRecommendations([]);
+    setTopicResults([]);
+
+    try {
+      // 1. AI에게 추천 요청
+      const aiRes = await fetch("/api/ai/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: trimmed, version }),
+      });
+
+      if (!aiRes.ok) {
+        const err = await aiRes.json().catch(() => ({ error: "Unknown" }));
+        setTopicError(err.error || "AI 추천 실패");
+        setTopicLoading(false);
+        return;
+      }
+
+      const { recommendations } = (await aiRes.json()) as {
+        recommendations: AIRecommendation[];
+      };
+      setTopicRecommendations(recommendations);
+
+      // 2. 추천된 구절을 DB에서 실제 조회
+      const versePromises = recommendations.map((rec) =>
+        supabase
+          .from("bible_verses")
+          .select("*")
+          .eq("version", version)
+          .eq("book_name", rec.book)
+          .eq("chapter", rec.chapter)
+          .eq("verse", rec.verse)
+          .single()
+      );
+      const verseResults = await Promise.all(versePromises);
+
+      const found: BibleVerse[] = [];
+      for (const res of verseResults) {
+        if (res.data) {
+          found.push(res.data as BibleVerse);
+        }
+      }
+
+      setTopicResults(found);
+      if (found.length === 0) {
+        setTopicError("추천된 구절을 DB에서 찾을 수 없습니다");
+      }
+    } catch {
+      setTopicError("AI 추천 중 오류가 발생했습니다");
+    } finally {
+      setTopicLoading(false);
+    }
+  }, [topicInput, version]);
+
   // ─── Shared: verse item renderer ───
   function VerseItem({
     verse,
@@ -317,7 +388,7 @@ export default function SearchPanel({
         </button>
       </div>
 
-      {/* 3 Tabs */}
+      {/* 4 Tabs */}
       <div className="flex border-b border-gray-200 mb-4">
         <button onClick={() => setMode("reference")} className={tabClass("reference")}>
           말씀 찾기
@@ -327,6 +398,9 @@ export default function SearchPanel({
         </button>
         <button onClick={() => setMode("word")} className={tabClass("word")}>
           단어 검색
+        </button>
+        <button onClick={() => setMode("topic")} className={tabClass("topic")}>
+          주제 추천
         </button>
       </div>
 
@@ -466,6 +540,84 @@ export default function SearchPanel({
                 {wordResults.length >= 50 && " (최대 50건)"}
               </p>
             </>
+          )}
+        </div>
+      )}
+
+      {/* ─── Tab 4: 주제 추천 (AI) ─── */}
+      {mode === "topic" && (
+        <div>
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              value={topicInput}
+              onChange={(e) => setTopicInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && searchTopic()}
+              placeholder="감사, 위로, 결혼, 장례, 새해 ..."
+              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+              onClick={searchTopic}
+              disabled={topicLoading}
+              className="px-5 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors"
+            >
+              {topicLoading ? (
+                <span className="flex items-center gap-1.5">
+                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  AI
+                </span>
+              ) : (
+                "AI 추천"
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            AI가 주제에 맞는 성경 구절을 추천합니다
+          </p>
+
+          {topicError && (
+            <p className="text-sm text-red-500 mb-3 text-center">
+              {topicError}
+            </p>
+          )}
+
+          {topicLoading && (
+            <div className="p-8 text-center">
+              <div className="inline-flex items-center gap-2 text-violet-600 text-sm">
+                <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                AI가 말씀을 찾고 있습니다...
+              </div>
+            </div>
+          )}
+
+          {topicResults.length > 0 && (
+            <>
+              <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+                {topicResults.map((v) => (
+                  <VerseItem key={v.id} verse={v} showBookInfo />
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                AI 추천 {topicResults.length}건
+              </p>
+            </>
+          )}
+
+          {!topicLoading && topicRecommendations.length > 0 && topicResults.length === 0 && !topicError && (
+            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+              <p className="text-sm text-amber-700 mb-2">AI가 추천했지만 DB에서 찾지 못한 구절:</p>
+              {topicRecommendations.map((rec, i) => (
+                <p key={i} className="text-xs text-amber-600">
+                  {rec.book} {rec.chapter}:{rec.verse} — {rec.preview}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       )}

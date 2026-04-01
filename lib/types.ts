@@ -16,8 +16,15 @@ export interface BilingualVerse {
   english: BibleVerse | null;
 }
 
-export type SearchMode = "reference" | "chapter" | "word";
+export type SearchMode = "reference" | "chapter" | "word" | "topic";
 
 export type BibleVersion = "nkrv" | "rnksv";
 
 export type ViewMode = "search" | "display";
+
+export interface AIRecommendation {
+  book: string;
+  chapter: number;
+  verse: number;
+  preview: string;
+}
