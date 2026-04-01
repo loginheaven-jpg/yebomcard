@@ -252,7 +252,7 @@ export default function SearchPanel({
 
       if (!aiRes.ok) {
         const err = await aiRes.json().catch(() => ({ error: "Unknown" }));
-        setTopicError(err.error || "AI 추천 실패");
+        setTopicError(err.error || "추천 실패");
         setTopicLoading(false);
         return;
       }
@@ -287,7 +287,7 @@ export default function SearchPanel({
         setTopicError("추천된 구절을 DB에서 찾을 수 없습니다");
       }
     } catch {
-      setTopicError("AI 추천 중 오류가 발생했습니다");
+      setTopicError("추천 중 오류가 발생했습니다");
     } finally {
       setTopicLoading(false);
     }
@@ -567,15 +567,15 @@ export default function SearchPanel({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  AI
+                  ...
                 </span>
               ) : (
-                "AI 추천"
+                "추천"
               )}
             </button>
           </div>
           <p className="text-xs text-gray-400 mb-3">
-            AI가 주제에 맞는 성경 구절을 추천합니다
+            주제에 맞는 성경 구절을 추천합니다
           </p>
 
           {topicError && (
@@ -591,7 +591,7 @@ export default function SearchPanel({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                AI가 말씀을 찾고 있습니다...
+                말씀을 찾고 있습니다...
               </div>
             </div>
           )}
@@ -604,14 +604,14 @@ export default function SearchPanel({
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-2 text-center">
-                AI 추천 {topicResults.length}건
+                추천 {topicResults.length}건
               </p>
             </>
           )}
 
           {!topicLoading && topicRecommendations.length > 0 && topicResults.length === 0 && !topicError && (
             <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-              <p className="text-sm text-amber-700 mb-2">AI가 추천했지만 DB에서 찾지 못한 구절:</p>
+              <p className="text-sm text-amber-700 mb-2">추천되었지만 DB에서 찾지 못한 구절:</p>
               {topicRecommendations.map((rec, i) => (
                 <p key={i} className="text-xs text-amber-600">
                   {rec.book} {rec.chapter}:{rec.verse} — {rec.preview}

@@ -205,7 +205,7 @@ export default function VerseDisplay({
 
         <button
           onClick={onAddMore}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -243,10 +243,10 @@ export default function VerseDisplay({
               {group.verses.map((v, vi) => (
                 <span key={v.id} className="group/verse relative">
                   {vi > 0 && " "}
-                  <sup className="text-xs text-indigo-400 mr-0.5">
+                  <sup className="text-xs text-gray-400 mr-0.5">
                     {v.verse}
                   </sup>
-                  <span className="hover:bg-red-50 rounded cursor-pointer transition-colors"
+                  <span className="hover:bg-gray-100 rounded cursor-pointer transition-colors"
                     onClick={() => onRemoveVerse(v)}
                     title="클릭하면 제거"
                   >
@@ -255,7 +255,7 @@ export default function VerseDisplay({
                 </span>
               ))}
             </blockquote>
-            <p className="text-sm text-indigo-600 font-medium mb-6">
+            <p className="text-sm text-gray-500 font-medium mb-6">
               {koreanRef}
             </p>
 
