@@ -31,7 +31,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-sans-kr);
+  --font-sans: var(--font-gothic-a1);
   --font-serif: var(--font-noto-serif-kr);
   --font-display: var(--font-playfair);
 
