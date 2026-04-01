@@ -733,6 +733,31 @@ yebom-card/
 
 ---
 
+## 12. 업그레이드 검토사항
+
+향후 구현을 검토 중인 기능. 우선순위와 타이밍은 별도 결정.
+
+### 12.1 AI 추천 피드백 루프 — 선택 히스토리 기반 추천 품질 향상
+
+**개요**: "주제 추천" 탭에서 사용자가 선택한 구절을 저장하여, 같은 주제 재검색 시 AI 프롬프트에 "이전에 많이 선택된 구절" 힌트를 제공 → 추천 정확도 점진적 향상.
+
+**구현 방향**:
+
+1. **Supabase 테이블**: `topic_verse_stats` (topic, book_code, chapter, verse, count, updated_at)
+   - UNIQUE (topic, book_code, chapter, verse)
+   - RLS: SELECT public (기존 정책 유지)
+
+2. **RPC 함수**: `increment_topic_stat` — `SECURITY DEFINER`로 anon 사용자의 직접 INSERT 차단, 함수 호출만 허용
+   - ON CONFLICT DO UPDATE SET count = count + 1
+
+3. **API Route**: `/api/ai/track` (POST) — 선택 기록 저장 (RPC 호출)
+
+4. **프롬프트 힌트**: `/api/ai/recommend`에서 응답 전 인기 구절 조회 → "이전에 사용자들이 많이 선택한 구절: 시편 100:4, 골로새서 3:15 (참고만)" 형태로 프롬프트에 포함
+
+**규모**: API Route 1개, Supabase 테이블 1개, RPC 함수 1개, recommend 프롬프트 수정. 소규모 작업.
+
+---
+
 ## 변경 이력
 
 | 버전 | 일자 | 변경 내용 |

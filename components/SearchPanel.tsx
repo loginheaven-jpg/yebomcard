@@ -252,7 +252,7 @@ export default function SearchPanel({
 
       if (!aiRes.ok) {
         const err = await aiRes.json().catch(() => ({ error: "Unknown" }));
-        setTopicError(err.error || "AI 추천 실패");
+        setTopicError(err.error || "추천 실패");
         setTopicLoading(false);
         return;
       }
@@ -287,7 +287,7 @@ export default function SearchPanel({
         setTopicError("추천된 구절을 DB에서 찾을 수 없습니다");
       }
     } catch {
-      setTopicError("AI 추천 중 오류가 발생했습니다");
+      setTopicError("추천 중 오류가 발생했습니다");
     } finally {
       setTopicLoading(false);
     }
@@ -305,29 +305,29 @@ export default function SearchPanel({
     return (
       <button
         onClick={() => onToggleVerse(verse)}
-        className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
+        className={`w-full text-left px-4 py-3 border-b border-[var(--color-border)] last:border-b-0 transition-colors ${
           selected
-            ? "bg-indigo-100 border-l-4 border-l-indigo-500"
-            : "hover:bg-gray-50"
+            ? "bg-[var(--color-accent-bg)] border-l-4 border-l-[var(--color-accent)]"
+            : "hover:bg-[var(--bg-warm)]"
         }`}
       >
         {showBookInfo && (
-          <div className="text-indigo-600 font-semibold text-xs mb-1">
+          <div className="text-[var(--color-accent)] font-semibold text-xs mb-1">
             {verse.book_name} {verse.chapter}:{verse.verse}
           </div>
         )}
         {!showBookInfo && (
           <span
-            className={`font-semibold text-sm mr-2 ${selected ? "text-indigo-700" : "text-indigo-500"}`}
+            className={`font-semibold text-sm mr-2 ${selected ? "text-[var(--color-accent)]" : "text-[var(--color-accent-soft)]"}`}
           >
             {verse.verse}절
           </span>
         )}
-        <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+        <span className={`text-sm ${selected ? "text-[var(--color-text)]" : "text-[var(--color-text-soft)]"}`}>
           {verse.text}
         </span>
         {selected && (
-          <span className="float-right text-indigo-600 text-sm">&#10003;</span>
+          <span className="float-right text-[var(--color-accent)] text-sm">&#10003;</span>
         )}
       </button>
     );
@@ -336,8 +336,8 @@ export default function SearchPanel({
   const tabClass = (tab: SearchMode) =>
     `flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
       mode === tab
-        ? "border-b-2 border-indigo-600 text-indigo-600"
-        : "text-gray-500 hover:text-gray-700"
+        ? "border-b-2 border-[var(--color-accent)] text-[var(--color-accent)]"
+        : "text-[var(--color-text-muted)] hover:text-[var(--color-text-soft)]"
     }`;
 
   return (
@@ -345,21 +345,21 @@ export default function SearchPanel({
       {/* Header */}
       {!isAddingMore && (
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 font-[family-name:var(--font-noto-serif-kr)]">
+          <h1 className="text-3xl font-bold text-[var(--color-dark)] font-[family-name:var(--font-noto-serif-kr)]">
             예봄카드
           </h1>
-          <p className="text-sm text-gray-500 mt-1 font-[family-name:var(--font-playfair)] italic">
+          <p className="text-sm text-[var(--color-text-muted)] mt-1 font-[family-name:var(--font-playfair)] italic">
             Yebom Card
           </p>
-          <p className="text-gray-600 mt-2">
-            성경 말씀을 아름다운 카드로 만들어 보세요
+          <p className="text-[var(--color-text-soft)] mt-2 text-sm">
+            말씀을 품은 카드, 은혜를 담은 이미지
           </p>
         </div>
       )}
 
       {/* Adding more indicator */}
       {isAddingMore && (
-        <div className="mb-4 p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700 text-center">
+        <div className="mb-4 p-3 bg-[var(--color-accent-bg)] rounded-[10px] text-sm text-[var(--color-accent)] text-center">
           현재 {selectedVerses.length}절 선택됨 — 추가할 구절을 선택하세요
         </div>
       )}
@@ -370,8 +370,8 @@ export default function SearchPanel({
           onClick={() => setVersion("nkrv")}
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
             version === "nkrv"
-              ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-[var(--color-accent)] text-white"
+              : "bg-[var(--bg-warm)] text-[var(--color-text-muted)] hover:bg-[var(--bg-warm)]"
           }`}
         >
           개역개정
@@ -380,8 +380,8 @@ export default function SearchPanel({
           onClick={() => setVersion("rnksv")}
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
             version === "rnksv"
-              ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-[var(--color-accent)] text-white"
+              : "bg-[var(--bg-warm)] text-[var(--color-text-muted)] hover:bg-[var(--bg-warm)]"
           }`}
         >
           새번역
@@ -389,7 +389,7 @@ export default function SearchPanel({
       </div>
 
       {/* 4 Tabs */}
-      <div className="flex border-b border-gray-200 mb-4">
+      <div className="flex border-b border-[var(--color-border)] mb-4">
         <button onClick={() => setMode("reference")} className={tabClass("reference")}>
           말씀 찾기
         </button>
@@ -414,17 +414,17 @@ export default function SearchPanel({
               onChange={(e) => setRefInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchReference()}
               placeholder="창1:1-3, 시편 23:1, 롬8:28"
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-4 py-2.5 border border-[var(--color-border)] rounded-[10px] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             />
             <button
               onClick={searchReference}
               disabled={refLoading}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-[10px] text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
             >
               {refLoading ? "..." : "찾기"}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-[var(--color-text-muted)] mb-3">
             예: 창1:1 · 시편23:1-6 · 창세기 1장 1절-3절 · 롬8:28,31
           </p>
 
@@ -433,7 +433,7 @@ export default function SearchPanel({
           )}
 
           {refResults.length > 0 && (
-            <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+            <div className="border border-[var(--color-border)] rounded-[10px] max-h-80 overflow-y-auto">
               {refResults.map((v) => (
                 <VerseItem key={v.id} verse={v} showBookInfo />
               ))}
@@ -449,7 +449,7 @@ export default function SearchPanel({
             <select
               value={bookCode}
               onChange={(e) => setBookCode(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-3 py-2 border border-[var(--color-border)] rounded-[10px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             >
               <optgroup label="구약">
                 {OLD_TESTAMENT.map((b) => (
@@ -470,7 +470,7 @@ export default function SearchPanel({
             <select
               value={chapter}
               onChange={(e) => setChapter(Number(e.target.value))}
-              className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-24 px-3 py-2 border border-[var(--color-border)] rounded-[10px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             >
               {chapters.map((ch) => (
                 <option key={ch} value={ch}>
@@ -480,13 +480,13 @@ export default function SearchPanel({
             </select>
           </div>
 
-          <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+          <div className="border border-[var(--color-border)] rounded-[10px] max-h-80 overflow-y-auto">
             {loadingBrowse ? (
-              <div className="p-4 text-center text-gray-400">
+              <div className="p-4 text-center text-[var(--color-text-muted)]">
                 불러오는 중...
               </div>
             ) : browseVerses.length === 0 ? (
-              <div className="p-4 text-center text-gray-400">
+              <div className="p-4 text-center text-[var(--color-text-muted)]">
                 구절이 없습니다
               </div>
             ) : (
@@ -508,34 +508,34 @@ export default function SearchPanel({
               onChange={(e) => setWordInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchWord()}
               placeholder="사랑 믿음 (AND) · 사랑x믿음 (OR)"
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-4 py-2.5 border border-[var(--color-border)] rounded-[10px] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             />
             <button
               onClick={searchWord}
               disabled={wordLoading}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-[10px] text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
             >
               {wordLoading ? "..." : "검색"}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-[var(--color-text-muted)] mb-3">
             공백 = AND 조건 · x = OR 조건 (예: 사랑x소망)
           </p>
 
           {wordError && (
-            <p className="text-sm text-gray-500 mb-3 text-center">
+            <p className="text-sm text-[var(--color-text-muted)] mb-3 text-center">
               {wordError}
             </p>
           )}
 
           {wordResults.length > 0 && (
             <>
-              <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+              <div className="border border-[var(--color-border)] rounded-[10px] max-h-80 overflow-y-auto">
                 {wordResults.map((v) => (
                   <VerseItem key={v.id} verse={v} showBookInfo />
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2 text-center">
+              <p className="text-xs text-[var(--color-text-muted)] mt-2 text-center">
                 {wordResults.length}건
                 {wordResults.length >= 50 && " (최대 50건)"}
               </p>
@@ -554,12 +554,12 @@ export default function SearchPanel({
               onChange={(e) => setTopicInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchTopic()}
               placeholder="감사, 위로, 결혼, 장례, 새해 ..."
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 px-4 py-2.5 border border-[var(--color-border)] rounded-[10px] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             />
             <button
               onClick={searchTopic}
               disabled={topicLoading}
-              className="px-5 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors"
+              className="px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-[10px] text-sm font-medium hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-colors"
             >
               {topicLoading ? (
                 <span className="flex items-center gap-1.5">
@@ -567,15 +567,15 @@ export default function SearchPanel({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  AI
+                  ...
                 </span>
               ) : (
-                "AI 추천"
+                "추천"
               )}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
-            AI가 주제에 맞는 성경 구절을 추천합니다
+          <p className="text-xs text-[var(--color-text-muted)] mb-3">
+            주제에 맞는 성경 구절을 추천합니다
           </p>
 
           {topicError && (
@@ -586,32 +586,32 @@ export default function SearchPanel({
 
           {topicLoading && (
             <div className="p-8 text-center">
-              <div className="inline-flex items-center gap-2 text-violet-600 text-sm">
+              <div className="inline-flex items-center gap-2 text-[var(--color-accent)] text-sm">
                 <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                AI가 말씀을 찾고 있습니다...
+                말씀을 찾고 있습니다...
               </div>
             </div>
           )}
 
           {topicResults.length > 0 && (
             <>
-              <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+              <div className="border border-[var(--color-border)] rounded-[10px] max-h-80 overflow-y-auto">
                 {topicResults.map((v) => (
                   <VerseItem key={v.id} verse={v} showBookInfo />
                 ))}
               </div>
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                AI 추천 {topicResults.length}건
+              <p className="text-xs text-[var(--color-text-muted)] mt-2 text-center">
+                추천 {topicResults.length}건
               </p>
             </>
           )}
 
           {!topicLoading && topicRecommendations.length > 0 && topicResults.length === 0 && !topicError && (
-            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-              <p className="text-sm text-amber-700 mb-2">AI가 추천했지만 DB에서 찾지 못한 구절:</p>
+            <div className="border border-amber-200 bg-amber-50 rounded-[10px] p-4">
+              <p className="text-sm text-amber-700 mb-2">추천되었지만 DB에서 찾지 못한 구절:</p>
               {topicRecommendations.map((rec, i) => (
                 <p key={i} className="text-xs text-amber-600">
                   {rec.book} {rec.chapter}:{rec.verse} — {rec.preview}
@@ -627,7 +627,7 @@ export default function SearchPanel({
         <div className="sticky bottom-4 mt-4">
           <button
             onClick={onConfirm}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-indigo-700 transition-colors"
+            className="w-full py-3 bg-[var(--color-accent)] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[var(--color-accent-hover)] transition-colors"
           >
             선택 완료 ({selectedVerses.length}절)
           </button>
