@@ -30,24 +30,14 @@ export async function POST(request: NextRequest) {
       [
         {
           role: "user",
-          content: `"${topic.trim()}" 주제에 맞는 성경 구절을 10개 추천해줘.
-
-반드시 아래 JSON 배열 형식으로만 응답해. 다른 텍스트 없이 JSON만:
-[
-  {"book": "시편", "chapter": 23, "verse": 1, "preview": "여호와는 나의 목자시니..."},
-  {"book": "요한복음", "chapter": 3, "verse": 16, "preview": "하나님이 세상을 이처럼..."}
-]
-
-규칙:
-- ${versionName} 기준 정확한 책이름 사용 (창세기, 출애굽기, 시편 등)
-- preview는 해당 절의 앞부분 15~25자
-- 해당 주제와 실제로 관련 있는 구절만
-- 잘 알려진 구절과 덜 알려진 구절을 섞어서`,
+          content: `"${topic.trim()}" 주제 성경 구절 7개. JSON만 응답:
+[{"book":"시편","chapter":23,"verse":1,"preview":"여호와는 나의 목자시니"}]
+규칙: ${versionName} 책이름, preview 15자 이내, 주제 관련 구절만`,
         },
       ],
       {
         provider: "gemini-flash",
-        max_tokens: 1500,
+        max_tokens: 2500,
         temperature: 0.7,
         caller: "yebom-card:recommend",
       }
