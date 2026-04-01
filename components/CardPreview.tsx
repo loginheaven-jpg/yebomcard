@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 import { findGradient, type GradientPreset } from "@/lib/gradients";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
@@ -40,6 +41,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [aiBackground, setAiBackground] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [englishText, setEnglishText] = useState("");
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -57,6 +59,29 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const keywords = extractKeywords(koreanText);
   const fontCss =
     FONT_OPTIONS.find((f) => f.key === selectedFont)?.css || FONT_OPTIONS[0].css;
+
+  // 0. English verse
+  useEffect(() => {
+    async function loadEnglish() {
+      const promises = verses.map((v) =>
+        supabase
+          .from("bible_verses")
+          .select("text")
+          .eq("version", "kjv")
+          .eq("book_code", v.book_code)
+          .eq("chapter", v.chapter)
+          .eq("verse", v.verse)
+          .single()
+      );
+      const results = await Promise.all(promises);
+      const texts = results
+        .map((r) => r.data?.text)
+        .filter(Boolean)
+        .join(" ");
+      setEnglishText(texts);
+    }
+    loadEnglish();
+  }, [verses]);
 
   // 1. CSS Gradient
   useEffect(() => {
@@ -217,10 +242,15 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
                   : "none",
             }}
           >
-            {/* Korean verse — centered, no bold */}
+            {/* Korean verse */}
             <p
-              className="text-xl leading-[1.9] text-center mb-4"
-              style={{ fontFamily: fontCss }}
+              className="text-xl leading-[1.9] text-center mb-3"
+              style={{
+                fontFamily: fontCss,
+                wordBreak: "keep-all",
+                overflowWrap: "break-word",
+                textWrap: "balance" as never,
+              }}
             >
               {koreanText}
             </p>
@@ -228,8 +258,21 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             {/* Korean ref */}
             <p className="text-sm opacity-80 font-semibold mb-5">{koreanRef}</p>
 
-            {/* English verse + ref */}
-            <p className="text-xs font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed">
+            {/* English verse */}
+            {englishText && (
+              <p
+                className="text-xs font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
+                style={{
+                  wordBreak: "keep-all",
+                  textWrap: "balance" as never,
+                }}
+              >
+                {englishText}
+              </p>
+            )}
+
+            {/* English ref */}
+            <p className="text-xs font-[family-name:var(--font-playfair)] opacity-50">
               {englishRef}
             </p>
           </div>
