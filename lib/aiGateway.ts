@@ -45,3 +45,41 @@ export async function callAI(
 
   return res.json();
 }
+
+// ─── Image Generation ─────────────────────────────────────
+
+export interface ImageResult {
+  data: string; // base64
+  media_type: string;
+  provider: string;
+  model: string;
+  size: string;
+  revised_prompt?: string;
+  elapsed_ms?: number;
+}
+
+export async function callImage(
+  prompt: string,
+  options?: {
+    size?: string;
+    style?: string;
+    provider?: string;
+    caller?: string;
+  }
+): Promise<ImageResult> {
+  const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt,
+      ...options,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown" }));
+    throw new Error(`IMAGE_ERROR: ${res.status} ${err.detail}`);
+  }
+
+  return res.json();
+}

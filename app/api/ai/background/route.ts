@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callAI } from "@/lib/aiGateway";
-
-const AI_GATEWAY_URL =
-  process.env.AI_GATEWAY_URL ||
-  "https://ai-gateway20251125.up.railway.app";
-
-// TODO: Gateway에 /api/ai/image 추가 후 활성화
-// → AI_IMAGE_GENERATION_REQUEST.md 참조
-const USE_IMAGE_GENERATION = false;
+import { callImage, callAI } from "@/lib/aiGateway";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,37 +13,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ─── 이미지 생성 모드 (Gateway 준비 후 USE_IMAGE_GENERATION = true) ───
-    if (USE_IMAGE_GENERATION) {
-      const kw = keywords.length > 0 ? keywords.join(", ") : "peaceful";
-      const prompt = `A serene ${kw} landscape, spiritual atmosphere, suitable for text overlay, Bible verse card background, 4:5 portrait orientation`;
+    const kw = keywords.length > 0 ? keywords.join(", ") : "peaceful";
 
-      const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          size: "1080x1350",
-          style: "natural",
-          caller: "yebom-card:background",
-        }),
+    // ─── 이미지 생성 (DALL-E / Imagen) ───
+    try {
+      const prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;
+
+      const imageResult = await callImage(prompt, {
+        size: "1080x1350",
+        style: "natural",
+        caller: "yebom-card:background",
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        return NextResponse.json({
-          type: "image",
-          url: data.url || data.data,
-          provider: data.provider,
-        });
-      }
-      // 이미지 생성 실패 → gradient fallback
+      return NextResponse.json({
+        type: "image",
+        data: imageResult.data,
+        media_type: imageResult.media_type,
+        provider: imageResult.provider,
+        model: imageResult.model,
+      });
+    } catch (imageError) {
+      // 이미지 생성 실패 → CSS gradient fallback
+      console.error("Image generation failed, falling back to gradient:", imageError);
     }
 
-    // ─── Gradient fallback (현재 기본 모드) ───
-
-    const kw = keywords.length > 0 ? keywords.join(",") : "";
-
+    // ─── Gradient fallback ───
     const result = await callAI(
       [
         {
@@ -74,12 +60,13 @@ textColor: white 또는 dark. 설명 금지.`,
 
     if (backgrounds.length === 0) {
       return NextResponse.json(
-        { error: "배경 생성 파싱 실패" },
+        { error: "배경 생성 실패" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
+      type: "gradient",
       backgrounds,
       provider: result.provider,
     });

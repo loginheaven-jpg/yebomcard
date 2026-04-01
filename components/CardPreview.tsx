@@ -14,9 +14,13 @@ interface UnsplashImage {
 }
 
 interface AiBackground {
-  name: string;
-  gradient: string;
-  textColor: "white" | "dark";
+  type: "image" | "gradient";
+  // image mode
+  imageDataUrl?: string;
+  // gradient fallback
+  name?: string;
+  gradient?: string;
+  textColor?: "white" | "dark";
 }
 
 interface CardPreviewProps {
@@ -125,7 +129,20 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.backgrounds?.length > 0) setAiBackground(data.backgrounds[0]);
+          if (data.type === "image" && data.data) {
+            setAiBackground({
+              type: "image",
+              imageDataUrl: `data:${data.media_type};base64,${data.data}`,
+            });
+          } else if (data.backgrounds?.length > 0) {
+            const bg = data.backgrounds[0];
+            setAiBackground({
+              type: "gradient",
+              name: bg.name,
+              gradient: bg.gradient,
+              textColor: bg.textColor,
+            });
+          }
         }
       } catch {
         /* silent */
@@ -168,9 +185,18 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       </span>
     );
   } else if (activeCard === "ai" && aiBackground) {
-    cardStyle = { background: aiBackground.gradient };
-    textColorClass =
-      aiBackground.textColor === "dark" ? "text-gray-900" : "text-white";
+    if (aiBackground.type === "image" && aiBackground.imageDataUrl) {
+      cardStyle = {
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.35)), url(${aiBackground.imageDataUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      };
+      textColorClass = "text-white";
+    } else if (aiBackground.gradient) {
+      cardStyle = { background: aiBackground.gradient };
+      textColorClass =
+        aiBackground.textColor === "dark" ? "text-gray-900" : "text-white";
+    }
   }
 
   const isLoading =
@@ -306,7 +332,12 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           &ldquo;{gradient.name}&rdquo;
         </p>
       )}
-      {activeCard === "ai" && aiBackground && (
+      {activeCard === "ai" && aiBackground && aiBackground.type === "image" && (
+        <p className="text-center text-xs text-gray-400 mt-2">
+          AI 생성 이미지
+        </p>
+      )}
+      {activeCard === "ai" && aiBackground && aiBackground.type === "gradient" && aiBackground.name && (
         <p className="text-center text-xs text-gray-400 mt-2">
           &ldquo;{aiBackground.name}&rdquo;
         </p>
