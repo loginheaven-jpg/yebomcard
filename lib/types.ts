@@ -20,7 +20,7 @@ export type SearchMode = "reference" | "chapter" | "word" | "topic";
 
 export type BibleVersion = "nkrv" | "rnksv";
 
-export type ViewMode = "search" | "display";
+export type ViewMode = "search" | "display" | "card";
 
 export interface AIRecommendation {
   book: string;

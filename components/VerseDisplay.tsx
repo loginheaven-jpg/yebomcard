@@ -10,6 +10,7 @@ interface VerseDisplayProps {
   onBack: () => void;
   onAddMore: () => void;
   onRemoveVerse: (verse: BibleVerse) => void;
+  onCreateCard: () => void;
 }
 
 /**
@@ -107,6 +108,7 @@ export default function VerseDisplay({
   onBack,
   onAddMore,
   onRemoveVerse,
+  onCreateCard,
 }: VerseDisplayProps) {
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -284,17 +286,14 @@ export default function VerseDisplay({
         );
       })}
 
-      {/* Summary + action */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-        <p className="text-sm text-gray-500 mb-1">
-          총 {verses.length}절 선택됨
-        </p>
-        <p className="text-sm text-gray-400">
-          이 말씀으로 카드를 만들 준비가 되었습니다
-        </p>
-        <p className="text-xs text-gray-300 mt-1">
-          (카드 생성 기능은 다음 단계에서 구현됩니다)
-        </p>
+      {/* CTA */}
+      <div className="mt-2">
+        <button
+          onClick={onCreateCard}
+          className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
+        >
+          이 말씀으로 카드 만들기 ({verses.length}절)
+        </button>
       </div>
     </div>
   );

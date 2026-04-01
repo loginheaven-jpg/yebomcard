@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import SearchPanel from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
+import CardPreview from "@/components/CardPreview";
 import type { BibleVerse, ViewMode } from "@/lib/types";
 
 export default function Home() {
@@ -61,7 +62,6 @@ export default function Home() {
             v.version === verse.version
           )
       );
-      // 모두 제거되면 검색 화면으로
       if (next.length === 0) {
         setView("search");
         setIsAddingMore(false);
@@ -70,14 +70,28 @@ export default function Home() {
     });
   }, []);
 
+  const handleCreateCard = useCallback(() => {
+    setView("card");
+  }, []);
+
+  const handleBackToDisplay = useCallback(() => {
+    setView("display");
+  }, []);
+
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-4">
-      {view === "display" ? (
+      {view === "card" ? (
+        <CardPreview
+          verses={selectedVerses}
+          onBack={handleBackToDisplay}
+        />
+      ) : view === "display" ? (
         <VerseDisplay
           verses={selectedVerses}
           onBack={handleBack}
           onAddMore={handleAddMore}
           onRemoveVerse={handleRemoveVerse}
+          onCreateCard={handleCreateCard}
         />
       ) : (
         <SearchPanel
