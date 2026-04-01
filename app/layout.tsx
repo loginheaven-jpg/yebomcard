@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
 import {
+  Noto_Sans_KR,
   Noto_Serif_KR,
-  Gothic_A1,
   Playfair_Display,
 } from "next/font/google";
 import "./globals.css";
+
+const notoSansKr = Noto_Sans_KR({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-noto-sans-kr",
+});
 
 const notoSerifKr = Noto_Serif_KR({
   subsets: ["latin"],
   weight: ["400", "700"],
   variable: "--font-noto-serif-kr",
-});
-
-const gothicA1 = Gothic_A1({
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  variable: "--font-gothic-a1",
 });
 
 const playfairDisplay = Playfair_Display({
@@ -38,9 +38,9 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${notoSerifKr.variable} ${gothicA1.variable} ${playfairDisplay.variable} h-full antialiased`}
+      className={`${notoSansKr.variable} ${notoSerifKr.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
+      <body className="min-h-full flex flex-col font-[family-name:var(--font-noto-sans-kr)]">
         {children}
       </body>
     </html>
