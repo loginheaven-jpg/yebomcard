@@ -1,52 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  /* Ocean Tone Color System */
-  --background: #F0F4F8;
-  --bg-warm: #E8EDF3;
-  --foreground: #1A2B3C;
-
-  --color-accent: #2E6B8A;
-  --color-accent-soft: #5A9BB5;
-  --color-accent-bg: #E8F2F7;
-  --color-accent-hover: #245A75;
-
-  --color-dark: #1A2B3C;
-  --color-dark-soft: #2D4156;
-
-  --color-stone: #7B8B9A;
-  --color-stone-light: #C8D1DA;
-
-  --color-text: #1A2B3C;
-  --color-text-soft: #4A6175;
-  --color-text-muted: #6B7D8D;
-
-  --color-border: #D4DDE6;
-  --color-gold: #B8860B;
-
-  --color-red: #C0392B;
-  --color-green: #27864A;
+  --background: #f8f9fa;
+  --foreground: #1a1a2e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-sans-kr);
+  --font-sans: var(--font-gothic-a1);
   --font-serif: var(--font-noto-serif-kr);
   --font-display: var(--font-playfair);
-
-  /* Ocean Tone tokens */
-  --color-ocean: #2E6B8A;
-  --color-ocean-soft: #5A9BB5;
-  --color-ocean-bg: #E8F2F7;
-  --color-ocean-hover: #245A75;
-  --color-ocean-dark: #1A2B3C;
-  --color-ocean-dark-soft: #2D4156;
-  --color-ocean-stone: #7B8B9A;
-  --color-ocean-stone-light: #C8D1DA;
-  --color-ocean-border: #D4DDE6;
-  --color-ocean-gold: #B8860B;
-  --color-ocean-gold-hover: #9A7009;
 }
 
 body {
@@ -54,26 +18,10 @@ body {
   color: var(--foreground);
 }
 
-/* Card base (design guide §4.1) */
-.card-base {
-  border-radius: 16px;
-  background: white;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 2px 8px rgba(26, 43, 60, 0.06);
-}
-
-/* Input focus (design guide §4.3) */
-input:focus,
-select:focus {
-  border-color: var(--color-accent) !important;
-  box-shadow: 0 0 0 3px rgba(46, 107, 138, 0.1) !important;
-  outline: none;
-}
-
-/* Select arrow */
+/* Search panel select styles */
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237B8B9A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
   padding-right: 2.5rem;
