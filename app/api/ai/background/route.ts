@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/aiGateway";
 
-/**
- * AI CSS 아트 배경 생성 API
- * POST /api/ai/background
- * body: { verseText: "...", keywords: ["평안","소망"] }
- * → AI가 말씀에 어울리는 CSS 그라데이션 생성
- */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -19,54 +13,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const keywordHint =
-      keywords.length > 0
-        ? `\n이 말씀의 키워드: ${keywords.join(", ")}`
-        : "";
+    const kw = keywords.length > 0 ? keywords.join(",") : "";
 
     const result = await callAI(
       [
         {
           role: "user",
-          content: `성경 말씀에 어울리는 CSS 배경을 3종 생성해줘.
-
-말씀: "${verseText}"${keywordHint}
-
-반드시 아래 JSON 배열 형식으로만 응답해. 다른 텍스트 없이 JSON만:
-[
-  {
-    "name": "배경 이름 (한글 2~4자)",
-    "gradient": "linear-gradient(...) 또는 radial-gradient(...)",
-    "textColor": "white" 또는 "dark",
-    "description": "한줄 설명"
-  }
-]
-
-규칙:
-- gradient는 유효한 CSS gradient 문법
-- 말씀의 감정/분위기를 색으로 표현
-- 3종은 각각 분위기가 다르게 (밝은/깊은/따뜻한)
-- textColor는 배경 위 텍스트 가독성 기준`,
+          content: `"${verseText}" 말씀에 어울리는 CSS gradient 배경 2개. ${kw ? `키워드:${kw}.` : ""} JSON만:
+[{"name":"이름","gradient":"linear-gradient(...)","textColor":"white"}]
+textColor: white 또는 dark. 설명 금지.`,
         },
       ],
       {
         provider: "gemini-flash",
-        max_tokens: 800,
+        max_tokens: 4096,
         temperature: 0.8,
         caller: "yebom-card:background",
       }
     );
 
     const content = result.content.trim();
-    const jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
+    const backgrounds = parsePartialJsonArray(content);
+
+    if (backgrounds.length === 0) {
       return NextResponse.json(
-        { error: "AI 응답 파싱 실패", raw: content },
+        { error: "배경 생성 파싱 실패" },
         { status: 500 }
       );
     }
 
-    const backgrounds = JSON.parse(jsonMatch[0]);
     return NextResponse.json({
       backgrounds,
       provider: result.provider,
@@ -75,8 +50,47 @@ export async function POST(request: NextRequest) {
     const message =
       error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: `AI 배경 생성 실패: ${message}` },
+      { error: `배경 생성 실패: ${message}` },
       { status: 500 }
     );
+  }
+}
+
+function parsePartialJsonArray(
+  raw: string
+): { name: string; gradient: string; textColor: string }[] {
+  const fullMatch = raw.match(/\[[\s\S]*\]/);
+  if (fullMatch) {
+    try {
+      return JSON.parse(fullMatch[0]);
+    } catch {
+      // fall through
+    }
+  }
+
+  const startIdx = raw.indexOf("[");
+  if (startIdx === -1) return [];
+
+  let jsonStr = raw.slice(startIdx);
+  const lastBrace = jsonStr.lastIndexOf("}");
+  if (lastBrace === -1) return [];
+
+  jsonStr = jsonStr.slice(0, lastBrace + 1) + "]";
+
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    const objRegex =
+      /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"gradient"\s*:\s*"([^"]+)"\s*,\s*"textColor"\s*:\s*"([^"]+)"[^}]*\}/g;
+    const results: { name: string; gradient: string; textColor: string }[] = [];
+    let match;
+    while ((match = objRegex.exec(raw)) !== null) {
+      results.push({
+        name: match[1],
+        gradient: match[2],
+        textColor: match[3],
+      });
+    }
+    return results;
   }
 }

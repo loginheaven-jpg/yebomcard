@@ -24,16 +24,23 @@ interface CardPreviewProps {
 }
 
 type CardType = "gradient" | "photo" | "ai";
+type FontChoice = "noto-serif" | "gowun-batang" | "gowun-dodum";
+
+const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
+  { key: "noto-serif", label: "명조", css: "var(--font-noto-serif-kr)" },
+  { key: "gowun-batang", label: "바탕", css: "var(--font-gowun-batang)" },
+  { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum)" },
+];
 
 export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
+  const [selectedFont, setSelectedFont] = useState<FontChoice>("gowun-dodum");
   const [gradient, setGradient] = useState<GradientPreset | null>(null);
   const [photo, setPhoto] = useState<UnsplashImage | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [aiBackground, setAiBackground] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Combine verse texts
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
   const book = getBookByCode(firstVerse.book_code);
@@ -48,16 +55,17 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     : "";
 
   const keywords = extractKeywords(koreanText);
+  const fontCss =
+    FONT_OPTIONS.find((f) => f.key === selectedFont)?.css || FONT_OPTIONS[0].css;
 
-  // 1. CSS Gradient — 즉시 매칭
+  // 1. CSS Gradient
   useEffect(() => {
     setGradient(findGradient(koreanText));
   }, [koreanText]);
 
-  // 2. Unsplash — 탭 선택 시 로드
+  // 2. Unsplash
   useEffect(() => {
     if (activeCard !== "photo" || photo) return;
-
     async function loadPhoto() {
       setPhotoLoading(true);
       try {
@@ -67,12 +75,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         );
         if (res.ok) {
           const data = await res.json();
-          if (data.length > 0) {
-            setPhoto(data[0]);
-          }
+          if (data.length > 0) setPhoto(data[0]);
         }
       } catch {
-        // silent fail
+        /* silent */
       } finally {
         setPhotoLoading(false);
       }
@@ -80,10 +86,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     loadPhoto();
   }, [activeCard, photo, keywords]);
 
-  // 3. AI Background — 탭 선택 시 로드
+  // 3. AI Background
   useEffect(() => {
     if (activeCard !== "ai" || aiBackground) return;
-
     async function loadAi() {
       setAiLoading(true);
       try {
@@ -94,12 +99,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.backgrounds?.length > 0) {
-            setAiBackground(data.backgrounds[0]);
-          }
+          if (data.backgrounds?.length > 0) setAiBackground(data.backgrounds[0]);
         }
       } catch {
-        // silent fail
+        /* silent */
       } finally {
         setAiLoading(false);
       }
@@ -107,25 +110,24 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     loadAi();
   }, [activeCard, aiBackground, koreanText, keywords]);
 
-  // Current card background + text color
-  let cardBg = "";
+  // Card style
   let cardStyle: React.CSSProperties = {};
   let textColorClass = "text-white";
   let creditLine: React.ReactNode = null;
 
   if (activeCard === "gradient" && gradient) {
     cardStyle = { background: gradient.gradient };
-    textColorClass = gradient.textColor === "dark" ? "text-gray-900" : "text-white";
+    textColorClass =
+      gradient.textColor === "dark" ? "text-gray-900" : "text-white";
   } else if (activeCard === "photo" && photo) {
-    cardBg = photo.url;
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url(${photo.url})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url(${photo.url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
     textColorClass = "text-white";
     creditLine = (
-      <span className="text-[10px] opacity-60">
+      <span className="text-[9px] opacity-50">
         Photo by{" "}
         <a
           href={photo.credit.profileUrl}
@@ -155,33 +157,30 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         : "text-gray-500 hover:bg-gray-100"
     }`;
 
+  const fontBtnClass = (key: FontChoice) =>
+    `px-3 py-1.5 text-xs rounded-lg transition-colors ${
+      selectedFont === key
+        ? "bg-gray-900 text-white"
+        : "text-gray-500 hover:bg-gray-100"
+    }`;
+
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-md mx-auto">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={onBack}
           className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           말씀으로 돌아가기
         </button>
       </div>
 
       {/* Card type selector */}
-      <div className="flex gap-1 mb-4 bg-gray-50 p-1 rounded-xl">
+      <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-xl">
         <button onClick={() => setActiveCard("gradient")} className={tabClass("gradient")}>
           그라데이션
         </button>
@@ -193,7 +192,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </button>
       </div>
 
-      {/* Card preview */}
+      {/* Card preview — 4:5 ratio (1080×1350) */}
       <div
         className="relative rounded-2xl overflow-hidden shadow-lg"
         style={{ aspectRatio: "4/5", ...cardStyle }}
@@ -201,41 +200,36 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
             <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <svg
-                className="animate-spin w-5 h-5"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
+              <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               {activeCard === "photo" ? "사진 불러오는 중..." : "생성 중..."}
             </div>
           </div>
         ) : (
           <div
-            className={`absolute inset-0 flex flex-col justify-center px-10 ${textColorClass}`}
-            style={{ textShadow: textColorClass === "text-white" ? "0 2px 8px rgba(0,0,0,0.6)" : "none" }}
+            className={`absolute inset-0 flex flex-col justify-center items-center px-8 ${textColorClass}`}
+            style={{
+              textShadow:
+                textColorClass === "text-white"
+                  ? "0 1px 6px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.3)"
+                  : "none",
+            }}
           >
-            {/* Korean verse */}
-            <p className="text-lg leading-relaxed font-[family-name:var(--font-gowun-dodum)] font-bold mb-4">
+            {/* Korean verse — centered, no bold */}
+            <p
+              className="text-xl leading-[1.9] text-center mb-4"
+              style={{ fontFamily: fontCss }}
+            >
               {koreanText}
             </p>
-            <p className="text-sm opacity-80 mb-6">{koreanRef}</p>
 
-            {/* English ref */}
-            <p className="text-xs font-[family-name:var(--font-playfair)] italic opacity-60">
+            {/* Korean ref */}
+            <p className="text-sm opacity-80 font-semibold mb-5">{koreanRef}</p>
+
+            {/* English verse + ref */}
+            <p className="text-xs font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed">
               {englishRef}
             </p>
           </div>
@@ -244,9 +238,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         {/* Watermark */}
         {!isLoading && (
           <div
-            className="absolute bottom-5 right-6 font-[family-name:var(--font-playfair)] italic text-sm opacity-50"
+            className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-xs"
             style={{
-              color: textColorClass === "text-white" ? "white" : "#1a1a1a",
+              color: textColorClass === "text-white" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)",
             }}
           >
             Yebom Card
@@ -255,38 +249,48 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
 
         {/* Attribution */}
         {!isLoading && creditLine && (
-          <div
-            className="absolute bottom-5 left-6"
-            style={{ color: "white" }}
-          >
+          <div className="absolute bottom-4 left-5" style={{ color: "white" }}>
             {creditLine}
           </div>
         )}
       </div>
 
-      {/* Gradient name badge */}
+      {/* Style name */}
       {activeCard === "gradient" && gradient && (
-        <p className="text-center text-xs text-gray-400 mt-3">
-          &ldquo;{gradient.name}&rdquo; 스타일
+        <p className="text-center text-xs text-gray-400 mt-2">
+          &ldquo;{gradient.name}&rdquo;
         </p>
       )}
       {activeCard === "ai" && aiBackground && (
-        <p className="text-center text-xs text-gray-400 mt-3">
-          &ldquo;{aiBackground.name}&rdquo; 스타일
+        <p className="text-center text-xs text-gray-400 mt-2">
+          &ldquo;{aiBackground.name}&rdquo;
         </p>
       )}
 
-      {/* Action buttons */}
-      <div className="mt-6 space-y-3">
+      {/* Font selector */}
+      <div className="mt-4">
+        <p className="text-xs text-gray-400 mb-2">서체</p>
+        <div className="flex gap-1 bg-gray-50 p-1 rounded-xl">
+          {FONT_OPTIONS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setSelectedFont(f.key)}
+              className={fontBtnClass(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Action */}
+      <div className="mt-5 space-y-2">
         <button
           disabled
           className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg opacity-50 cursor-not-allowed"
         >
-          PNG 다운로드 (다음 단계에서 구현)
+          PNG 다운로드 (다음 단계)
         </button>
-        <p className="text-center text-xs text-gray-400">
-          키워드: {keywords.join(", ")}
-        </p>
       </div>
     </div>
   );
