@@ -239,7 +239,7 @@ export default function VerseDisplay({
             className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-4"
           >
             {/* Korean text */}
-            <blockquote className="text-xl leading-relaxed text-gray-900 font-[family-name:var(--font-noto-serif-kr)] mb-3">
+            <blockquote className="text-xl leading-relaxed text-gray-900 font-[family-name:var(--font-gowun-dodum)] font-bold mb-3">
               {group.verses.map((v, vi) => (
                 <span key={v.id} className="group/verse relative">
                   {vi > 0 && " "}
