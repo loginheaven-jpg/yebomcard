@@ -16,6 +16,8 @@ export interface BilingualVerse {
   english: BibleVerse | null;
 }
 
-export type SearchMode = "chapter" | "keyword";
+export type SearchMode = "reference" | "chapter" | "word";
 
 export type BibleVersion = "nkrv" | "rnksv";
+
+export type ViewMode = "search" | "display";
