@@ -129,7 +129,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [englishText, setEnglishText] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [dominantColor, setDominantColor] = useState("#808080");
-  const [textColorSlider, setTextColorSlider] = useState(0); // 0=white, 100=black
+  const [textColorSlider, setTextColorSlider] = useState(0);
+  const [fontScale, setFontScale] = useState(100); // 80~120%
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -172,7 +173,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
 
   // 1. Gradients — 5개
   useEffect(() => {
-    setGradients(findGradients(koreanText, 5));
+    setGradients(findGradients(koreanText, 6));
   }, [koreanText]);
 
   // 2. Unsplash — 5장
@@ -183,7 +184,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       try {
         const query = getUnsplashQuery(keywords);
         const res = await fetch(
-          `/api/unsplash?query=${encodeURIComponent(query)}&per_page=5`
+          `/api/unsplash?query=${encodeURIComponent(query)}&per_page=6`
         );
         if (res.ok) {
           const data = await res.json();
@@ -427,9 +428,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           >
             {/* Korean verse */}
             <p
-              className="text-2xl leading-[1.9] text-center mb-3"
+              className="text-xl leading-[1.9] text-center mb-3"
               style={{
                 fontFamily: fontCss,
+                fontSize: `${fontScale}%`,
                 wordBreak: "keep-all",
                 overflowWrap: "break-word",
                 textWrap: "balance" as never,
@@ -444,8 +446,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             {/* English verse */}
             {englishText && (
               <p
-                className="text-sm font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
-                style={{ wordBreak: "keep-all", textWrap: "balance" as never }}
+                className="text-base font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
+                style={{ fontSize: `${fontScale * 0.85}%`, wordBreak: "keep-all", textWrap: "balance" as never }}
               >
                 {englishText}
               </p>
@@ -548,6 +550,22 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             }}
           />
         </div>
+      </div>
+
+      {/* Font size slider */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-400">글자 크기</p>
+          <p className="text-xs text-gray-400">{fontScale}%</p>
+        </div>
+        <input
+          type="range"
+          min={80}
+          max={120}
+          value={fontScale}
+          onChange={(e) => setFontScale(Number(e.target.value))}
+          className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
+        />
       </div>
 
       {/* Font selector */}

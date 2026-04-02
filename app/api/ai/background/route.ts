@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
         for (const k of keywords) {
           if (sceneMap[k]) { scene = sceneMap[k]; break; }
         }
-        prompt = `Simple minimal children storybook watercolor: ${scene}. Very simple composition, few elements, large empty space in center for text overlay. Soft pastel tones, gentle brushstrokes. NO people, NO faces, NO characters. No text no words. Portrait orientation.`;
+        prompt = `Simple minimal children storybook watercolor: ${scene}. Very simple composition, few elements, large empty space in center for text overlay. Soft pastel tones, gentle brushstrokes. NO people, NO faces, NO characters. ABSOLUTELY NO text, NO letters, NO numbers, NO writing, NO characters, NO watermarks, NO signatures anywhere in the image. Portrait orientation.`;
       } else {
         // 배경 모드: 풍경 사진
-        prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;
+        prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation. ABSOLUTELY NO text, NO letters, NO numbers, NO writing, NO watermarks, NO signatures anywhere in the image.`;
       }
 
       const imageResult = await callImage(prompt, {
