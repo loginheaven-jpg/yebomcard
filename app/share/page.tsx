@@ -1,177 +1,76 @@
-"use client";
-
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { getBookByCode } from "@/lib/books";
-import type { BibleVerse } from "@/lib/types";
-import { useSearchParams } from "next/navigation";
+import type { Metadata } from "next";
 import { Suspense } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { getBookByCode } from "@/lib/books";
+import ShareContent from "@/components/ShareContent";
 
-function ShareContent() {
-  const searchParams = useSearchParams();
-  const [koreanVerses, setKoreanVerses] = useState<BibleVerse[]>([]);
-  const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
-  const [loading, setLoading] = useState(true);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-  const version = searchParams.get("v") || "nkrv";
-  const refs = searchParams.get("r") || "";
+interface SharePageProps {
+  searchParams: Promise<{ v?: string; r?: string }>;
+}
 
-  useEffect(() => {
-    async function load() {
-      if (!refs) {
-        setLoading(false);
-        return;
-      }
+export async function generateMetadata({
+  searchParams,
+}: SharePageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const version = params.v || "nkrv";
+  const refs = params.r || "";
 
-      // Parse refs: "jhn.3.16,jhn.3.17"
-      const parts = refs.split(",").map((r) => {
-        const [bookCode, ch, vs] = r.split(".");
-        return { bookCode, chapter: parseInt(ch), verse: parseInt(vs) };
-      });
-
-      // Fetch Korean + English
-      const krPromises = parts.map((p) =>
-        supabase
-          .from("bible_verses")
-          .select("*")
-          .eq("version", version)
-          .eq("book_code", p.bookCode)
-          .eq("chapter", p.chapter)
-          .eq("verse", p.verse)
-          .single()
-      );
-      const enPromises = parts.map((p) =>
-        supabase
-          .from("bible_verses")
-          .select("*")
-          .eq("version", "kjv")
-          .eq("book_code", p.bookCode)
-          .eq("chapter", p.chapter)
-          .eq("verse", p.verse)
-          .single()
-      );
-
-      const [krResults, enResults] = await Promise.all([
-        Promise.all(krPromises),
-        Promise.all(enPromises),
-      ]);
-
-      setKoreanVerses(
-        krResults.filter((r) => r.data).map((r) => r.data as BibleVerse)
-      );
-      setEnglishVerses(
-        enResults.filter((r) => r.data).map((r) => r.data as BibleVerse)
-      );
-      setLoading(false);
-    }
-    load();
-  }, [refs, version]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">
-        불러오는 중...
-      </div>
-    );
+  if (!refs) {
+    return { title: "말씀나눔 | 예봄성경" };
   }
 
-  if (koreanVerses.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">
-        구절을 찾을 수 없습니다
-      </div>
-    );
-  }
+  // 첫 번째 구절 정보 파싱
+  const parts = refs.split(",").map((r) => {
+    const [bookCode, ch, vs] = r.split(".");
+    return { bookCode, chapter: parseInt(ch), verse: parseInt(vs) };
+  });
 
-  const firstVerse = koreanVerses[0];
-  const book = getBookByCode(firstVerse.book_code);
+  const first = parts[0];
+  const book = getBookByCode(first.bookCode);
+  const bookName = book?.nameKr || first.bookCode;
+
   const verseRange =
-    koreanVerses.length === 1
-      ? `${koreanVerses[0].verse}`
-      : `${koreanVerses[0].verse}-${koreanVerses[koreanVerses.length - 1].verse}`;
-  const koreanRef = `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`;
-  const englishRef = book
-    ? `${book.nameEn} ${firstVerse.chapter}:${verseRange}`
-    : "";
+    parts.length === 1
+      ? `${parts[0].verse}`
+      : `${parts[0].verse}-${parts[parts.length - 1].verse}`;
+  const refStr = `${bookName} ${first.chapter}:${verseRange}`;
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="px-4 py-4">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          홈으로
-        </a>
-      </div>
+  // 본문 미리보기 (첫 절)
+  let preview = "";
+  try {
+    const { data } = await supabase
+      .from("bible_verses")
+      .select("text")
+      .eq("version", version)
+      .eq("book_code", first.bookCode)
+      .eq("chapter", first.chapter)
+      .eq("verse", first.verse)
+      .single();
+    if (data?.text) {
+      preview = data.text.length > 60 ? data.text.slice(0, 60) + "..." : data.text;
+    }
+  } catch {
+    // silent
+  }
 
-      {/* Verse card */}
-      <div className="max-w-lg mx-auto px-4 pb-12">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          {/* Korean */}
-          <blockquote className="text-xl leading-[1.9] text-gray-900 font-[family-name:var(--font-gowun-dodum)] font-bold mb-3">
-            {koreanVerses.map((v, i) => (
-              <span key={v.id}>
-                {i > 0 && " "}
-                {koreanVerses.length > 1 && (
-                  <sup className="text-xs text-gray-400 mr-0.5">
-                    {v.verse}
-                  </sup>
-                )}
-                {v.text}
-              </span>
-            ))}
-          </blockquote>
-          <p className="text-sm text-gray-500 font-medium mb-6">
-            {koreanRef}
-          </p>
+  const title = `말씀나눔 - ${refStr}`;
+  const description = preview || `${refStr} | 예봄성경`;
 
-          {/* English */}
-          {englishVerses.length > 0 && (
-            <div className="border-t border-gray-100 pt-5">
-              <blockquote className="text-base leading-relaxed text-gray-600 font-[family-name:var(--font-playfair)] italic">
-                {englishVerses.map((ev, i) => (
-                  <span key={ev.id}>
-                    {i > 0 && " "}
-                    {englishVerses.length > 1 && (
-                      <sup className="text-xs text-gray-400 mr-0.5 not-italic">
-                        {ev.verse}
-                      </sup>
-                    )}
-                    {ev.text}
-                  </span>
-                ))}
-              </blockquote>
-              <p className="text-sm text-gray-400 mt-2 font-[family-name:var(--font-playfair)]">
-                {englishRef}
-              </p>
-            </div>
-          )}
-
-          {/* Watermark */}
-          <div className="mt-6 pt-4 border-t border-gray-50 text-right">
-            <span className="text-xs text-gray-300 font-[family-name:var(--font-playfair)] italic">
-              Yebom Bible Card
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: "예봄성경",
+      type: "article",
+    },
+  };
 }
 
 export default function SharePage() {

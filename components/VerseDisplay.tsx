@@ -353,7 +353,8 @@ export default function VerseDisplay({
                   if (enText) result += `\n\n'${enText}'\n${enRef}`;
                   return result;
                 });
-                await navigator.clipboard.writeText(textParts.join("\n\n---\n\n"));
+                const fullText = "\n[예봄성경 말씀나눔]\n\n" + textParts.join("\n\n---\n\n");
+                await navigator.clipboard.writeText(fullText);
                 setCopiedType("text");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
               }}
