@@ -37,6 +37,17 @@ export default function SearchPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScroll = useRef(0);
 
+  // 성경 본문 읽기 폰트 크기 (localStorage 유지)
+  const [readingFontSize, setReadingFontSize] = useState(() => {
+    if (typeof window !== "undefined") {
+      return parseInt(localStorage.getItem("readingFontSize") || "16");
+    }
+    return 16;
+  });
+  useEffect(() => {
+    localStorage.setItem("readingFontSize", String(readingFontSize));
+  }, [readingFontSize]);
+
   // ─── Unified search state (reference + word merged) ───
   const [searchInput, setSearchInput] = useState("");
   const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
@@ -466,7 +477,7 @@ export default function SearchPanel({
             {verse.verse}절
           </span>
         )}
-        <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+        <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
           {verse.text}
         </span>
         {selected && (
@@ -721,19 +732,19 @@ export default function SearchPanel({
           {/* Step: 절 본문 (리스트) */}
           {browseStep === "verse" && (
             <div>
-              {/* 헤더: 뒤로 + 책/장 + 장 좌우 이동 */}
+              {/* 헤더: 뒤로 + 책/장(총장수) + 글자크기 슬라이더 + 장 이동 */}
               <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={() => setBrowseStep("chapter")}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
-                  {getBookByCode(bookCode)?.nameKr} {chapter}장
+                  {getBookByCode(bookCode)?.nameKr} {chapter}/{chapters.length}장
                 </button>
 
-                <div className="flex items-center gap-0">
+                <div className="flex items-center gap-0 shrink-0">
                   <button
                     onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                     disabled={!canPrevChapter}
@@ -743,9 +754,15 @@ export default function SearchPanel({
                       <path d="M15 4 L4 14 L15 24 Z" />
                     </svg>
                   </button>
-                  <span className="text-xs text-gray-400 min-w-[3rem] text-center">
-                    {chapter} / {chapters.length}
-                  </span>
+                  <input
+                    type="range"
+                    min={14}
+                    max={24}
+                    value={readingFontSize}
+                    onChange={(e) => setReadingFontSize(Number(e.target.value))}
+                    className="w-16 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer mx-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
+                    title={`글자 크기 ${readingFontSize}px`}
+                  />
                   <button
                     onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                     disabled={!canNextChapter}
@@ -788,12 +805,12 @@ export default function SearchPanel({
                                 <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800" : "text-gray-500"}`}>
                                   {v.verse}절
                                 </span>
-                                <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
                                   {v.text}
                                 </span>
                               </div>
                               {alt && (
-                                <div className="mt-1 ml-7 text-xs text-gray-400 leading-relaxed">
+                                <div className="mt-1 ml-7 text-gray-400 leading-relaxed" style={{ fontSize: `${readingFontSize - 2}px` }}>
                                   {alt.text}
                                 </div>
                               )}
@@ -805,11 +822,11 @@ export default function SearchPanel({
                                 <span className={`font-semibold text-sm mr-1.5 ${selected ? "text-gray-800" : "text-gray-500"}`}>
                                   {v.verse}
                                 </span>
-                                <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
                                   {v.text}
                                 </span>
                               </div>
-                              <div className="text-sm text-gray-500 border-l border-gray-100 pl-4">
+                              <div className="text-gray-500 border-l border-gray-100 pl-4" style={{ fontSize: `${readingFontSize - 2}px` }}>
                                 <span className="text-gray-400 mr-1.5">{v.verse}</span>
                                 {alt?.text || ""}
                               </div>
