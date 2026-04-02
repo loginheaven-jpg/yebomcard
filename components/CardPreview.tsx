@@ -130,8 +130,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [downloading, setDownloading] = useState(false);
   const [dominantColor, setDominantColor] = useState("#808080");
   const [textColorSlider, setTextColorSlider] = useState(0);
-  const [fontScale, setFontScale] = useState(100); // 80~120%
-  const [verticalPos, setVerticalPos] = useState(50); // 0=상단, 50=중앙, 100=하단
+  const [fontScale, setFontScale] = useState(100); // 80~140%
+  const [verticalPos, setVerticalPos] = useState(50);
+  const [cardRatio, setCardRatio] = useState<"4/5" | "9/16">("4/5");
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -405,7 +406,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       <div
         ref={cardRef}
         className="relative rounded-2xl overflow-hidden shadow-lg"
-        style={{ aspectRatio: "4/5", ...cardStyle }}
+        style={{ aspectRatio: cardRatio, ...cardStyle }}
       >
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
@@ -542,68 +543,91 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </p>
       )}
 
-      {/* Text color bar */}
-      <div className="mt-4">
-        <p className="text-xs text-gray-400 mb-2">글자색</p>
-        <div className="relative">
-          <div
-            className="h-6 rounded-full"
-            style={{
-              background: `linear-gradient(to right, #ffffff, ${dominantColor}, #000000)`,
-              border: "1px solid #e5e5e5",
-            }}
-          />
+      {/* Controls — 2×2 grid */}
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+        {/* Row 1 Left: 글자색 */}
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">글자색</p>
+          <div className="relative">
+            <div
+              className="h-5 rounded-full"
+              style={{
+                background: `linear-gradient(to right, #ffffff, ${dominantColor}, #000000)`,
+                border: "1px solid #e5e5e5",
+              }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={textColorSlider}
+              onChange={(e) => setTextColorSlider(Number(e.target.value))}
+              className="absolute inset-0 w-full h-5 opacity-0 cursor-pointer"
+            />
+            <div
+              className="absolute top-0 w-4 h-5 rounded-full border-2 border-white shadow-md pointer-events-none"
+              style={{
+                left: `calc(${textColorSlider}% - 8px)`,
+                background: userTextColor,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Row 1 Right: 글자 크기 */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs text-gray-400">크기</p>
+            <p className="text-xs text-gray-400">{fontScale}%</p>
+          </div>
           <input
             type="range"
-            min={0}
-            max={100}
-            value={textColorSlider}
-            onChange={(e) => setTextColorSlider(Number(e.target.value))}
-            className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
-          />
-          <div
-            className="absolute top-0 w-5 h-6 rounded-full border-2 border-white shadow-md pointer-events-none"
-            style={{
-              left: `calc(${textColorSlider}% - 10px)`,
-              background: userTextColor,
-            }}
+            min={80}
+            max={140}
+            value={fontScale}
+            onChange={(e) => setFontScale(Number(e.target.value))}
+            className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
           />
         </div>
-      </div>
 
-      {/* Font size slider */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs text-gray-400">글자 크기</p>
-          <p className="text-xs text-gray-400">{fontScale}%</p>
+        {/* Row 2 Left: 서체 */}
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">서체</p>
+          <div className="flex gap-0.5 bg-gray-50 p-0.5 rounded-lg">
+            {FONT_OPTIONS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setSelectedFont(f.key)}
+                className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${
+                  selectedFont === f.key
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <input
-          type="range"
-          min={80}
-          max={120}
-          value={fontScale}
-          onChange={(e) => setFontScale(Number(e.target.value))}
-          className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
-        />
-      </div>
 
-      {/* Font selector */}
-      <div className="mt-4">
-        <p className="text-xs text-gray-400 mb-2">서체</p>
-        <div className="flex gap-1 bg-gray-50 p-1 rounded-xl">
-          {FONT_OPTIONS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setSelectedFont(f.key)}
-              className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${
-                selectedFont === f.key
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-500 hover:bg-gray-100"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* Row 2 Right: 비율 */}
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">비율</p>
+          <div className="flex gap-0.5 bg-gray-50 p-0.5 rounded-lg">
+            {(["4/5", "9/16"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setCardRatio(r)}
+                className={`flex-1 py-1 text-[11px] rounded-md transition-colors ${
+                  cardRatio === r
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-500 hover:bg-gray-100"
+                }`}
+              >
+                {r === "4/5" ? "4:5" : "9:16"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
