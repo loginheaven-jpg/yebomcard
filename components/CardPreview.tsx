@@ -131,6 +131,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [dominantColor, setDominantColor] = useState("#808080");
   const [textColorSlider, setTextColorSlider] = useState(0);
   const [fontScale, setFontScale] = useState(100); // 80~120%
+  const [verticalPos, setVerticalPos] = useState(50); // 0=상단, 50=중앙, 100=하단
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -399,10 +400,11 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </div>
       )}
 
-      {/* Card preview — 4:5 ratio */}
+      {/* Card preview + vertical position slider */}
+      <div className="flex gap-2 items-stretch">
       <div
         ref={cardRef}
-        className="relative rounded-2xl overflow-hidden shadow-lg"
+        className="relative rounded-2xl overflow-hidden shadow-lg flex-1"
         style={{ aspectRatio: "4/5", ...cardStyle }}
       >
         {isLoading ? (
@@ -417,9 +419,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           </div>
         ) : (
           <div
-            className="absolute inset-0 flex flex-col justify-center items-center px-8"
+            className="absolute inset-0 flex flex-col items-center px-8"
             style={{
               color: userTextColor,
+              paddingTop: `${verticalPos * 0.7}%`,
               textShadow:
                 textColorSlider < 50
                   ? "0 1px 6px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.3)"
@@ -441,7 +444,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             </p>
 
             {/* Korean ref */}
-            <p className="text-sm opacity-80 font-semibold mb-5">{koreanRef}</p>
+            <p className="text-sm opacity-80 font-semibold mb-5" style={{ fontSize: `${fontScale * 0.7}%` }}>{koreanRef}</p>
 
             {/* English verse */}
             {englishText && (
@@ -454,7 +457,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             )}
 
             {/* English ref */}
-            <p className="text-xs font-[family-name:var(--font-playfair)] opacity-50">
+            <p className="text-xs font-[family-name:var(--font-playfair)] opacity-50" style={{ fontSize: `${fontScale * 0.6}%` }}>
               {englishRef}
             </p>
           </div>
@@ -476,6 +479,22 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             {creditLine}
           </div>
         )}
+      </div>
+
+      {/* Vertical position slider */}
+      <div className="flex flex-col items-center justify-between py-2 w-6">
+        <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 2 L1 8 L11 8 Z" /></svg>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={verticalPos}
+          onChange={(e) => setVerticalPos(Number(e.target.value))}
+          className="h-full w-1.5 appearance-none cursor-pointer bg-gray-200 rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
+          style={{ writingMode: "vertical-lr", direction: "rtl" }}
+        />
+        <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 10 L1 4 L11 4 Z" /></svg>
+      </div>
       </div>
 
       {/* Gradient thumbnails */}
