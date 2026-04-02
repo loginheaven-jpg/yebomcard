@@ -482,15 +482,15 @@ export default function SearchPanel({
             </select>
 
             {/* Chapter navigation */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                 disabled={!canPrevChapter}
-                className="p-1.5 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                className="px-1.5 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="이전 장"
               >
-                <svg className="w-5 h-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                <svg className="w-3 h-7 text-gray-500" viewBox="0 0 10 24" fill="currentColor">
+                  <path d="M8 4 L1 12 L8 20 Z" />
                 </svg>
               </button>
               <select
@@ -507,11 +507,11 @@ export default function SearchPanel({
               <button
                 onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                 disabled={!canNextChapter}
-                className="p-1.5 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                className="px-1.5 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="다음 장"
               >
-                <svg className="w-5 h-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                <svg className="w-3 h-7 text-gray-500" viewBox="0 0 10 24" fill="currentColor">
+                  <path d="M2 4 L9 12 L2 20 Z" />
                 </svg>
               </button>
             </div>
