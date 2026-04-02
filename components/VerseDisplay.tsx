@@ -112,6 +112,8 @@ export default function VerseDisplay({
 }: VerseDisplayProps) {
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [copiedType, setCopiedType] = useState<"link" | "text" | null>(null);
 
   useEffect(() => {
     async function loadEnglish() {
@@ -292,8 +294,90 @@ export default function VerseDisplay({
         );
       })}
 
-      {/* CTA */}
-      <div className="mt-2">
+      {/* Share + CTA */}
+      <div className="mt-2 space-y-2">
+        {/* 이 말씀 보내기 */}
+        {!showShareOptions ? (
+          <button
+            onClick={() => setShowShareOptions(true)}
+            className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+            </svg>
+            이 말씀 보내기
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                const refsParam = verses
+                  .map((v) => `${v.book_code}.${v.chapter}.${v.verse}`)
+                  .join(",");
+                const url = `${window.location.origin}/share?v=${verses[0].version}&r=${refsParam}`;
+                navigator.clipboard.writeText(url);
+                setCopiedType("link");
+                setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
+              }}
+              className={`flex-1 py-2.5 text-sm rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
+                copiedType === "link"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              {copiedType === "link" ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  복사됨
+                </>
+              ) : (
+                "이 페이지 그대로"
+              )}
+            </button>
+            <button
+              onClick={async () => {
+                // 한글 + 영문 텍스트 조합
+                const groups = groupVerses(verses, englishVerses);
+                const textParts = groups.map((g) => {
+                  const book = getBookByCode(g.bookCode);
+                  const vRange = g.verses.length === 1
+                    ? `${g.verses[0].verse}`
+                    : `${g.verses[0].verse}-${g.verses[g.verses.length - 1].verse}`;
+                  const krText = g.verses.map((v) => v.text).join(" ");
+                  const krRef = `(${g.bookName} ${g.chapter}:${vRange})`;
+                  const enText = g.englishVerses.map((v) => v.text).join(" ");
+                  const enRef = book ? `(${book.nameEn} ${g.chapter}:${vRange})` : "";
+                  let result = `'${krText}'\n${krRef}`;
+                  if (enText) result += `\n\n'${enText}'\n${enRef}`;
+                  return result;
+                });
+                await navigator.clipboard.writeText(textParts.join("\n\n---\n\n"));
+                setCopiedType("text");
+                setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
+              }}
+              className={`flex-1 py-2.5 text-sm rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
+                copiedType === "text"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              {copiedType === "text" ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  복사됨
+                </>
+              ) : (
+                "텍스트로"
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* 카드 만들기 */}
         <button
           onClick={onCreateCard}
           className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
