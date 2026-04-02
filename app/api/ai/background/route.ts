@@ -26,19 +26,23 @@ export async function POST(request: NextRequest) {
             {
               role: "user",
               content: `성경 말씀: "${verseText}"
-이 말씀의 핵심 장면을 시각적 삽화로 표현하는 영문 이미지 프롬프트 1줄만 작성해.
-규칙: 성경 내용과 직접 관련된 장면/상징, 한국 민화풍의 따스하고 흐뭇한 분위기, 부드러운 붓터치, 글자 없이, 세로 비율.
+이 말씀에 직접 언급된 대상(자연, 동물, 사물, 풍경)만 그리는 영문 이미지 프롬프트 1줄 작성.
+규칙:
+- 말씀 본문에 없는 대상은 절대 그리지 마라
+- 사람 얼굴, 초상화, 인물 클로즈업 절대 금지
+- 어린이 그림책 삽화 스타일, 따뜻하고 부드러운 분위기
+- 세로 비율, 글자 없이
 프롬프트만:`,
             },
           ],
           {
             provider: "gemini-flash",
             max_tokens: 150,
-            temperature: 0.8,
+            temperature: 0.4,
             caller: "yebom-card:illustration-prompt",
           }
         );
-        prompt = promptResult.content.trim() + ", Korean minhwa folk painting style, warm and heartwarming atmosphere, soft brushstrokes, gentle pastel tones, no text no letters no words, portrait orientation, suitable for white text overlay";
+        prompt = promptResult.content.trim() + ", children storybook illustration style, warm and gentle watercolor, soft pastel tones, NO people faces, NO portraits, NO human close-ups, no text no letters no words, portrait orientation, suitable for white text overlay";
       } else {
         // 배경 모드: 풍경 사진
         prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;
