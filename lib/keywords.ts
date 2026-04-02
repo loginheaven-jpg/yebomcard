@@ -45,13 +45,58 @@ export function extractKeywords(text: string): string[] {
 }
 
 /**
- * 키워드 → Unsplash 검색어 변환
+ * 본문에서 구체적 풍경 단어 추출 → 영문 변환
  */
-export function getUnsplashQuery(keywords: string[]): string {
+const SCENE_WORDS: Record<string, string> = {
+  풀밭: "green pasture meadow",
+  초원: "green meadow field",
+  풀: "green grass field",
+  푸른: "green bright",
+  산: "mountain",
+  바다: "ocean sea",
+  물: "water stream river",
+  강: "river stream",
+  호수: "lake",
+  하늘: "sky clouds",
+  꽃: "flowers bloom",
+  나무: "tree forest",
+  숲: "forest woodland",
+  별: "stars night sky",
+  빛: "sunlight rays bright",
+  길: "path road",
+  들: "field meadow",
+  비: "rain",
+  눈: "snow winter",
+  바위: "rock cliff",
+  양: "sheep lamb pasture",
+  목자: "shepherd green pasture sheep",
+  포도: "vineyard grapes",
+};
+
+/**
+ * 키워드 → Unsplash 검색어 변환
+ * 1순위: 본문에서 구체적 풍경 단어 추출
+ * 2순위: 추상 키워드 매핑
+ */
+export function getUnsplashQuery(keywords: string[], text?: string): string {
+  // 본문에서 구체적 풍경 단어 찾기
+  if (text) {
+    const sceneTerms: string[] = [];
+    for (const [kr, en] of Object.entries(SCENE_WORDS)) {
+      if (text.includes(kr)) {
+        sceneTerms.push(en);
+      }
+    }
+    if (sceneTerms.length > 0) {
+      return sceneTerms.slice(0, 3).join(" ") + " bright beautiful";
+    }
+  }
+
+  // fallback: 추상 키워드 매핑
   for (const kw of keywords) {
     if (KEYWORD_TO_UNSPLASH[kw]) {
       return KEYWORD_TO_UNSPLASH[kw];
     }
   }
-  return "nature peaceful landscape";
+  return "nature peaceful landscape bright";
 }

@@ -184,7 +184,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     async function loadPhotos() {
       setPhotoLoading(true);
       try {
-        const query = getUnsplashQuery(keywords);
+        const query = getUnsplashQuery(keywords, koreanText);
         const res = await fetch(
           `/api/unsplash?query=${encodeURIComponent(query)}&per_page=6`
         );
