@@ -534,13 +534,21 @@ export default function SearchPanel({
                 }
                 savedScroll.current = scrollRef.current.scrollTop;
               }
-              setParallel(false);
-              setVersion(v);
+              if (parallel) {
+                setVersion(v); // 병기 유지, 주/부 교체
+              } else {
+                setParallel(false);
+                setVersion(v);
+              }
             }}
             className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              !parallel && version === v
-                ? "bg-gray-900 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              parallel
+                ? version === v
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-300 text-gray-600 hover:bg-gray-400"
+                : version === v
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
             {label}
