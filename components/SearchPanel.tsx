@@ -30,7 +30,7 @@ export default function SearchPanel({
   isAddingMore,
 }: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>("search");
-  const [version, setVersion] = useState<BibleVersion>("nkrv");
+  const [version, setVersion] = useState<BibleVersion>("rnksv");
   const [parallel, setParallel] = useState(false);
 
   // Scroll position preservation
