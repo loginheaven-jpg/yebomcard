@@ -557,7 +557,7 @@ export default function SearchPanel({
         <button onClick={() => setMode("search")} className={tabClass("search")}>
           말씀 검색
         </button>
-        <button onClick={() => setMode("chapter")} className={tabClass("chapter")}>
+        <button onClick={() => { setMode("chapter"); setBrowseStep("book"); }} className={tabClass("chapter")}>
           장절 선택
         </button>
         <button onClick={() => setMode("topic")} className={tabClass("topic")}>

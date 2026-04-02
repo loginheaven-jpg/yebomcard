@@ -238,22 +238,17 @@ export default function VerseDisplay({
         return (
           <div
             key={`${group.bookCode}-${group.chapter}-${gi}`}
-            className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-4"
+            className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-4"
           >
             {/* Korean text */}
             <blockquote className="text-xl leading-relaxed text-gray-900 font-[family-name:var(--font-gowun-dodum)] font-bold mb-3">
               {group.verses.map((v, vi) => (
-                <span key={v.id} className="group/verse relative">
+                <span key={v.id}>
                   {vi > 0 && " "}
                   <sup className="text-xs text-gray-400 mr-0.5">
                     {v.verse}
                   </sup>
-                  <span className="hover:bg-gray-100 rounded cursor-pointer transition-colors"
-                    onClick={() => onRemoveVerse(v)}
-                    title="클릭하면 제거"
-                  >
-                    {v.text}
-                  </span>
+                  {v.text}
                 </span>
               ))}
             </blockquote>
@@ -282,6 +277,17 @@ export default function VerseDisplay({
                 )}
               </div>
             )}
+
+            {/* Remove card button */}
+            <button
+              onClick={() => group.verses.forEach((v) => onRemoveVerse(v))}
+              className="absolute bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+              title="이 카드 제외"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         );
       })}
