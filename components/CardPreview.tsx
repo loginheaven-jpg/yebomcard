@@ -401,10 +401,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       )}
 
       {/* Card preview + vertical position slider */}
-      <div className="flex gap-2 items-stretch">
+      <div className="relative">
       <div
         ref={cardRef}
-        className="relative rounded-2xl overflow-hidden shadow-lg flex-1"
+        className="relative rounded-2xl overflow-hidden shadow-lg"
         style={{ aspectRatio: "4/5", ...cardStyle }}
       >
         {isLoading ? (
@@ -481,8 +481,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         )}
       </div>
 
-      {/* Vertical position slider */}
-      <div className="flex flex-col items-center justify-between py-2 w-6">
+      {/* Vertical position slider — absolute right side */}
+      <div className="absolute -right-8 top-0 bottom-0 flex flex-col items-center justify-between py-3 w-6">
         <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 2 L1 8 L11 8 Z" /></svg>
         <input
           type="range"
