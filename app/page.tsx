@@ -13,23 +13,15 @@ export default function Home() {
 
   const handleToggleVerse = useCallback((verse: BibleVerse) => {
     setSelectedVerses((prev) => {
-      const exists = prev.some(
-        (v) =>
-          v.book_code === verse.book_code &&
+      const match = (v: BibleVerse) =>
+        v.id === verse.id ||
+        (v.book_code === verse.book_code &&
           v.chapter === verse.chapter &&
           v.verse === verse.verse &&
-          v.version === verse.version
-      );
-      if (exists) {
-        return prev.filter(
-          (v) =>
-            !(
-              v.book_code === verse.book_code &&
-              v.chapter === verse.chapter &&
-              v.verse === verse.verse &&
-              v.version === verse.version
-            )
-        );
+          v.version === verse.version);
+
+      if (prev.some(match)) {
+        return prev.filter((v) => !match(v));
       }
       return [...prev, verse];
     });
