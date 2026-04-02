@@ -482,15 +482,15 @@ export default function SearchPanel({
             </select>
 
             {/* Chapter navigation */}
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                 disabled={!canPrevChapter}
-                className="px-1.5 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                className="px-2 py-2 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="이전 장"
               >
-                <svg className="w-3 h-7 text-gray-500" viewBox="0 0 10 24" fill="currentColor">
-                  <path d="M8 4 L1 12 L8 20 Z" />
+                <svg className="w-4 h-9 text-gray-500" viewBox="0 0 12 28" fill="currentColor">
+                  <path d="M10 3 L1 14 L10 25 Z" />
                 </svg>
               </button>
               <select
@@ -507,11 +507,11 @@ export default function SearchPanel({
               <button
                 onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                 disabled={!canNextChapter}
-                className="px-1.5 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                className="px-2 py-2 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="다음 장"
               >
-                <svg className="w-3 h-7 text-gray-500" viewBox="0 0 10 24" fill="currentColor">
-                  <path d="M2 4 L9 12 L2 20 Z" />
+                <svg className="w-4 h-9 text-gray-500" viewBox="0 0 12 28" fill="currentColor">
+                  <path d="M2 3 L11 14 L2 25 Z" />
                 </svg>
               </button>
             </div>
