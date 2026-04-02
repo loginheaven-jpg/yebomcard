@@ -8,9 +8,77 @@ import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
 import type { BibleVerse } from "@/lib/types";
 
+/**
+ * 슬라이더 값(0~100) → 흰→주조색→검 그라데이션 상의 색상
+ * 0=white, 50=dominantColor, 100=black
+ */
+function sliderToColor(value: number, dominant: string): string {
+  const dr = parseInt(dominant.slice(1, 3), 16) || 128;
+  const dg = parseInt(dominant.slice(3, 5), 16) || 128;
+  const db = parseInt(dominant.slice(5, 7), 16) || 128;
+
+  if (value <= 50) {
+    const t = value / 50;
+    const r = Math.round(255 + (dr - 255) * t);
+    const g = Math.round(255 + (dg - 255) * t);
+    const b = Math.round(255 + (db - 255) * t);
+    return `rgb(${r},${g},${b})`;
+  } else {
+    const t = (value - 50) / 50;
+    const r = Math.round(dr * (1 - t));
+    const g = Math.round(dg * (1 - t));
+    const b = Math.round(db * (1 - t));
+    return `rgb(${r},${g},${b})`;
+  }
+}
+
+/** gradient CSS에서 중간 hex 색상 추출 → 평균 */
+function extractGradientColor(gradient: string): string {
+  const hexes = gradient.match(/#[0-9a-fA-F]{6}/g);
+  if (!hexes || hexes.length === 0) return "#808080";
+  let r = 0, g = 0, b = 0;
+  for (const hex of hexes) {
+    r += parseInt(hex.slice(1, 3), 16);
+    g += parseInt(hex.slice(3, 5), 16);
+    b += parseInt(hex.slice(5, 7), 16);
+  }
+  const n = hexes.length;
+  return `#${Math.round(r / n).toString(16).padStart(2, "0")}${Math.round(g / n).toString(16).padStart(2, "0")}${Math.round(b / n).toString(16).padStart(2, "0")}`;
+}
+
+/** base64 이미지 → 중앙 영역 평균색 추출 */
+function extractImageColor(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const size = 50;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve("#808080"); return; }
+      // 중앙 영역 샘플링
+      const sx = (img.width - img.width * 0.3) / 2;
+      const sy = (img.height - img.height * 0.3) / 2;
+      ctx.drawImage(img, sx, sy, img.width * 0.3, img.height * 0.3, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+      let r = 0, g = 0, b = 0;
+      const pixels = size * size;
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i]; g += data[i + 1]; b += data[i + 2];
+      }
+      resolve(`#${Math.round(r / pixels).toString(16).padStart(2, "0")}${Math.round(g / pixels).toString(16).padStart(2, "0")}${Math.round(b / pixels).toString(16).padStart(2, "0")}`);
+    };
+    img.onerror = () => resolve("#808080");
+    img.src = dataUrl;
+  });
+}
+
 interface UnsplashImage {
   id: string;
   url: string;
+  color: string;
   credit: { name: string; profileUrl: string };
 }
 
@@ -57,9 +125,11 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [aiIllust, setAiIllust] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // English + download
+  // English + download + text color
   const [englishText, setEnglishText] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [dominantColor, setDominantColor] = useState("#808080");
+  const [textColorSlider, setTextColorSlider] = useState(0); // 0=white, 100=black
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -211,6 +281,37 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     (activeCard === "photo" && photoLoading) ||
     (activeCard === "ai" && aiLoading);
 
+  // 주조색 추출 + 슬라이더 기본값 설정
+  useEffect(() => {
+    async function updateDominant() {
+      let color = "#808080";
+      let defaultSlider = 0; // 0=white
+
+      if (activeCard === "gradient" && selectedGradient) {
+        color = extractGradientColor(selectedGradient.gradient);
+        defaultSlider = selectedGradient.textColor === "dark" ? 100 : 0;
+      } else if (activeCard === "photo" && photos.length > 0) {
+        color = photos[selectedPhotoIdx]?.color || "#808080";
+        defaultSlider = 0; // 사진은 어두운 overlay → 흰 글씨
+      } else if (activeCard === "ai" && currentAi) {
+        if (currentAi.type === "image" && currentAi.imageDataUrl) {
+          color = await extractImageColor(currentAi.imageDataUrl);
+          defaultSlider = 0;
+        } else if (currentAi.gradient) {
+          color = extractGradientColor(currentAi.gradient);
+          defaultSlider = currentAi.textColor === "dark" ? 100 : 0;
+        }
+      }
+
+      setDominantColor(color);
+      setTextColorSlider(defaultSlider);
+    }
+    updateDominant();
+  }, [activeCard, selectedGradientIdx, selectedPhotoIdx, currentAi]);
+
+  // 슬라이더 기반 텍스트 색상
+  const userTextColor = sliderToColor(textColorSlider, dominantColor);
+
   // PNG Download
   const handleDownload = async () => {
     if (!cardRef.current) return;
@@ -316,12 +417,13 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           </div>
         ) : (
           <div
-            className={`absolute inset-0 flex flex-col justify-center items-center px-8 ${textColorClass}`}
+            className="absolute inset-0 flex flex-col justify-center items-center px-8"
             style={{
+              color: userTextColor,
               textShadow:
-                textColorClass === "text-white"
+                textColorSlider < 50
                   ? "0 1px 6px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.3)"
-                  : "none",
+                  : "0 1px 4px rgba(255,255,255,0.5)",
             }}
           >
             {/* Korean verse */}
@@ -361,9 +463,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         {!isLoading && (
           <div
             className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-xs"
-            style={{
-              color: textColorClass === "text-white" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.3)",
-            }}
+            style={{ color: userTextColor, opacity: 0.4 }}
           >
             Yebom Card
           </div>
@@ -421,6 +521,35 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           {aiMode === "illustration" ? "AI 삽화" : "AI 배경 사진"}
         </p>
       )}
+
+      {/* Text color bar */}
+      <div className="mt-4">
+        <p className="text-xs text-gray-400 mb-2">글자색</p>
+        <div className="relative">
+          <div
+            className="h-6 rounded-full"
+            style={{
+              background: `linear-gradient(to right, #ffffff, ${dominantColor}, #000000)`,
+              border: "1px solid #e5e5e5",
+            }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={textColorSlider}
+            onChange={(e) => setTextColorSlider(Number(e.target.value))}
+            className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
+          />
+          <div
+            className="absolute top-0 w-5 h-6 rounded-full border-2 border-white shadow-md pointer-events-none"
+            style={{
+              left: `calc(${textColorSlider}% - 10px)`,
+              background: userTextColor,
+            }}
+          />
+        </div>
+      </div>
 
       {/* Font selector */}
       <div className="mt-4">
