@@ -40,7 +40,10 @@ export default function SearchPanel({
   const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
-  const [lastSearchType, setLastSearchType] = useState<"ref" | "word" | null>(null);
+  const [lastSearchType, setLastSearchType] = useState<"ref" | "word-and" | "word-or" | null>(null);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Chapter browse state
   const [bookCode, setBookCode] = useState("gen");
@@ -48,6 +51,7 @@ export default function SearchPanel({
   const [chapter, setChapter] = useState<number>(1);
   const [browseVerses, setBrowseVerses] = useState<BibleVerse[]>([]);
   const [loadingBrowse, setLoadingBrowse] = useState(false);
+  const [rememberedVerse, setRememberedVerse] = useState<number | null>(null);
 
   // Topic recommendation state
   const [topicInput, setTopicInput] = useState("");
@@ -103,9 +107,10 @@ export default function SearchPanel({
         setSearchError("2글자 이상 입력해주세요");
         return;
       }
-      setLastSearchType("word");
       setSearchError("");
       setSearchLoading(true);
+      setSearchOffset(0);
+      setHasMoreResults(false);
 
       try {
         const isOr = trimmed.includes("x");
@@ -120,6 +125,7 @@ export default function SearchPanel({
         }
 
         if (isOr) {
+          setLastSearchType("word-or");
           const promises = words.map((w) =>
             supabase
               .from("bible_verses")
@@ -148,6 +154,8 @@ export default function SearchPanel({
           setSearchResults(sorted.slice(0, 50));
           if (sorted.length === 0) setSearchError("검색 결과가 없습니다");
         } else {
+          setLastSearchType("word-and");
+          const PAGE_SIZE = 50;
           let query = supabase
             .from("bible_verses")
             .select("*")
@@ -161,13 +169,14 @@ export default function SearchPanel({
             .order("book_order")
             .order("chapter")
             .order("verse")
-            .limit(50);
+            .range(0, PAGE_SIZE - 1);
 
           if (error) {
             setSearchError("검색 중 오류가 발생했습니다");
             setSearchResults([]);
           } else {
             setSearchResults((data as BibleVerse[]) || []);
+            setHasMoreResults((data?.length || 0) === PAGE_SIZE);
             if (data?.length === 0) setSearchError("검색 결과가 없습니다");
           }
         }
@@ -178,6 +187,44 @@ export default function SearchPanel({
       }
     }
   }, [searchInput, version]);
+
+  // ─── 다음 50건 불러오기 (AND 검색 전용) ───
+  const loadMore = useCallback(async () => {
+    const trimmed = searchInput.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
+
+    const PAGE_SIZE = 50;
+    const newOffset = searchOffset + PAGE_SIZE;
+    setLoadingMore(true);
+
+    try {
+      let query = supabase
+        .from("bible_verses")
+        .select("*")
+        .eq("version", version);
+
+      for (const w of words) {
+        query = query.ilike("text", `%${w}%`);
+      }
+
+      const { data } = await query
+        .order("book_order")
+        .order("chapter")
+        .order("verse")
+        .range(newOffset, newOffset + PAGE_SIZE - 1);
+
+      if (data) {
+        setSearchResults((prev) => [...prev, ...(data as BibleVerse[])]);
+        setSearchOffset(newOffset);
+        setHasMoreResults(data.length === PAGE_SIZE);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [searchInput, searchOffset, version]);
 
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
@@ -221,6 +268,21 @@ export default function SearchPanel({
     }
     loadVerses();
   }, [bookCode, chapter, version]);
+
+  // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
+  useEffect(() => {
+    if (rememberedVerse && browseVerses.length > 0 && scrollRef.current) {
+      requestAnimationFrame(() => {
+        if (!scrollRef.current) return;
+        const buttons = scrollRef.current.querySelectorAll("button");
+        const idx = browseVerses.findIndex((v) => v.verse === rememberedVerse);
+        if (idx >= 0 && buttons[idx]) {
+          buttons[idx].scrollIntoView({ block: "center" });
+        }
+        setRememberedVerse(null);
+      });
+    }
+  }, [browseVerses, rememberedVerse]);
 
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
@@ -376,7 +438,20 @@ export default function SearchPanel({
       {/* Version Toggle */}
       <div className="flex justify-center gap-2 mb-4">
         <button
-          onClick={() => setVersion("nkrv")}
+          onClick={() => {
+            if (mode === "chapter" && scrollRef.current) {
+              const btns = scrollRef.current.querySelectorAll("button");
+              const rect = scrollRef.current.getBoundingClientRect();
+              for (const btn of btns) {
+                if (btn.getBoundingClientRect().top >= rect.top) {
+                  const m = btn.textContent?.match(/(\d+)절/);
+                  if (m) setRememberedVerse(parseInt(m[1]));
+                  break;
+                }
+              }
+            }
+            setVersion("nkrv");
+          }}
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
             version === "nkrv"
               ? "bg-gray-900 text-white"
@@ -386,7 +461,20 @@ export default function SearchPanel({
           개역개정
         </button>
         <button
-          onClick={() => setVersion("rnksv")}
+          onClick={() => {
+            if (mode === "chapter" && scrollRef.current) {
+              const btns = scrollRef.current.querySelectorAll("button");
+              const rect = scrollRef.current.getBoundingClientRect();
+              for (const btn of btns) {
+                if (btn.getBoundingClientRect().top >= rect.top) {
+                  const m = btn.textContent?.match(/(\d+)절/);
+                  if (m) setRememberedVerse(parseInt(m[1]));
+                  break;
+                }
+              }
+            }
+            setVersion("rnksv");
+          }}
           className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
             version === "rnksv"
               ? "bg-gray-900 text-white"
@@ -440,15 +528,24 @@ export default function SearchPanel({
 
           {searchResults.length > 0 && (
             <>
-              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
                 {searchResults.map((v) => (
                   <VerseItem key={v.id} verse={v} showBookInfo />
                 ))}
               </div>
-              {lastSearchType === "word" && (
+              {lastSearchType === "word-and" && hasMoreResults && (
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="w-full py-2.5 mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                >
+                  {loadingMore ? "불러오는 중..." : "다음 50건 불러오기"}
+                </button>
+              )}
+              {(lastSearchType === "word-and" || lastSearchType === "word-or") && (
                 <p className="text-xs text-gray-400 mt-2 text-center">
                   {searchResults.length}건
-                  {searchResults.length >= 50 && " (최대 50건)"}
+                  {lastSearchType === "word-or" && searchResults.length >= 50 && " (OR 검색은 최대 50건까지 표시됩니다)"}
                 </p>
               )}
             </>
@@ -517,7 +614,7 @@ export default function SearchPanel({
             </div>
           </div>
 
-          <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+          <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
             {loadingBrowse ? (
               <div className="p-4 text-center text-gray-400">
                 불러오는 중...
@@ -589,7 +686,7 @@ export default function SearchPanel({
 
           {topicResults.length > 0 && (
             <>
-              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
                 {topicResults.map((v) => (
                   <VerseItem key={v.id} verse={v} showBookInfo />
                 ))}
@@ -613,9 +710,23 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* ─── 선택 완료 버튼 ─── */}
+      {/* ─── 하단 버튼 ─── */}
       {selectedVerses.length > 0 && (
-        <div className="sticky bottom-4 mt-4">
+        <div className="sticky bottom-4 mt-4 space-y-2">
+          {mode !== "chapter" && (
+            <button
+              onClick={() => {
+                const lastVerse = selectedVerses[selectedVerses.length - 1];
+                setBookCode(lastVerse.book_code);
+                setChapter(lastVerse.chapter);
+                setRememberedVerse(lastVerse.verse);
+                setMode("chapter");
+              }}
+              className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              본문으로 가기
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
