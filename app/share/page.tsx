@@ -69,6 +69,14 @@ export async function generateMetadata({
       description,
       siteName: "예봄성경",
       type: "article",
+      images: [
+        {
+          url: "/icons/icon-512.png",
+          width: 512,
+          height: 512,
+          alt: "예봄성경",
+        },
+      ],
     },
   };
 }
