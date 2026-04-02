@@ -71,9 +71,9 @@ export async function generateMetadata({
       type: "article",
       images: [
         {
-          url: "/icons/icon-512.png",
-          width: 512,
-          height: 512,
+          url: "/icons/og-image.png",
+          width: 1200,
+          height: 630,
           alt: "예봄성경",
         },
       ],
