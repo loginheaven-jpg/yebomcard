@@ -481,26 +481,25 @@ export default function SearchPanel({
               </optgroup>
             </select>
 
-            {/* Chapter navigation group */}
-            <div className="inline-flex items-center bg-gray-900 rounded-full">
+            {/* Chapter navigation */}
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                 disabled={!canPrevChapter}
-                className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="이전 장"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                <svg className="w-5 h-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               </button>
               <select
                 value={chapter}
                 onChange={(e) => setChapter(Number(e.target.value))}
-                className="w-14 h-9 text-sm text-center text-white bg-transparent font-semibold focus:outline-none cursor-pointer"
-                style={{ appearance: "none", backgroundImage: "none" }}
+                className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-gray-400"
               >
                 {chapters.map((ch) => (
-                  <option key={ch} value={ch} className="text-gray-900">
+                  <option key={ch} value={ch}>
                     {ch}장
                   </option>
                 ))}
@@ -508,11 +507,11 @@ export default function SearchPanel({
               <button
                 onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                 disabled={!canNextChapter}
-                className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                 aria-label="다음 장"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                <svg className="w-5 h-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
                 </svg>
               </button>
             </div>
