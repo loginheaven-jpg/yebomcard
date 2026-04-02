@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toPng } from "html-to-image";
 import { supabase } from "@/lib/supabase";
-import { findGradient, type GradientPreset } from "@/lib/gradients";
+import { findGradients, type GradientPreset } from "@/lib/gradients";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
 import type { BibleVerse } from "@/lib/types";
@@ -15,9 +16,7 @@ interface UnsplashImage {
 
 interface AiBackground {
   type: "image" | "gradient";
-  // image mode
   imageDataUrl?: string;
-  // gradient fallback
   name?: string;
   gradient?: string;
   textColor?: "white" | "dark";
@@ -29,6 +28,7 @@ interface CardPreviewProps {
 }
 
 type CardType = "gradient" | "photo" | "ai";
+type AiMode = "background" | "illustration";
 type FontChoice = "noto-serif" | "gowun-batang" | "gowun-dodum";
 
 const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
@@ -38,20 +38,32 @@ const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
 ];
 
 export default function CardPreview({ verses, onBack }: CardPreviewProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
   const [selectedFont, setSelectedFont] = useState<FontChoice>("gowun-dodum");
-  const [gradient, setGradient] = useState<GradientPreset | null>(null);
+
+  // Gradient state — 5개
+  const [gradients, setGradients] = useState<GradientPreset[]>([]);
+  const [selectedGradientIdx, setSelectedGradientIdx] = useState(0);
+
+  // Photo state
   const [photos, setPhotos] = useState<UnsplashImage[]>([]);
   const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
   const [photoLoading, setPhotoLoading] = useState(false);
-  const [aiBackground, setAiBackground] = useState<AiBackground | null>(null);
+
+  // AI state — 배경/삽화 서브모드
+  const [aiMode, setAiMode] = useState<AiMode>("background");
+  const [aiBg, setAiBg] = useState<AiBackground | null>(null);
+  const [aiIllust, setAiIllust] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // English + download
   const [englishText, setEnglishText] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
   const book = getBookByCode(firstVerse.book_code);
-
   const verseRange =
     verses.length === 1
       ? `${verses[0].verse}`
@@ -60,7 +72,6 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const englishRef = book
     ? `${book.nameEn} ${firstVerse.chapter}:${verseRange}`
     : "";
-
   const keywords = extractKeywords(koreanText);
   const fontCss =
     FONT_OPTIONS.find((f) => f.key === selectedFont)?.css || FONT_OPTIONS[0].css;
@@ -79,21 +90,22 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           .single()
       );
       const results = await Promise.all(promises);
-      const texts = results
-        .map((r) => r.data?.text)
-        .filter(Boolean)
-        .join(" ");
-      setEnglishText(texts);
+      setEnglishText(
+        results
+          .map((r) => r.data?.text)
+          .filter(Boolean)
+          .join(" ")
+      );
     }
     loadEnglish();
   }, [verses]);
 
-  // 1. CSS Gradient
+  // 1. Gradients — 5개
   useEffect(() => {
-    setGradient(findGradient(koreanText));
+    setGradients(findGradients(koreanText, 5));
   }, [koreanText]);
 
-  // 2. Unsplash — 5장 로드
+  // 2. Unsplash — 5장
   useEffect(() => {
     if (activeCard !== "photo" || photos.length > 0) return;
     async function loadPhotos() {
@@ -116,27 +128,30 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     loadPhotos();
   }, [activeCard, photos.length, keywords]);
 
-  // 3. AI Background
+  // 3. AI — 모드별 로드
+  const currentAi = aiMode === "illustration" ? aiIllust : aiBg;
+  const setCurrentAi = aiMode === "illustration" ? setAiIllust : setAiBg;
+
   useEffect(() => {
-    if (activeCard !== "ai" || aiBackground) return;
+    if (activeCard !== "ai" || currentAi) return;
     async function loadAi() {
       setAiLoading(true);
       try {
         const res = await fetch("/api/ai/background", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ verseText: koreanText, keywords }),
+          body: JSON.stringify({ verseText: koreanText, keywords, mode: aiMode }),
         });
         if (res.ok) {
           const data = await res.json();
           if (data.type === "image" && data.data) {
-            setAiBackground({
+            setCurrentAi({
               type: "image",
               imageDataUrl: `data:${data.media_type};base64,${data.data}`,
             });
           } else if (data.backgrounds?.length > 0) {
             const bg = data.backgrounds[0];
-            setAiBackground({
+            setCurrentAi({
               type: "gradient",
               name: bg.name,
               gradient: bg.gradient,
@@ -151,17 +166,19 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       }
     }
     loadAi();
-  }, [activeCard, aiBackground, koreanText, keywords]);
+  }, [activeCard, aiMode, currentAi, koreanText, keywords]);
 
-  // Card style
+  // Card style computation
   let cardStyle: React.CSSProperties = {};
   let textColorClass = "text-white";
   let creditLine: React.ReactNode = null;
 
-  if (activeCard === "gradient" && gradient) {
-    cardStyle = { background: gradient.gradient };
+  const selectedGradient = gradients[selectedGradientIdx];
+
+  if (activeCard === "gradient" && selectedGradient) {
+    cardStyle = { background: selectedGradient.gradient };
     textColorClass =
-      gradient.textColor === "dark" ? "text-gray-900" : "text-white";
+      selectedGradient.textColor === "dark" ? "text-gray-900" : "text-white";
   } else if (activeCard === "photo" && photos.length > 0) {
     const selectedPhoto = photos[selectedPhotoIdx];
     cardStyle = {
@@ -173,35 +190,54 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     creditLine = (
       <span className="text-[9px] opacity-50">
         Photo by{" "}
-        <a
-          href={selectedPhoto.credit.profileUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
+        <a href={selectedPhoto.credit.profileUrl} target="_blank" rel="noopener noreferrer" className="underline">
           {selectedPhoto.credit.name}
         </a>{" "}
         on Unsplash
       </span>
     );
-  } else if (activeCard === "ai" && aiBackground) {
-    if (aiBackground.type === "image" && aiBackground.imageDataUrl) {
+  } else if (activeCard === "ai" && currentAi) {
+    if (currentAi.type === "image" && currentAi.imageDataUrl) {
       cardStyle = {
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.35)), url(${aiBackground.imageDataUrl})`,
+        backgroundImage: `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.35)), url(${currentAi.imageDataUrl})`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       };
       textColorClass = "text-white";
-    } else if (aiBackground.gradient) {
-      cardStyle = { background: aiBackground.gradient };
+    } else if (currentAi.gradient) {
+      cardStyle = { background: currentAi.gradient };
       textColorClass =
-        aiBackground.textColor === "dark" ? "text-gray-900" : "text-white";
+        currentAi.textColor === "dark" ? "text-gray-900" : "text-white";
     }
   }
 
   const isLoading =
     (activeCard === "photo" && photoLoading) ||
     (activeCard === "ai" && aiLoading);
+
+  // PNG Download
+  const handleDownload = async () => {
+    if (!cardRef.current) return;
+    setDownloading(true);
+    try {
+      await document.fonts.ready;
+      const dataUrl = await toPng(cardRef.current, {
+        width: 1080,
+        height: 1350,
+        pixelRatio: 1,
+        cacheBust: true,
+        style: { transform: "scale(1)", transformOrigin: "top left" },
+      });
+      const link = document.createElement("a");
+      link.download = `yebom-card-${firstVerse.book_code}${firstVerse.chapter}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Download failed:", err);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const tabClass = (type: CardType) =>
     `flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
@@ -210,11 +246,11 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         : "text-gray-500 hover:bg-gray-100"
     }`;
 
-  const fontBtnClass = (key: FontChoice) =>
-    `px-3 py-1.5 text-xs rounded-lg transition-colors ${
-      selectedFont === key
-        ? "bg-gray-900 text-white"
-        : "text-gray-500 hover:bg-gray-100"
+  const aiModeClass = (m: AiMode) =>
+    `flex-1 py-1.5 text-xs font-medium text-center rounded-md transition-colors ${
+      aiMode === m
+        ? "bg-gray-700 text-white"
+        : "text-gray-400 hover:text-gray-600"
     }`;
 
   return (
@@ -245,8 +281,21 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </button>
       </div>
 
-      {/* Card preview — 4:5 ratio (1080×1350) */}
+      {/* AI sub-toggle */}
+      {activeCard === "ai" && (
+        <div className="flex gap-1 mb-3 bg-gray-100 p-0.5 rounded-lg">
+          <button onClick={() => setAiMode("background")} className={aiModeClass("background")}>
+            배경 사진
+          </button>
+          <button onClick={() => setAiMode("illustration")} className={aiModeClass("illustration")}>
+            삽화
+          </button>
+        </div>
+      )}
+
+      {/* Card preview — 4:5 ratio */}
       <div
+        ref={cardRef}
         className="relative rounded-2xl overflow-hidden shadow-lg"
         style={{ aspectRatio: "4/5", ...cardStyle }}
       >
@@ -257,7 +306,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {activeCard === "photo" ? "사진 불러오는 중..." : "생성 중..."}
+              {activeCard === "photo" ? "사진 불러오는 중..." : aiMode === "illustration" ? "삽화 생성 중..." : "생성 중..."}
             </div>
           </div>
         ) : (
@@ -272,7 +321,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           >
             {/* Korean verse */}
             <p
-              className="text-xl leading-[1.9] text-center mb-3"
+              className="text-2xl leading-[1.9] text-center mb-3"
               style={{
                 fontFamily: fontCss,
                 wordBreak: "keep-all",
@@ -289,11 +338,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             {/* English verse */}
             {englishText && (
               <p
-                className="text-xs font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
-                style={{
-                  wordBreak: "keep-all",
-                  textWrap: "balance" as never,
-                }}
+                className="text-sm font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
+                style={{ wordBreak: "keep-all", textWrap: "balance" as never }}
               >
                 {englishText}
               </p>
@@ -326,21 +372,23 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         )}
       </div>
 
-      {/* Style name */}
-      {activeCard === "gradient" && gradient && (
-        <p className="text-center text-xs text-gray-400 mt-2">
-          &ldquo;{gradient.name}&rdquo;
-        </p>
-      )}
-      {activeCard === "ai" && aiBackground && aiBackground.type === "image" && (
-        <p className="text-center text-xs text-gray-400 mt-2">
-          AI 생성 이미지
-        </p>
-      )}
-      {activeCard === "ai" && aiBackground && aiBackground.type === "gradient" && aiBackground.name && (
-        <p className="text-center text-xs text-gray-400 mt-2">
-          &ldquo;{aiBackground.name}&rdquo;
-        </p>
+      {/* Gradient thumbnails */}
+      {activeCard === "gradient" && gradients.length > 1 && (
+        <div className="flex gap-2 mt-3 justify-center">
+          {gradients.map((g, i) => (
+            <button
+              key={g.name}
+              onClick={() => setSelectedGradientIdx(i)}
+              className={`w-12 h-12 rounded-lg border-2 transition-all ${
+                i === selectedGradientIdx
+                  ? "border-gray-900 scale-110"
+                  : "border-transparent opacity-60 hover:opacity-80"
+              }`}
+              style={{ background: g.gradient }}
+              title={g.name}
+            />
+          ))}
+        </div>
       )}
 
       {/* Photo thumbnails */}
@@ -350,9 +398,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             <button
               key={p.id}
               onClick={() => setSelectedPhotoIdx(i)}
-              className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${
+              className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
                 i === selectedPhotoIdx
-                  ? "border-gray-900 scale-105"
+                  ? "border-gray-900 scale-110"
                   : "border-transparent opacity-60 hover:opacity-80"
               }`}
             >
@@ -360,6 +408,13 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             </button>
           ))}
         </div>
+      )}
+
+      {/* AI label */}
+      {activeCard === "ai" && !aiLoading && currentAi?.type === "image" && (
+        <p className="text-center text-xs text-gray-400 mt-2">
+          {aiMode === "illustration" ? "AI 삽화" : "AI 배경 사진"}
+        </p>
       )}
 
       {/* Font selector */}
@@ -370,7 +425,11 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             <button
               key={f.key}
               onClick={() => setSelectedFont(f.key)}
-              className={fontBtnClass(f.key)}
+              className={`flex-1 py-1.5 text-xs rounded-lg transition-colors ${
+                selectedFont === f.key
+                  ? "bg-gray-900 text-white"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
             >
               {f.label}
             </button>
@@ -378,13 +437,14 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </div>
       </div>
 
-      {/* Action */}
-      <div className="mt-5 space-y-2">
+      {/* Download */}
+      <div className="mt-5">
         <button
-          disabled
-          className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg opacity-50 cursor-not-allowed"
+          onClick={handleDownload}
+          disabled={isLoading || downloading}
+          className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] disabled:opacity-50 transition-colors"
         >
-          PNG 다운로드 (다음 단계)
+          {downloading ? "다운로드 중..." : "PNG 다운로드"}
         </button>
       </div>
     </div>

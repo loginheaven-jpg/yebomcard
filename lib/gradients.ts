@@ -92,3 +92,15 @@ export function findGradient(text: string): GradientPreset {
   }
   return GRADIENT_PRESETS[Math.floor(Math.random() * GRADIENT_PRESETS.length)];
 }
+
+/**
+ * 5개 추천: 매칭된 것 우선 + 나머지 랜덤 채움
+ */
+export function findGradients(text: string, count = 5): GradientPreset[] {
+  const matched = GRADIENT_PRESETS.filter((p) =>
+    p.keywords.some((kw) => text.includes(kw))
+  );
+  const rest = GRADIENT_PRESETS.filter((p) => !matched.includes(p));
+  const shuffled = rest.sort(() => Math.random() - 0.5);
+  return [...matched, ...shuffled].slice(0, count);
+}
