@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
               role: "user",
               content: `성경 말씀: "${verseText}"
 이 말씀의 핵심 장면을 시각적 삽화로 표현하는 영문 이미지 프롬프트 1줄만 작성해.
-규칙: 성경 내용과 직접 관련된 장면/상징, 유화풍 또는 수채화풍, 따뜻한 톤, 글자 없이, 세로 비율.
+규칙: 성경 내용과 직접 관련된 장면/상징, 한국 민화풍의 따스하고 흐뭇한 분위기, 부드러운 붓터치, 글자 없이, 세로 비율.
 프롬프트만:`,
             },
           ],
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
             caller: "yebom-card:illustration-prompt",
           }
         );
-        prompt = promptResult.content.trim() + ", oil painting style, warm tones, no text no letters no words, portrait orientation, suitable for white text overlay";
+        prompt = promptResult.content.trim() + ", Korean minhwa folk painting style, warm and heartwarming atmosphere, soft brushstrokes, gentle pastel tones, no text no letters no words, portrait orientation, suitable for white text overlay";
       } else {
         // 배경 모드: 풍경 사진
         prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;

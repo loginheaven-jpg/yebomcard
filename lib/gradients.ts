@@ -7,6 +7,12 @@ export interface GradientPreset {
 
 export const GRADIENT_PRESETS: GradientPreset[] = [
   {
+    name: "깨끗한",
+    gradient: "linear-gradient(180deg, #ffffff, #f5f5f5)",
+    keywords: [],
+    textColor: "dark",
+  },
+  {
     name: "새벽기도",
     gradient: "linear-gradient(135deg, #0f0c29, #302b63, #24243e)",
     keywords: ["새벽", "기도", "경건"],
@@ -25,10 +31,10 @@ export const GRADIENT_PRESETS: GradientPreset[] = [
     textColor: "white",
   },
   {
-    name: "석양",
-    gradient: "linear-gradient(135deg, #fa709a, #fee140)",
+    name: "감사",
+    gradient: "linear-gradient(135deg, #d4a574, #c2956b, #a67c52)",
     keywords: ["감사", "찬양"],
-    textColor: "dark",
+    textColor: "white",
   },
   {
     name: "평안",
@@ -43,14 +49,14 @@ export const GRADIENT_PRESETS: GradientPreset[] = [
     textColor: "white",
   },
   {
-    name: "들꽃",
-    gradient: "linear-gradient(135deg, #f093fb, #f5576c)",
+    name: "사랑",
+    gradient: "linear-gradient(135deg, #dda0dd, #e6c3e6, #f0e0f0)",
     keywords: ["사랑", "아름다움"],
-    textColor: "white",
+    textColor: "dark",
   },
   {
     name: "순금",
-    gradient: "linear-gradient(135deg, #f7971e, #ffd200)",
+    gradient: "linear-gradient(135deg, #c9a84c, #e8d5a3, #c9a84c)",
     keywords: ["말씀", "진리", "보배"],
     textColor: "dark",
   },
@@ -62,7 +68,7 @@ export const GRADIENT_PRESETS: GradientPreset[] = [
   },
   {
     name: "초원",
-    gradient: "linear-gradient(135deg, #11998e, #38ef7d)",
+    gradient: "linear-gradient(135deg, #2d6a4f, #52796f, #84a98c)",
     keywords: ["생명", "치유", "회복"],
     textColor: "white",
   },
@@ -71,12 +77,6 @@ export const GRADIENT_PRESETS: GradientPreset[] = [
     gradient: "linear-gradient(135deg, #e0c3fc, #8ec5fc)",
     keywords: ["천국", "영원"],
     textColor: "dark",
-  },
-  {
-    name: "불기둥",
-    gradient: "linear-gradient(135deg, #eb3349, #f45c43)",
-    keywords: ["열정", "심판"],
-    textColor: "white",
   },
 ];
 

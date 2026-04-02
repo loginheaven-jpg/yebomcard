@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Noto_Serif_KR, Gothic_A1, Gowun_Dodum, Gowun_Batang, Playfair_Display } from "next/font/google";
+import { Noto_Serif_KR, Gothic_A1, Gowun_Dodum, IBM_Plex_Sans_KR, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
 const notoSerifKr = Noto_Serif_KR({
@@ -20,10 +20,10 @@ const gowunDodum = Gowun_Dodum({
   variable: "--font-gowun-dodum",
 });
 
-const gowunBatang = Gowun_Batang({
+const ibmPlexSansKr = IBM_Plex_Sans_KR({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-gowun-batang",
+  weight: ["400", "500", "600"],
+  variable: "--font-ibm-plex",
 });
 
 const playfairDisplay = Playfair_Display({
@@ -46,7 +46,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${gowunBatang.variable} ${playfairDisplay.variable} h-full antialiased`}
+      className={`${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${ibmPlexSansKr.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
         {children}

@@ -29,11 +29,11 @@ interface CardPreviewProps {
 
 type CardType = "gradient" | "photo" | "ai";
 type AiMode = "background" | "illustration";
-type FontChoice = "noto-serif" | "gowun-batang" | "gowun-dodum";
+type FontChoice = "noto-serif" | "ibm-plex" | "gowun-dodum";
 
 const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
   { key: "noto-serif", label: "명조", css: "var(--font-noto-serif-kr)" },
-  { key: "gowun-batang", label: "바탕", css: "var(--font-gowun-batang)" },
+  { key: "ibm-plex", label: "고딕", css: "var(--font-ibm-plex)" },
   { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum)" },
 ];
 
@@ -128,45 +128,41 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     loadPhotos();
   }, [activeCard, photos.length, keywords]);
 
-  // 3. AI — 모드별 로드
+  // 3. AI — 수동 생성 (서브 토글 선택 후 "생성" 버튼)
   const currentAi = aiMode === "illustration" ? aiIllust : aiBg;
-  const setCurrentAi = aiMode === "illustration" ? setAiIllust : setAiBg;
 
-  useEffect(() => {
-    if (activeCard !== "ai" || currentAi) return;
-    async function loadAi() {
-      setAiLoading(true);
-      try {
-        const res = await fetch("/api/ai/background", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ verseText: koreanText, keywords, mode: aiMode }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.type === "image" && data.data) {
-            setCurrentAi({
-              type: "image",
-              imageDataUrl: `data:${data.media_type};base64,${data.data}`,
-            });
-          } else if (data.backgrounds?.length > 0) {
-            const bg = data.backgrounds[0];
-            setCurrentAi({
-              type: "gradient",
-              name: bg.name,
-              gradient: bg.gradient,
-              textColor: bg.textColor,
-            });
-          }
+  async function generateAi() {
+    const setter = aiMode === "illustration" ? setAiIllust : setAiBg;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai/background", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verseText: koreanText, keywords, mode: aiMode }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.type === "image" && data.data) {
+          setter({
+            type: "image",
+            imageDataUrl: `data:${data.media_type};base64,${data.data}`,
+          });
+        } else if (data.backgrounds?.length > 0) {
+          const bg = data.backgrounds[0];
+          setter({
+            type: "gradient",
+            name: bg.name,
+            gradient: bg.gradient,
+            textColor: bg.textColor,
+          });
         }
-      } catch {
-        /* silent */
-      } finally {
-        setAiLoading(false);
       }
+    } catch {
+      /* silent */
+    } finally {
+      setAiLoading(false);
     }
-    loadAi();
-  }, [activeCard, aiMode, currentAi, koreanText, keywords]);
+  }
 
   // Card style computation
   let cardStyle: React.CSSProperties = {};
@@ -281,14 +277,23 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </button>
       </div>
 
-      {/* AI sub-toggle */}
+      {/* AI sub-toggle + generate button */}
       {activeCard === "ai" && (
-        <div className="flex gap-1 mb-3 bg-gray-100 p-0.5 rounded-lg">
-          <button onClick={() => setAiMode("background")} className={aiModeClass("background")}>
-            배경 사진
-          </button>
-          <button onClick={() => setAiMode("illustration")} className={aiModeClass("illustration")}>
-            삽화
+        <div className="flex gap-2 mb-3 items-center">
+          <div className="flex gap-1 flex-1 bg-gray-100 p-0.5 rounded-lg">
+            <button onClick={() => setAiMode("background")} className={aiModeClass("background")}>
+              배경 사진
+            </button>
+            <button onClick={() => setAiMode("illustration")} className={aiModeClass("illustration")}>
+              삽화
+            </button>
+          </div>
+          <button
+            onClick={generateAi}
+            disabled={aiLoading}
+            className="px-4 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {aiLoading ? "..." : "생성"}
           </button>
         </div>
       )}
