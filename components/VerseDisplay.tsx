@@ -167,7 +167,7 @@ export default function VerseDisplay({
 
   if (loading) {
     return (
-      <div className="w-full max-w-2xl mx-auto p-8 text-center text-gray-400">
+      <div className="w-full max-w-[1200px] mx-auto p-8 text-center text-gray-400">
         불러오는 중...
       </div>
     );
@@ -175,7 +175,7 @@ export default function VerseDisplay({
 
   if (verses.length === 0) {
     return (
-      <div className="w-full max-w-2xl mx-auto p-8 text-center text-gray-400">
+      <div className="w-full max-w-[1200px] mx-auto p-8 text-center text-gray-400">
         선택된 구절이 없습니다
       </div>
     );
@@ -184,7 +184,7 @@ export default function VerseDisplay({
   const groups = groupVerses(verses, englishVerses);
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-[1200px] mx-auto">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <button

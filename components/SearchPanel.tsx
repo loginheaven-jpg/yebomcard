@@ -489,7 +489,7 @@ export default function SearchPanel({
     }`;
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full max-w-[1200px] mx-auto">
       {/* Header */}
       {!isAddingMore && (
         <div className="text-center mb-6">
