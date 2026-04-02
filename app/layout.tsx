@@ -1,6 +1,14 @@
-import type { Metadata } from "next";
-import { Noto_Serif_KR, Gothic_A1, Gowun_Dodum, IBM_Plex_Sans_KR, Playfair_Display } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import {
+  Noto_Serif_KR,
+  Gothic_A1,
+  Gowun_Dodum,
+  IBM_Plex_Sans_KR,
+  Playfair_Display,
+} from "next/font/google";
 import "./globals.css";
+import VersionCheck from "@/components/VersionCheck";
+import PwaInstall from "@/components/PwaInstall";
 
 const notoSerifKr = Noto_Serif_KR({
   subsets: ["latin"],
@@ -36,6 +44,25 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: "예봄카드 | Yebom Card",
   description: "성경 말씀을 아름다운 이미지 카드로 만들어 보세요",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "예봄카드",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#1A2B3C",
 };
 
 export default function RootLayout({
@@ -50,6 +77,8 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
         {children}
+        <VersionCheck />
+        <PwaInstall />
       </body>
     </html>
   );
