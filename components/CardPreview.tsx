@@ -492,7 +492,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           value={verticalPos}
           onChange={(e) => setVerticalPos(Number(e.target.value))}
           className="h-full w-1.5 appearance-none cursor-pointer bg-gray-200 rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
-          style={{ writingMode: "vertical-lr", direction: "rtl" }}
+          style={{ writingMode: "vertical-lr" }}
         />
         <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 10 L1 4 L11 4 Z" /></svg>
       </div>
