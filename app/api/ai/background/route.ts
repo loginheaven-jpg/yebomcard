@@ -23,26 +23,26 @@ export async function POST(request: NextRequest) {
         // 삽화 모드: 키워드 기반으로 직접 프롬프트 구성 (AI 프롬프트 생성 대신)
         // Unsplash 매핑과 같은 키워드를 활용하되, 삽화 스타일로
         const sceneMap: Record<string, string> = {
-          평안: "a peaceful lake surrounded by gentle hills at sunset",
-          소망: "a bright sunrise over rolling hills with a winding path",
-          능력: "a majestic mountain peak with clouds and golden light",
-          사랑: "a blooming flower garden with butterflies and warm sunlight",
-          기쁨: "a sunlit meadow with wildflowers swaying in gentle breeze",
-          감사: "golden wheat fields at harvest time under warm autumn sky",
-          생명: "a fresh green forest with morning dew on leaves and ferns",
-          치유: "calm ocean waves on a serene beach with soft morning light",
-          묵상: "a misty quiet forest path with soft light filtering through trees",
-          영광: "dramatic golden clouds with rays of light breaking through",
-          구원: "light breaking through dark clouds over a vast landscape",
-          믿음: "a long winding road through green hills leading to distant light",
-          지혜: "an ancient olive tree with deep roots in a peaceful garden",
+          평안: "a calm lake reflecting soft sky",
+          소망: "a single sunrise over a hill",
+          능력: "a single mountain peak with golden light",
+          사랑: "a few simple flowers in warm sunlight",
+          기쁨: "a single tree in a sunlit meadow",
+          감사: "a golden wheat field under warm sky",
+          생명: "a single green tree with morning light",
+          치유: "calm ocean horizon with soft light",
+          묵상: "a quiet misty forest path",
+          영광: "golden light rays through simple clouds",
+          구원: "light breaking through a single cloud",
+          믿음: "a simple path leading to distant light",
+          지혜: "a single olive tree in a quiet garden",
         };
 
-        let scene = "a peaceful nature landscape with gentle hills and soft clouds";
+        let scene = "a calm simple landscape with soft sky";
         for (const k of keywords) {
           if (sceneMap[k]) { scene = sceneMap[k]; break; }
         }
-        prompt = `Children storybook watercolor illustration: ${scene}. Warm pastel tones, soft brushstrokes, heartwarming gentle atmosphere. NO people, NO faces, NO human figures, NO characters. Only nature and landscape. No text no words. Portrait orientation, suitable for white text overlay.`;
+        prompt = `Simple minimal children storybook watercolor: ${scene}. Very simple composition, few elements, large empty space in center for text overlay. Soft pastel tones, gentle brushstrokes. NO people, NO faces, NO characters. No text no words. Portrait orientation.`;
       } else {
         // 배경 모드: 풍경 사진
         prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;

@@ -318,12 +318,11 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     setDownloading(true);
     try {
       await document.fonts.ready;
-      const dataUrl = await toPng(cardRef.current, {
-        width: 1080,
-        height: 1350,
-        pixelRatio: 1,
+      const el = cardRef.current;
+      const ratio = 1080 / el.offsetWidth;
+      const dataUrl = await toPng(el, {
+        pixelRatio: ratio,
         cacheBust: true,
-        style: { transform: "scale(1)", transformOrigin: "top left" },
       });
       const link = document.createElement("a");
       link.download = `yebom-card-${firstVerse.book_code}${firstVerse.chapter}.png`;
