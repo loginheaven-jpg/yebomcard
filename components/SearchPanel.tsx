@@ -31,6 +31,7 @@ export default function SearchPanel({
 }: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>("search");
   const [version, setVersion] = useState<BibleVersion>("nkrv");
+  const [parallel, setParallel] = useState(false);
 
   // Scroll position preservation
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,7 @@ export default function SearchPanel({
   const [chapters, setChapters] = useState<number[]>([]);
   const [chapter, setChapter] = useState<number>(1);
   const [browseVerses, setBrowseVerses] = useState<BibleVerse[]>([]);
+  const [browseVersesAlt, setBrowseVersesAlt] = useState<BibleVerse[]>([]);
   const [loadingBrowse, setLoadingBrowse] = useState(false);
   const [rememberedVerse, setRememberedVerse] = useState<number | null>(null);
   const [bookTestament, setBookTestament] = useState<"old" | "new">("old");
@@ -292,6 +294,22 @@ export default function SearchPanel({
     loadVerses();
   }, [bookCode, chapter, version]);
 
+  // 병기 모드: 부 버전 로드
+  useEffect(() => {
+    if (!parallel || !chapter) { setBrowseVersesAlt([]); return; }
+    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    supabase
+      .from("bible_verses")
+      .select("*")
+      .eq("version", altVersion)
+      .eq("book_code", bookCode)
+      .eq("chapter", chapter)
+      .order("verse")
+      .then(({ data }) => {
+        if (data) setBrowseVersesAlt(data as BibleVerse[]);
+      });
+  }, [parallel, bookCode, chapter, version]);
+
   // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
   useEffect(() => {
     if (rememberedVerse && browseVerses.length > 0 && scrollRef.current) {
@@ -497,58 +515,46 @@ export default function SearchPanel({
       )}
 
       {/* Version Toggle */}
-      <div className="flex justify-center gap-2 mb-4">
-        <button
-          onClick={() => {
-            if (scrollRef.current) {
-              if (mode === "chapter") {
-                const btns = scrollRef.current.querySelectorAll("button");
-                const rect = scrollRef.current.getBoundingClientRect();
-                for (const btn of btns) {
-                  if (btn.getBoundingClientRect().top >= rect.top) {
-                    const m = btn.textContent?.match(/(\d+)절/);
-                    if (m) setRememberedVerse(parseInt(m[1]));
-                    break;
+      <div className="flex justify-center gap-1.5 mb-4">
+        {([["nkrv", "개역개정"], ["rnksv", "새번역"]] as const).map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => {
+              if (scrollRef.current) {
+                if (mode === "chapter") {
+                  const btns = scrollRef.current.querySelectorAll("button");
+                  const rect = scrollRef.current.getBoundingClientRect();
+                  for (const btn of btns) {
+                    if (btn.getBoundingClientRect().top >= rect.top) {
+                      const m = btn.textContent?.match(/(\d+)절/);
+                      if (m) setRememberedVerse(parseInt(m[1]));
+                      break;
+                    }
                   }
                 }
+                savedScroll.current = scrollRef.current.scrollTop;
               }
-              savedScroll.current = scrollRef.current.scrollTop;
-            }
-            setVersion("nkrv");
-          }}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            version === "nkrv"
+              setParallel(false);
+              setVersion(v);
+            }}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              !parallel && version === v
+                ? "bg-gray-900 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+        <button
+          onClick={() => setParallel(!parallel)}
+          className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            parallel
               ? "bg-gray-900 text-white"
               : "bg-gray-100 text-gray-600 hover:bg-gray-200"
           }`}
         >
-          개역개정
-        </button>
-        <button
-          onClick={() => {
-            if (scrollRef.current) {
-              if (mode === "chapter") {
-                const btns = scrollRef.current.querySelectorAll("button");
-                const rect = scrollRef.current.getBoundingClientRect();
-                for (const btn of btns) {
-                  if (btn.getBoundingClientRect().top >= rect.top) {
-                    const m = btn.textContent?.match(/(\d+)절/);
-                    if (m) setRememberedVerse(parseInt(m[1]));
-                    break;
-                  }
-                }
-              }
-              savedScroll.current = scrollRef.current.scrollTop;
-            }
-            setVersion("rnksv");
-          }}
-          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            version === "rnksv"
-              ? "bg-gray-900 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          새번역
+          병기
         </button>
       </div>
 
@@ -744,21 +750,86 @@ export default function SearchPanel({
                 </div>
               </div>
 
-              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
-                {loadingBrowse ? (
-                  <div className="p-4 text-center text-gray-400">
-                    불러오는 중...
-                  </div>
-                ) : browseVerses.length === 0 ? (
-                  <div className="p-4 text-center text-gray-400">
-                    구절이 없습니다
-                  </div>
-                ) : (
-                  browseVerses.map((v) => (
-                    <VerseItem key={v.id} verse={v} />
-                  ))
-                )}
-              </div>
+              {parallel && browseVersesAlt.length > 0 ? (
+                /* 병기 모드 */
+                <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+                  {loadingBrowse ? (
+                    <div className="p-4 text-center text-gray-400">불러오는 중...</div>
+                  ) : (
+                    <>
+                      {/* PC: 좌우 2단 헤더 */}
+                      <div className="hidden lg:grid lg:grid-cols-2 lg:gap-0 border-b border-gray-200 bg-gray-50 text-xs text-gray-500 font-medium">
+                        <div className="px-4 py-2">{version === "nkrv" ? "개역개정" : "새번역"}</div>
+                        <div className="px-4 py-2 border-l border-gray-200">{version === "nkrv" ? "새번역" : "개역개정"}</div>
+                      </div>
+
+                      {browseVerses.map((v) => {
+                        const alt = browseVersesAlt.find((a) => a.verse === v.verse);
+                        const selected = isSelected(v, selectedVerses);
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => handleToggle(v)}
+                            className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
+                              selected ? "bg-gray-100 border-l-4 border-l-gray-400" : "hover:bg-gray-50"
+                            }`}
+                          >
+                            {/* 모바일: 교차 (세로) */}
+                            <div className="lg:hidden">
+                              <div className="flex items-start gap-1.5">
+                                <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800" : "text-gray-500"}`}>
+                                  {v.verse}절
+                                </span>
+                                <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+                                  {v.text}
+                                </span>
+                              </div>
+                              {alt && (
+                                <div className="mt-1 ml-7 text-xs text-gray-400 leading-relaxed">
+                                  {alt.text}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* PC: 좌우 2단 */}
+                            <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
+                              <div>
+                                <span className={`font-semibold text-sm mr-1.5 ${selected ? "text-gray-800" : "text-gray-500"}`}>
+                                  {v.verse}
+                                </span>
+                                <span className={`text-sm ${selected ? "text-gray-900" : "text-gray-700"}`}>
+                                  {v.text}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-500 border-l border-gray-100 pl-4">
+                                <span className="text-gray-400 mr-1.5">{v.verse}</span>
+                                {alt?.text || ""}
+                              </div>
+                            </div>
+
+                            {selected && (
+                              <span className="float-right text-gray-700 text-sm">&#10003;</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* 단일 버전 모드 */
+                <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+                  {loadingBrowse ? (
+                    <div className="p-4 text-center text-gray-400">불러오는 중...</div>
+                  ) : browseVerses.length === 0 ? (
+                    <div className="p-4 text-center text-gray-400">구절이 없습니다</div>
+                  ) : (
+                    browseVerses.map((v) => (
+                      <VerseItem key={v.id} verse={v} />
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
