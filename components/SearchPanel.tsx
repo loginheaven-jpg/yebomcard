@@ -482,25 +482,25 @@ export default function SearchPanel({
             </select>
 
             {/* Chapter navigation group */}
-            <div className="flex items-center">
+            <div className="inline-flex items-center bg-gray-900 rounded-full">
               <button
                 onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                 disabled={!canPrevChapter}
-                className="px-2 py-2 border border-gray-300 border-r-0 rounded-l-lg bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
                 aria-label="이전 장"
               >
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <select
                 value={chapter}
                 onChange={(e) => setChapter(Number(e.target.value))}
-                className="w-16 py-2 border-y border-gray-300 text-sm text-center bg-white focus:outline-none"
-                style={{ appearance: "none", backgroundImage: "none", paddingRight: "0.5rem" }}
+                className="w-14 h-9 text-sm text-center text-white bg-transparent font-semibold focus:outline-none cursor-pointer"
+                style={{ appearance: "none", backgroundImage: "none" }}
               >
                 {chapters.map((ch) => (
-                  <option key={ch} value={ch}>
+                  <option key={ch} value={ch} className="text-gray-900">
                     {ch}장
                   </option>
                 ))}
@@ -508,10 +508,10 @@ export default function SearchPanel({
               <button
                 onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                 disabled={!canNextChapter}
-                className="px-2 py-2 border border-gray-300 border-l-0 rounded-r-lg bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-9 h-9 flex items-center justify-center text-white/70 hover:text-white disabled:text-white/20 disabled:cursor-not-allowed transition-colors"
                 aria-label="다음 장"
               >
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </button>
