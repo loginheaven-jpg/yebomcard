@@ -191,6 +191,19 @@ export function parseReference(input: string): ParsedReference | null {
     }
   }
 
+  // 패턴 3: 장만 지정 — "요3:" "요3" "마태복음3" "누가2장"
+  const chapterOnlyPattern = /^(.+?)\s*(\d+)\s*[:：장]?\s*$/;
+  const chapterOnlyMatch = text.match(chapterOnlyPattern);
+  if (chapterOnlyMatch) {
+    const bookCode = resolveBookCode(chapterOnlyMatch[1]);
+    if (bookCode) {
+      const chapter = parseInt(chapterOnlyMatch[2]);
+      if (chapter) {
+        return { bookCode, chapter, verses: [] };
+      }
+    }
+  }
+
   return null;
 }
 

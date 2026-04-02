@@ -78,14 +78,18 @@ export default function SearchPanel({
       setSearchLoading(true);
 
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("bible_verses")
           .select("*")
           .eq("version", version)
           .eq("book_code", parsed.bookCode)
-          .eq("chapter", parsed.chapter)
-          .in("verse", parsed.verses)
-          .order("verse");
+          .eq("chapter", parsed.chapter);
+
+        if (parsed.verses.length > 0) {
+          query = query.in("verse", parsed.verses);
+        }
+
+        const { data, error } = await query.order("verse");
 
         if (error) {
           setSearchError("검색 중 오류가 발생했습니다");
