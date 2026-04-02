@@ -464,15 +464,22 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           </div>
         )}
 
-        {/* Watermark */}
-        {!isLoading && (
-          <div
-            className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-sm"
-            style={{ color: userTextColor, opacity: 0.4 }}
-          >
-            Yebom Bible Card
-          </div>
-        )}
+        {/* Watermark — 배경 대비 자동 색상 */}
+        {!isLoading && (() => {
+          const dr = parseInt(dominantColor.slice(1, 3), 16) || 128;
+          const dg = parseInt(dominantColor.slice(3, 5), 16) || 128;
+          const db = parseInt(dominantColor.slice(5, 7), 16) || 128;
+          const brightness = (dr * 299 + dg * 587 + db * 114) / 1000;
+          const wmColor = brightness > 128 ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.6)";
+          return (
+            <div
+              className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-sm"
+              style={{ color: wmColor }}
+            >
+              Yebom Bible Card
+            </div>
+          );
+        })()}
 
         {/* Attribution */}
         {!isLoading && creditLine && (
