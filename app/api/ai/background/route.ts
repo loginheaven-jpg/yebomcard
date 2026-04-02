@@ -20,29 +20,29 @@ export async function POST(request: NextRequest) {
       let prompt: string;
 
       if (mode === "illustration") {
-        // 삽화 모드: AI Chat으로 본문 분석 → 삽화 프롬프트 생성
-        const promptResult = await callAI(
-          [
-            {
-              role: "user",
-              content: `성경 말씀: "${verseText}"
-이 말씀에 직접 언급된 대상(자연, 동물, 사물, 풍경)만 그리는 영문 이미지 프롬프트 1줄 작성.
-규칙:
-- 말씀 본문에 없는 대상은 절대 그리지 마라
-- 사람 얼굴, 초상화, 인물 클로즈업 절대 금지
-- 어린이 그림책 삽화 스타일, 따뜻하고 부드러운 분위기
-- 세로 비율, 글자 없이
-프롬프트만:`,
-            },
-          ],
-          {
-            provider: "gemini-flash",
-            max_tokens: 150,
-            temperature: 0.4,
-            caller: "yebom-card:illustration-prompt",
-          }
-        );
-        prompt = promptResult.content.trim() + ", children storybook illustration style, warm and gentle watercolor, soft pastel tones, NO people faces, NO portraits, NO human close-ups, no text no letters no words, portrait orientation, suitable for white text overlay";
+        // 삽화 모드: 키워드 기반으로 직접 프롬프트 구성 (AI 프롬프트 생성 대신)
+        // Unsplash 매핑과 같은 키워드를 활용하되, 삽화 스타일로
+        const sceneMap: Record<string, string> = {
+          평안: "a peaceful lake surrounded by gentle hills at sunset",
+          소망: "a bright sunrise over rolling hills with a winding path",
+          능력: "a majestic mountain peak with clouds and golden light",
+          사랑: "a blooming flower garden with butterflies and warm sunlight",
+          기쁨: "a sunlit meadow with wildflowers swaying in gentle breeze",
+          감사: "golden wheat fields at harvest time under warm autumn sky",
+          생명: "a fresh green forest with morning dew on leaves and ferns",
+          치유: "calm ocean waves on a serene beach with soft morning light",
+          묵상: "a misty quiet forest path with soft light filtering through trees",
+          영광: "dramatic golden clouds with rays of light breaking through",
+          구원: "light breaking through dark clouds over a vast landscape",
+          믿음: "a long winding road through green hills leading to distant light",
+          지혜: "an ancient olive tree with deep roots in a peaceful garden",
+        };
+
+        let scene = "a peaceful nature landscape with gentle hills and soft clouds";
+        for (const k of keywords) {
+          if (sceneMap[k]) { scene = sceneMap[k]; break; }
+        }
+        prompt = `Children storybook watercolor illustration: ${scene}. Warm pastel tones, soft brushstrokes, heartwarming gentle atmosphere. NO people, NO faces, NO human figures, NO characters. Only nature and landscape. No text no words. Portrait orientation, suitable for white text overlay.`;
       } else {
         // 배경 모드: 풍경 사진
         prompt = `A beautiful ${kw} landscape photograph, serene spiritual atmosphere, soft natural lighting, suitable as background for white text overlay, portrait orientation, no text no letters no words`;
