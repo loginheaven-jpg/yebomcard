@@ -34,6 +34,7 @@ export default function SearchPanel({
 
   // Scroll position preservation
   const scrollRef = useRef<HTMLDivElement>(null);
+  const savedScroll = useRef(0);
 
   // ─── Unified search state (reference + word merged) ───
   const [searchInput, setSearchInput] = useState("");
@@ -98,7 +99,17 @@ export default function SearchPanel({
           setSearchError("해당 구절을 찾을 수 없습니다");
           setSearchResults([]);
         } else {
-          setSearchResults(data as BibleVerse[]);
+          const results = data as BibleVerse[];
+          setSearchResults(results);
+          if (results.length === 1 && !isSelected(results[0], selectedVerses)) {
+            onToggleVerse(results[0]);
+          }
+          requestAnimationFrame(() => {
+            if (scrollRef.current && savedScroll.current > 0) {
+              scrollRef.current.scrollTop = savedScroll.current;
+              savedScroll.current = 0;
+            }
+          });
         }
       } catch {
         setSearchError("검색 중 오류가 발생했습니다");
@@ -182,6 +193,12 @@ export default function SearchPanel({
             setSearchResults((data as BibleVerse[]) || []);
             setHasMoreResults((data?.length || 0) === PAGE_SIZE);
             if (data?.length === 0) setSearchError("검색 결과가 없습니다");
+            requestAnimationFrame(() => {
+              if (scrollRef.current && savedScroll.current > 0) {
+                scrollRef.current.scrollTop = savedScroll.current;
+                savedScroll.current = 0;
+              }
+            });
           }
         }
       } catch {
@@ -287,6 +304,44 @@ export default function SearchPanel({
       });
     }
   }, [browseVerses, rememberedVerse]);
+
+  // ─── 버전 전환 시 말씀 검색 결과 재조회 ───
+  const prevVersion = useRef(version);
+  useEffect(() => {
+    if (prevVersion.current !== version) {
+      prevVersion.current = version;
+      // 말씀 검색 결과가 있으면 재실행
+      if (searchResults.length > 0 && searchInput.trim()) {
+        savedScroll.current = scrollRef.current?.scrollTop ?? 0;
+        executeSearch();
+      }
+      // 주제 추천 결과가 있으면 DB만 재조회 (AI 재호출 없음)
+      if (topicRecommendations.length > 0) {
+        savedScroll.current = scrollRef.current?.scrollTop ?? 0;
+        (async () => {
+          const promises = topicRecommendations.map((rec) =>
+            supabase
+              .from("bible_verses")
+              .select("*")
+              .eq("version", version)
+              .eq("book_name", rec.book)
+              .eq("chapter", rec.chapter)
+              .eq("verse", rec.verse)
+              .single()
+          );
+          const results = await Promise.all(promises);
+          const found: BibleVerse[] = [];
+          for (const res of results) {
+            if (res.data) found.push(res.data as BibleVerse);
+          }
+          setTopicResults(found);
+          requestAnimationFrame(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = savedScroll.current;
+          });
+        })();
+      }
+    }
+  }, [version]);
 
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
@@ -443,16 +498,19 @@ export default function SearchPanel({
       <div className="flex justify-center gap-2 mb-4">
         <button
           onClick={() => {
-            if (mode === "chapter" && scrollRef.current) {
-              const btns = scrollRef.current.querySelectorAll("button");
-              const rect = scrollRef.current.getBoundingClientRect();
-              for (const btn of btns) {
-                if (btn.getBoundingClientRect().top >= rect.top) {
-                  const m = btn.textContent?.match(/(\d+)절/);
-                  if (m) setRememberedVerse(parseInt(m[1]));
-                  break;
+            if (scrollRef.current) {
+              if (mode === "chapter") {
+                const btns = scrollRef.current.querySelectorAll("button");
+                const rect = scrollRef.current.getBoundingClientRect();
+                for (const btn of btns) {
+                  if (btn.getBoundingClientRect().top >= rect.top) {
+                    const m = btn.textContent?.match(/(\d+)절/);
+                    if (m) setRememberedVerse(parseInt(m[1]));
+                    break;
+                  }
                 }
               }
+              savedScroll.current = scrollRef.current.scrollTop;
             }
             setVersion("nkrv");
           }}
@@ -466,16 +524,19 @@ export default function SearchPanel({
         </button>
         <button
           onClick={() => {
-            if (mode === "chapter" && scrollRef.current) {
-              const btns = scrollRef.current.querySelectorAll("button");
-              const rect = scrollRef.current.getBoundingClientRect();
-              for (const btn of btns) {
-                if (btn.getBoundingClientRect().top >= rect.top) {
-                  const m = btn.textContent?.match(/(\d+)절/);
-                  if (m) setRememberedVerse(parseInt(m[1]));
-                  break;
+            if (scrollRef.current) {
+              if (mode === "chapter") {
+                const btns = scrollRef.current.querySelectorAll("button");
+                const rect = scrollRef.current.getBoundingClientRect();
+                for (const btn of btns) {
+                  if (btn.getBoundingClientRect().top >= rect.top) {
+                    const m = btn.textContent?.match(/(\d+)절/);
+                    if (m) setRememberedVerse(parseInt(m[1]));
+                    break;
+                  }
                 }
               }
+              savedScroll.current = scrollRef.current.scrollTop;
             }
             setVersion("rnksv");
           }}
