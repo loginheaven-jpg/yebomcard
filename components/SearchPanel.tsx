@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { OLD_TESTAMENT, NEW_TESTAMENT } from "@/lib/books";
+import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import type { BibleVerse, BibleVersion, SearchMode, AIRecommendation } from "@/lib/types";
 
@@ -47,12 +47,14 @@ export default function SearchPanel({
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Chapter browse state
+  const [browseStep, setBrowseStep] = useState<"book" | "chapter" | "verse">("book");
   const [bookCode, setBookCode] = useState("gen");
   const [chapters, setChapters] = useState<number[]>([]);
   const [chapter, setChapter] = useState<number>(1);
   const [browseVerses, setBrowseVerses] = useState<BibleVerse[]>([]);
   const [loadingBrowse, setLoadingBrowse] = useState(false);
   const [rememberedVerse, setRememberedVerse] = useState<number | null>(null);
+  const [bookTestament, setBookTestament] = useState<"old" | "new">("old");
 
   // Topic recommendation state
   const [topicInput, setTopicInput] = useState("");
@@ -621,79 +623,144 @@ export default function SearchPanel({
       {/* ─── Tab 2: 장절 선택 ─── */}
       {mode === "chapter" && (
         <div>
-          <div className="flex gap-2 mb-4">
-            <select
-              value={bookCode}
-              onChange={(e) => setBookCode(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400"
-            >
-              <optgroup label="구약">
-                {OLD_TESTAMENT.map((b) => (
-                  <option key={b.code} value={b.code}>
-                    {b.nameKr}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="신약">
-                {NEW_TESTAMENT.map((b) => (
-                  <option key={b.code} value={b.code}>
-                    {b.nameKr}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+          {/* Step: 책 선택 (그리드) */}
+          {browseStep === "book" && (
+            <div>
+              {/* 구약/신약 토글 */}
+              <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-xl">
+                <button
+                  onClick={() => setBookTestament("old")}
+                  className={`flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
+                    bookTestament === "old" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                  }`}
+                >
+                  구약
+                </button>
+                <button
+                  onClick={() => setBookTestament("new")}
+                  className={`flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
+                    bookTestament === "new" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                  }`}
+                >
+                  신약
+                </button>
+              </div>
 
-            {/* Chapter navigation */}
-            <div className="flex items-center gap-0">
-              <button
-                onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
-                disabled={!canPrevChapter}
-                className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
-                aria-label="이전 장"
-              >
-                <svg className="w-6 h-9 text-gray-500" viewBox="0 0 18 28" fill="currentColor">
-                  <path d="M15 2 L2 14 L15 26 Z" />
-                </svg>
-              </button>
-              <select
-                value={chapter}
-                onChange={(e) => setChapter(Number(e.target.value))}
-                className="w-20 px-2 py-2 border border-gray-300 rounded-lg text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-gray-400"
-              >
-                {chapters.map((ch) => (
-                  <option key={ch} value={ch}>
-                    {ch}장
-                  </option>
+              {/* 책 그리드 */}
+              <div className="grid grid-cols-5 gap-1.5">
+                {(bookTestament === "old" ? OLD_TESTAMENT : NEW_TESTAMENT).map((b) => (
+                  <button
+                    key={b.code}
+                    onClick={() => {
+                      setBookCode(b.code);
+                      setBrowseStep("chapter");
+                    }}
+                    className={`py-3 rounded-lg text-center transition-colors ${
+                      bookCode === b.code
+                        ? "bg-gray-900 text-white"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{b.abbr}</span>
+                  </button>
                 ))}
-              </select>
-              <button
-                onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
-                disabled={!canNextChapter}
-                className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
-                aria-label="다음 장"
-              >
-                <svg className="w-6 h-9 text-gray-500" viewBox="0 0 18 28" fill="currentColor">
-                  <path d="M3 2 L16 14 L3 26 Z" />
-                </svg>
-              </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
-            {loadingBrowse ? (
-              <div className="p-4 text-center text-gray-400">
-                불러오는 중...
+          {/* Step: 장 선택 (그리드) */}
+          {browseStep === "chapter" && (
+            <div>
+              {/* 헤더: 뒤로 + 책 이름 */}
+              <button
+                onClick={() => setBrowseStep("book")}
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-3 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                {getBookByCode(bookCode)?.nameKr || "책 선택"}
+              </button>
+
+              {/* 장 그리드 */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {chapters.map((ch) => (
+                  <button
+                    key={ch}
+                    onClick={() => {
+                      setChapter(ch);
+                      setBrowseStep("verse");
+                    }}
+                    className={`py-3 rounded-lg text-center transition-colors ${
+                      chapter === ch
+                        ? "bg-gray-900 text-white"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                    }`}
+                  >
+                    <span className="text-sm">{ch}</span>
+                  </button>
+                ))}
               </div>
-            ) : browseVerses.length === 0 ? (
-              <div className="p-4 text-center text-gray-400">
-                구절이 없습니다
+            </div>
+          )}
+
+          {/* Step: 절 본문 (리스트) */}
+          {browseStep === "verse" && (
+            <div>
+              {/* 헤더: 뒤로 + 책/장 + 장 좌우 이동 */}
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => setBrowseStep("chapter")}
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  {getBookByCode(bookCode)?.nameKr} {chapter}장
+                </button>
+
+                <div className="flex items-center gap-0">
+                  <button
+                    onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
+                    disabled={!canPrevChapter}
+                    className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    <svg className="w-5 h-7 text-gray-400" viewBox="0 0 18 28" fill="currentColor">
+                      <path d="M15 4 L4 14 L15 24 Z" />
+                    </svg>
+                  </button>
+                  <span className="text-xs text-gray-400 min-w-[3rem] text-center">
+                    {chapter} / {chapters.length}
+                  </span>
+                  <button
+                    onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
+                    disabled={!canNextChapter}
+                    className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
+                  >
+                    <svg className="w-5 h-7 text-gray-400" viewBox="0 0 18 28" fill="currentColor">
+                      <path d="M3 4 L14 14 L3 24 Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            ) : (
-              browseVerses.map((v) => (
-                <VerseItem key={v.id} verse={v} />
-              ))
-            )}
-          </div>
+
+              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+                {loadingBrowse ? (
+                  <div className="p-4 text-center text-gray-400">
+                    불러오는 중...
+                  </div>
+                ) : browseVerses.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400">
+                    구절이 없습니다
+                  </div>
+                ) : (
+                  browseVerses.map((v) => (
+                    <VerseItem key={v.id} verse={v} />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -785,6 +852,7 @@ export default function SearchPanel({
                 setBookCode(lastVerse.book_code);
                 setChapter(lastVerse.chapter);
                 setRememberedVerse(lastVerse.verse);
+                setBrowseStep("verse");
                 setMode("chapter");
               }}
               className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
