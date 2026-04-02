@@ -42,7 +42,7 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "예봄카드 | Yebom Card",
+  title: "예봄성경 | Yebom Bible Card",
   description: "성경 말씀을 아름다운 이미지 카드로 만들어 보세요",
   manifest: "/manifest.json",
   icons: {
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "예봄카드",
+    title: "예봄성경",
   },
   formatDetection: { telephone: false },
 };

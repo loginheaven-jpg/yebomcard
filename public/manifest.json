@@ -1,6 +1,6 @@
 {
-  "name": "예봄카드 | Yebom Card",
-  "short_name": "예봄카드",
+  "name": "예봄교회 성경카드 | Yebom Bible Card",
+  "short_name": "예봄성경",
   "description": "성경 말씀을 아름다운 이미지 카드로 만들어 보세요",
   "start_url": "/",
   "display": "standalone",

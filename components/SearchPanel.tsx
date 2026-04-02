@@ -510,10 +510,10 @@ export default function SearchPanel({
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 font-[family-name:var(--font-noto-serif-kr)]">
-            예봄카드
+            예봄성경
           </h1>
           <p className="text-xs text-gray-400 mt-1 font-[family-name:var(--font-playfair)] italic tracking-wider">
-            Yebom Card
+            Yebom Bible Card
           </p>
         </div>
       )}
