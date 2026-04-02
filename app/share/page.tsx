@@ -52,7 +52,7 @@ export async function generateMetadata({
       .eq("verse", first.verse)
       .single();
     if (data?.text) {
-      preview = data.text.length > 60 ? data.text.slice(0, 60) + "..." : data.text;
+      preview = data.text.length > 10 ? data.text.slice(0, 10) + "..." : data.text;
     }
   } catch {
     // silent
