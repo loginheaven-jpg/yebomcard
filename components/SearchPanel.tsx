@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
@@ -29,14 +29,18 @@ export default function SearchPanel({
   onConfirm,
   isAddingMore,
 }: SearchPanelProps) {
-  const [mode, setMode] = useState<SearchMode>("reference");
+  const [mode, setMode] = useState<SearchMode>("search");
   const [version, setVersion] = useState<BibleVersion>("nkrv");
 
-  // Reference search state
-  const [refInput, setRefInput] = useState("");
-  const [refResults, setRefResults] = useState<BibleVerse[]>([]);
-  const [refLoading, setRefLoading] = useState(false);
-  const [refError, setRefError] = useState("");
+  // Scroll position preservation
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ─── Unified search state (reference + word merged) ───
+  const [searchInput, setSearchInput] = useState("");
+  const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [lastSearchType, setLastSearchType] = useState<"ref" | "word" | null>(null);
 
   // Chapter browse state
   const [bookCode, setBookCode] = useState("gen");
@@ -45,61 +49,135 @@ export default function SearchPanel({
   const [browseVerses, setBrowseVerses] = useState<BibleVerse[]>([]);
   const [loadingBrowse, setLoadingBrowse] = useState(false);
 
-  // Word search state
-  const [wordInput, setWordInput] = useState("");
-  const [wordResults, setWordResults] = useState<BibleVerse[]>([]);
-  const [wordLoading, setWordLoading] = useState(false);
-  const [wordError, setWordError] = useState("");
-
-  // Topic recommendation state (AI)
+  // Topic recommendation state
   const [topicInput, setTopicInput] = useState("");
   const [topicRecommendations, setTopicRecommendations] = useState<AIRecommendation[]>([]);
   const [topicResults, setTopicResults] = useState<BibleVerse[]>([]);
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState("");
 
-  // ─── 말씀 찾기 (Reference search) ───
-  const searchReference = useCallback(async () => {
-    const trimmed = refInput.trim();
+  // ─── 말씀 검색 (auto-detect: reference or word) ───
+  const executeSearch = useCallback(async () => {
+    const trimmed = searchInput.trim();
     if (!trimmed) {
-      setRefError("예: 창1:1-3, 시편 23:1, 롬8:28");
+      setSearchError("창1:1-3 또는 사랑, 평안");
       return;
     }
 
+    // Try reference parse first
     const parsed = parseReference(trimmed);
-    if (!parsed) {
-      setRefError("인식할 수 없는 형식입니다. 예: 창1:1-3, 시편 23:1");
-      return;
-    }
 
-    setRefError("");
-    setRefLoading(true);
+    if (parsed) {
+      // === Reference search ===
+      setLastSearchType("ref");
+      setSearchError("");
+      setSearchLoading(true);
 
-    try {
-      const { data, error } = await supabase
-        .from("bible_verses")
-        .select("*")
-        .eq("version", version)
-        .eq("book_code", parsed.bookCode)
-        .eq("chapter", parsed.chapter)
-        .in("verse", parsed.verses)
-        .order("verse");
+      try {
+        const { data, error } = await supabase
+          .from("bible_verses")
+          .select("*")
+          .eq("version", version)
+          .eq("book_code", parsed.bookCode)
+          .eq("chapter", parsed.chapter)
+          .in("verse", parsed.verses)
+          .order("verse");
 
-      if (error) {
-        setRefError("검색 중 오류가 발생했습니다");
-        setRefResults([]);
-      } else if (!data || data.length === 0) {
-        setRefError("해당 구절을 찾을 수 없습니다");
-        setRefResults([]);
-      } else {
-        setRefResults(data as BibleVerse[]);
+        if (error) {
+          setSearchError("검색 중 오류가 발생했습니다");
+          setSearchResults([]);
+        } else if (!data || data.length === 0) {
+          setSearchError("해당 구절을 찾을 수 없습니다");
+          setSearchResults([]);
+        } else {
+          setSearchResults(data as BibleVerse[]);
+        }
+      } catch {
+        setSearchError("검색 중 오류가 발생했습니다");
+      } finally {
+        setSearchLoading(false);
       }
-    } catch {
-      setRefError("검색 중 오류가 발생했습니다");
-    } finally {
-      setRefLoading(false);
+    } else {
+      // === Word search ===
+      if (trimmed.length < 2) {
+        setSearchError("2글자 이상 입력해주세요");
+        return;
+      }
+      setLastSearchType("word");
+      setSearchError("");
+      setSearchLoading(true);
+
+      try {
+        const isOr = trimmed.includes("x");
+        const words = isOr
+          ? trimmed.split("x").map((w) => w.trim()).filter(Boolean)
+          : trimmed.split(/\s+/).filter(Boolean);
+
+        if (words.length === 0) {
+          setSearchError("검색어를 입력해주세요");
+          setSearchLoading(false);
+          return;
+        }
+
+        if (isOr) {
+          const promises = words.map((w) =>
+            supabase
+              .from("bible_verses")
+              .select("*")
+              .eq("version", version)
+              .ilike("text", `%${w}%`)
+              .order("book_order")
+              .order("chapter")
+              .order("verse")
+              .limit(30)
+          );
+          const results = await Promise.all(promises);
+          const merged = new Map<number, BibleVerse>();
+          for (const res of results) {
+            if (res.data) {
+              for (const v of res.data as BibleVerse[]) {
+                merged.set(v.id, v);
+              }
+            }
+          }
+          const sorted = [...merged.values()].sort((a, b) => {
+            if (a.book_order !== b.book_order) return a.book_order - b.book_order;
+            if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+            return a.verse - b.verse;
+          });
+          setSearchResults(sorted.slice(0, 50));
+          if (sorted.length === 0) setSearchError("검색 결과가 없습니다");
+        } else {
+          let query = supabase
+            .from("bible_verses")
+            .select("*")
+            .eq("version", version);
+
+          for (const w of words) {
+            query = query.ilike("text", `%${w}%`);
+          }
+
+          const { data, error } = await query
+            .order("book_order")
+            .order("chapter")
+            .order("verse")
+            .limit(50);
+
+          if (error) {
+            setSearchError("검색 중 오류가 발생했습니다");
+            setSearchResults([]);
+          } else {
+            setSearchResults((data as BibleVerse[]) || []);
+            if (data?.length === 0) setSearchError("검색 결과가 없습니다");
+          }
+        }
+      } catch {
+        setSearchError("검색 중 오류가 발생했습니다");
+      } finally {
+        setSearchLoading(false);
+      }
     }
-  }, [refInput, version]);
+  }, [searchInput, version]);
 
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
@@ -144,92 +222,7 @@ export default function SearchPanel({
     loadVerses();
   }, [bookCode, chapter, version]);
 
-  // ─── 단어 검색 (Word search: space=AND, x=OR) ───
-  const searchWord = useCallback(async () => {
-    const trimmed = wordInput.trim();
-    if (trimmed.length < 2) {
-      setWordError("2글자 이상 입력해주세요");
-      return;
-    }
-
-    setWordError("");
-    setWordLoading(true);
-
-    try {
-      // "사랑x믿음" → OR, "사랑 믿음" → AND
-      const isOr = trimmed.includes("x");
-      const words = isOr
-        ? trimmed.split("x").map((w) => w.trim()).filter(Boolean)
-        : trimmed.split(/\s+/).filter(Boolean);
-
-      if (words.length === 0) {
-        setWordError("검색어를 입력해주세요");
-        setWordLoading(false);
-        return;
-      }
-
-      if (isOr) {
-        // OR: 각 단어별로 검색 후 합치기
-        const promises = words.map((w) =>
-          supabase
-            .from("bible_verses")
-            .select("*")
-            .eq("version", version)
-            .ilike("text", `%${w}%`)
-            .order("book_order")
-            .order("chapter")
-            .order("verse")
-            .limit(30)
-        );
-        const results = await Promise.all(promises);
-        const merged = new Map<number, BibleVerse>();
-        for (const res of results) {
-          if (res.data) {
-            for (const v of res.data as BibleVerse[]) {
-              merged.set(v.id, v);
-            }
-          }
-        }
-        const sorted = [...merged.values()].sort((a, b) => {
-          if (a.book_order !== b.book_order) return a.book_order - b.book_order;
-          if (a.chapter !== b.chapter) return a.chapter - b.chapter;
-          return a.verse - b.verse;
-        });
-        setWordResults(sorted.slice(0, 50));
-        if (sorted.length === 0) setWordError("검색 결과가 없습니다");
-      } else {
-        // AND: 첫 번째 단어로 검색 후 나머지 단어 필터링
-        let query = supabase
-          .from("bible_verses")
-          .select("*")
-          .eq("version", version);
-
-        for (const w of words) {
-          query = query.ilike("text", `%${w}%`);
-        }
-
-        const { data, error } = await query
-          .order("book_order")
-          .order("chapter")
-          .order("verse")
-          .limit(50);
-
-        if (error) {
-          setWordError("검색 중 오류가 발생했습니다");
-          setWordResults([]);
-        } else {
-          setWordResults((data as BibleVerse[]) || []);
-          if (data?.length === 0) setWordError("검색 결과가 없습니다");
-        }
-      }
-    } catch {
-      setWordError("검색 중 오류가 발생했습니다");
-    } finally {
-      setWordLoading(false);
-    }
-  }, [wordInput, version]);
-
-  // ─── 주제 추천 (AI topic recommendation) ───
+  // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
     const trimmed = topicInput.trim();
     if (trimmed.length < 1) {
@@ -243,7 +236,6 @@ export default function SearchPanel({
     setTopicResults([]);
 
     try {
-      // 1. AI에게 추천 요청
       const aiRes = await fetch("/api/ai/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -262,7 +254,6 @@ export default function SearchPanel({
       };
       setTopicRecommendations(recommendations);
 
-      // 2. 추천된 구절을 DB에서 실제 조회
       const versePromises = recommendations.map((rec) =>
         supabase
           .from("bible_verses")
@@ -293,6 +284,17 @@ export default function SearchPanel({
     }
   }, [topicInput, version]);
 
+  // ─── Verse toggle with scroll preservation ───
+  function handleToggle(verse: BibleVerse) {
+    const scrollPos = scrollRef.current?.scrollTop;
+    onToggleVerse(verse);
+    requestAnimationFrame(() => {
+      if (scrollRef.current && scrollPos !== undefined) {
+        scrollRef.current.scrollTop = scrollPos;
+      }
+    });
+  }
+
   // ─── Shared: verse item renderer ───
   function VerseItem({
     verse,
@@ -304,7 +306,7 @@ export default function SearchPanel({
     const selected = isSelected(verse, selectedVerses);
     return (
       <button
-        onClick={() => onToggleVerse(verse)}
+        onClick={() => handleToggle(verse)}
         className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
           selected
             ? "bg-gray-100 border-l-4 border-l-gray-400"
@@ -332,6 +334,11 @@ export default function SearchPanel({
       </button>
     );
   }
+
+  // Chapter navigation helpers
+  const chapterIdx = chapters.indexOf(chapter);
+  const canPrevChapter = chapterIdx > 0;
+  const canNextChapter = chapterIdx < chapters.length - 1;
 
   const tabClass = (tab: SearchMode) =>
     `flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
@@ -390,56 +397,61 @@ export default function SearchPanel({
         </button>
       </div>
 
-      {/* 4 Tabs */}
+      {/* 3 Tabs */}
       <div className="flex border-b border-gray-200 mb-4">
-        <button onClick={() => setMode("reference")} className={tabClass("reference")}>
-          말씀 찾기
+        <button onClick={() => setMode("search")} className={tabClass("search")}>
+          말씀 검색
         </button>
         <button onClick={() => setMode("chapter")} className={tabClass("chapter")}>
           장절 선택
-        </button>
-        <button onClick={() => setMode("word")} className={tabClass("word")}>
-          단어 검색
         </button>
         <button onClick={() => setMode("topic")} className={tabClass("topic")}>
           주제 추천
         </button>
       </div>
 
-      {/* ─── Tab 1: 말씀 찾기 ─── */}
-      {mode === "reference" && (
+      {/* ─── Tab 1: 말씀 검색 (reference + word unified) ─── */}
+      {mode === "search" && (
         <div>
           <div className="flex gap-2 mb-2">
             <input
               type="text"
-              value={refInput}
-              onChange={(e) => setRefInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && searchReference()}
-              placeholder="창1:1-3, 시편 23:1, 롬8:28"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && executeSearch()}
+              placeholder="창1:1 또는 사랑, 평안"
               className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
             <button
-              onClick={searchReference}
-              disabled={refLoading}
+              onClick={executeSearch}
+              disabled={searchLoading}
               className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
             >
-              {refLoading ? "..." : "찾기"}
+              {searchLoading ? "..." : "검색"}
             </button>
           </div>
           <p className="text-xs text-gray-400 mb-3">
-            예: 창1:1 · 시편23:1-6 · 창세기 1장 1절-3절 · 롬8:28,31
+            장절(창1:1-3) 또는 단어(사랑 믿음) · 공백=AND · x=OR
           </p>
 
-          {refError && (
-            <p className="text-sm text-red-500 mb-3 text-center">{refError}</p>
+          {searchError && (
+            <p className="text-sm text-red-500 mb-3 text-center">{searchError}</p>
           )}
 
-          {refResults.length > 0 && (
-            <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
-              {refResults.map((v) => (
-                <VerseItem key={v.id} verse={v} showBookInfo />
-              ))}
-            </div>
+          {searchResults.length > 0 && (
+            <>
+              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+                {searchResults.map((v) => (
+                  <VerseItem key={v.id} verse={v} showBookInfo />
+                ))}
+              </div>
+              {lastSearchType === "word" && (
+                <p className="text-xs text-gray-400 mt-2 text-center">
+                  {searchResults.length}건
+                  {searchResults.length >= 50 && " (최대 50건)"}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
@@ -469,20 +481,44 @@ export default function SearchPanel({
               </optgroup>
             </select>
 
-            <select
-              value={chapter}
-              onChange={(e) => setChapter(Number(e.target.value))}
-              className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-400"
-            >
-              {chapters.map((ch) => (
-                <option key={ch} value={ch}>
-                  {ch}장
-                </option>
-              ))}
-            </select>
+            {/* Chapter navigation group */}
+            <div className="flex items-center">
+              <button
+                onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
+                disabled={!canPrevChapter}
+                className="px-2 py-2 border border-gray-300 border-r-0 rounded-l-lg bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label="이전 장"
+              >
+                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <select
+                value={chapter}
+                onChange={(e) => setChapter(Number(e.target.value))}
+                className="w-16 py-2 border-y border-gray-300 text-sm text-center bg-white focus:outline-none"
+                style={{ appearance: "none", backgroundImage: "none", paddingRight: "0.5rem" }}
+              >
+                {chapters.map((ch) => (
+                  <option key={ch} value={ch}>
+                    {ch}장
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
+                disabled={!canNextChapter}
+                className="px-2 py-2 border border-gray-300 border-l-0 rounded-r-lg bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                aria-label="다음 장"
+              >
+                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+          <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
             {loadingBrowse ? (
               <div className="p-4 text-center text-gray-400">
                 불러오는 중...
@@ -500,53 +536,7 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* ─── Tab 3: 단어 검색 ─── */}
-      {mode === "word" && (
-        <div>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={wordInput}
-              onChange={(e) => setWordInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && searchWord()}
-              placeholder="사랑 믿음 (AND) · 사랑x믿음 (OR)"
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-            />
-            <button
-              onClick={searchWord}
-              disabled={wordLoading}
-              className="px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {wordLoading ? "..." : "검색"}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mb-3">
-            공백 = AND 조건 · x = OR 조건 (예: 사랑x소망)
-          </p>
-
-          {wordError && (
-            <p className="text-sm text-gray-500 mb-3 text-center">
-              {wordError}
-            </p>
-          )}
-
-          {wordResults.length > 0 && (
-            <>
-              <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
-                {wordResults.map((v) => (
-                  <VerseItem key={v.id} verse={v} showBookInfo />
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                {wordResults.length}건
-                {wordResults.length >= 50 && " (최대 50건)"}
-              </p>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ─── Tab 4: 주제 추천 (AI) ─── */}
+      {/* ─── Tab 3: 주제 추천 ─── */}
       {mode === "topic" && (
         <div>
           <div className="flex gap-2 mb-2">
@@ -600,7 +590,7 @@ export default function SearchPanel({
 
           {topicResults.length > 0 && (
             <>
-              <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
                 {topicResults.map((v) => (
                   <VerseItem key={v.id} verse={v} showBookInfo />
                 ))}
