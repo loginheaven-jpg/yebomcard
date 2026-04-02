@@ -467,10 +467,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         {/* Watermark */}
         {!isLoading && (
           <div
-            className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-xs"
+            className="absolute bottom-4 right-5 font-[family-name:var(--font-playfair)] italic text-sm"
             style={{ color: userTextColor, opacity: 0.4 }}
           >
-            Yebom Card
+            Yebom Bible Card
           </div>
         )}
 

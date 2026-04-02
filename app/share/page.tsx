@@ -165,7 +165,7 @@ function ShareContent() {
           {/* Watermark */}
           <div className="mt-6 pt-4 border-t border-gray-50 text-right">
             <span className="text-xs text-gray-300 font-[family-name:var(--font-playfair)] italic">
-              Yebom Card
+              Yebom Bible Card
             </span>
           </div>
         </div>
