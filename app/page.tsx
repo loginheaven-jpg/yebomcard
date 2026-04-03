@@ -1,15 +1,29 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import SearchPanel from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
-import type { BibleVerse, ViewMode } from "@/lib/types";
+import ScrapList from "@/components/ScrapList";
+import { addScrap, getScraps } from "@/lib/scrap";
+import { supabase } from "@/lib/supabase";
+import type { BibleVerse, ViewMode, ScrapItem } from "@/lib/types";
 
 export default function Home() {
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
   const [isAddingMore, setIsAddingMore] = useState(false);
+  const [scrapCount, setScrapCount] = useState(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setScrapCount(getScraps().length);
+  }, []);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2000);
+  }, []);
 
   const handleToggleVerse = useCallback((verse: BibleVerse) => {
     setSelectedVerses((prev) => {
@@ -63,11 +77,43 @@ export default function Home() {
   }, []);
 
   const handleCreateCard = useCallback(() => {
+    // 카드 만들기 진입 시 스크랩 저장
+    if (selectedVerses.length > 0) {
+      addScrap(selectedVerses, selectedVerses[0].version as "nkrv" | "rnksv");
+      setScrapCount(getScraps().length);
+      showToast("스크랩에 저장되었습니다");
+    }
     setView("card");
-  }, []);
+  }, [selectedVerses, showToast]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
+  }, []);
+
+  // 스크랩 저장 콜백 (VerseDisplay에서 링크/텍스트 복사 시)
+  const handleScrapSaved = useCallback(() => {
+    setScrapCount(getScraps().length);
+    showToast("스크랩에 저장되었습니다");
+  }, [showToast]);
+
+  // 스크랩 목록에서 항목 선택
+  const handleSelectScrap = useCallback(async (scrap: ScrapItem) => {
+    const promises = scrap.verses.map((ref) =>
+      supabase
+        .from("bible_verses")
+        .select("*")
+        .eq("version", scrap.version)
+        .eq("book_code", ref.book_code)
+        .eq("chapter", ref.chapter)
+        .eq("verse", ref.verse)
+        .single()
+    );
+    const results = await Promise.all(promises);
+    const found = results.filter((r) => r.data).map((r) => r.data as BibleVerse);
+    if (found.length > 0) {
+      setSelectedVerses(found);
+      setView("display");
+    }
   }, []);
 
   return (
@@ -84,6 +130,13 @@ export default function Home() {
           onAddMore={handleAddMore}
           onRemoveVerse={handleRemoveVerse}
           onCreateCard={handleCreateCard}
+          onScrapSaved={handleScrapSaved}
+        />
+      ) : view === "scrap" ? (
+        <ScrapList
+          onBack={() => setView("search")}
+          onSelectScrap={handleSelectScrap}
+          onScrapCountChange={setScrapCount}
         />
       ) : (
         <SearchPanel
@@ -92,6 +145,31 @@ export default function Home() {
           onConfirm={handleConfirm}
           isAddingMore={isAddingMore}
         />
+      )}
+
+      {/* 플로팅 스크랩 아이콘 (scrap 뷰 제외) */}
+      {view !== "scrap" && (
+        <button
+          onClick={() => setView("scrap")}
+          className="fixed bottom-6 left-6 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-lg hover:bg-gray-50 active:scale-95 transition-all"
+          title="스크랩"
+        >
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+          </svg>
+          {scrapCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-gray-700 text-white text-[10px] rounded-full flex items-center justify-center px-1">
+              {scrapCount > 99 ? "99+" : scrapCount}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* 토스트 */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl shadow-lg z-50 animate-[fadeInUp_0.2s_ease-out]">
+          {toastMessage}
+        </div>
       )}
     </main>
   );

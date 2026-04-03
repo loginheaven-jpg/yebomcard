@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
 import type { BibleVerse, BilingualVerse } from "@/lib/types";
+import { addScrap } from "@/lib/scrap";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -11,6 +12,7 @@ interface VerseDisplayProps {
   onAddMore: () => void;
   onRemoveVerse: (verse: BibleVerse) => void;
   onCreateCard: () => void;
+  onScrapSaved?: () => void;
 }
 
 /**
@@ -109,6 +111,7 @@ export default function VerseDisplay({
   onAddMore,
   onRemoveVerse,
   onCreateCard,
+  onScrapSaved,
 }: VerseDisplayProps) {
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -316,6 +319,8 @@ export default function VerseDisplay({
                   .join(",");
                 const url = `${window.location.origin}/share?v=${verses[0].version}&r=${refsParam}`;
                 navigator.clipboard.writeText(url);
+                addScrap(verses, verses[0].version as "nkrv" | "rnksv");
+                onScrapSaved?.();
                 setCopiedType("link");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
               }}
@@ -355,6 +360,8 @@ export default function VerseDisplay({
                 });
                 const fullText = "\n[예봄성경 말씀나눔]\n\n" + textParts.join("\n\n---\n\n");
                 await navigator.clipboard.writeText(fullText);
+                addScrap(verses, verses[0].version as "nkrv" | "rnksv");
+                onScrapSaved?.();
                 setCopiedType("text");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
               }}

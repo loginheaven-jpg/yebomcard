@@ -733,6 +733,23 @@ yebom-card/
 
 ---
 
+## 12. 업그레이드 검토사항
+
+### 12.1 AI 추천 피드백 루프
+→ topic_verse_stats 테이블로 선택 히스토리 저장, AI 프롬프트에 인기 구절 힌트 제공.
+
+### 12.2 스크랩 이미지 클라우드 저장
+
+**개요**: PNG 다운로드 시 생성된 카드 이미지를 클라우드(Supabase Storage)에 저장하고, 스크랩 항목에 이미지 URL을 포함시켜 나중에 다시 볼 수 있도록 함.
+
+**구현 방향**:
+1. Supabase Storage 버킷 생성 (`card-images`)
+2. PNG 다운로드 시 base64 → Blob → Storage 업로드
+3. 반환된 public URL을 ScrapItem에 `imageUrl` 필드로 저장
+4. 스크랩 목록에서 이미지 썸네일 표시
+
+---
+
 ## 변경 이력
 
 | 버전 | 일자 | 변경 내용 |
