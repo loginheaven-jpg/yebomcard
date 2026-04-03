@@ -302,7 +302,11 @@ export default function VerseDisplay({
         {/* 이 말씀 링크 복사 */}
         {!showShareOptions ? (
           <button
-            onClick={() => setShowShareOptions(true)}
+            onClick={() => {
+              addScrap(verses, verses[0].version as "nkrv" | "rnksv");
+              onScrapSaved?.();
+              setShowShareOptions(true);
+            }}
             className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -319,8 +323,6 @@ export default function VerseDisplay({
                   .join(",");
                 const url = `${window.location.origin}/share?v=${verses[0].version}&r=${refsParam}`;
                 navigator.clipboard.writeText(url);
-                addScrap(verses, verses[0].version as "nkrv" | "rnksv");
-                onScrapSaved?.();
                 setCopiedType("link");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
               }}
@@ -360,8 +362,6 @@ export default function VerseDisplay({
                 });
                 const fullText = "\n[예봄성경 말씀나눔]\n\n" + textParts.join("\n\n---\n\n");
                 await navigator.clipboard.writeText(fullText);
-                addScrap(verses, verses[0].version as "nkrv" | "rnksv");
-                onScrapSaved?.();
                 setCopiedType("text");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
               }}

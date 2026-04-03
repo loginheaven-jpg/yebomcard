@@ -14,6 +14,7 @@ export default function Home() {
   const [view, setView] = useState<ViewMode>("search");
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [scrapCount, setScrapCount] = useState(0);
+  const [showScrap, setShowScrap] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -132,12 +133,6 @@ export default function Home() {
           onCreateCard={handleCreateCard}
           onScrapSaved={handleScrapSaved}
         />
-      ) : view === "scrap" ? (
-        <ScrapList
-          onBack={() => setView("search")}
-          onSelectScrap={handleSelectScrap}
-          onScrapCountChange={setScrapCount}
-        />
       ) : (
         <SearchPanel
           selectedVerses={selectedVerses}
@@ -147,10 +142,26 @@ export default function Home() {
         />
       )}
 
-      {/* 플로팅 스크랩 아이콘 (scrap 뷰 제외) */}
-      {view !== "scrap" && (
-        <button
-          onClick={() => setView("scrap")}
+      {/* 스크랩 오버레이 팝업 */}
+      {showScrap && (
+        <div className="fixed inset-0 z-50 bg-black/30" onClick={() => setShowScrap(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[80vh] bg-gray-50 rounded-t-2xl overflow-y-auto p-4 pt-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+            <ScrapList
+              onBack={() => setShowScrap(false)}
+              onSelectScrap={(scrap) => { setShowScrap(false); handleSelectScrap(scrap); }}
+              onScrapCountChange={setScrapCount}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 플로팅 스크랩 아이콘 */}
+      <button
+          onClick={() => setShowScrap(true)}
           className="fixed bottom-6 left-6 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-lg hover:bg-gray-50 active:scale-95 transition-all"
           title="스크랩"
         >
@@ -163,7 +174,6 @@ export default function Home() {
             </span>
           )}
         </button>
-      )}
 
       {/* 토스트 */}
       {toastMessage && (
