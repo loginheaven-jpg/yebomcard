@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844" width="390" height="844">
+  <defs>
+    <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A2B3C"/>
+      <stop offset="100%" style="stop-color:#2E6B8A"/>
+    </linearGradient>
+    <linearGradient id="btnGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#2E6B8A"/>
+      <stop offset="100%" style="stop-color:#5A9BB5"/>
+    </linearGradient>
+    <linearGradient id="cardBg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1A2B3C"/>
+      <stop offset="100%" style="stop-color:#2D4156"/>
+    </linearGradient>
+    <linearGradient id="cardBg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8EDF3"/>
+      <stop offset="100%" style="stop-color:#F0F4F8"/>
+    </linearGradient>
+    <linearGradient id="cardBg3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2E6B8A"/>
+      <stop offset="100%" style="stop-color:#1A2B3C"/>
+    </linearGradient>
+    <filter id="shadow" x="-4%" y="-2%" width="108%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#1A2B3C" flood-opacity="0.1"/>
+    </filter>
+    <filter id="cardShadow" x="-5%" y="-3%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1A2B3C" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="390" height="844" fill="#F0F4F8"/>
+
+  <!-- 헤더 -->
+  <rect width="390" height="56" fill="url(#headerGrad)"/>
+  <!-- 로고 아이콘 -->
+  <rect x="16" y="10" width="36" height="36" rx="10" fill="rgba(255,255,255,0.15)"/>
+  <!-- BookOpen 아이콘 -->
+  <g transform="translate(22, 16)" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+  </g>
+  <text x="60" y="35" font-family="'Noto Sans KR', sans-serif" font-weight="600" font-size="16" fill="white">예봄카드</text>
+  <!-- 사용자 -->
+  <circle cx="355" cy="28" r="14" fill="rgba(255,255,255,0.15)"/>
+  <text x="355" y="33" font-family="'Noto Sans KR'" font-size="12" fill="white" text-anchor="middle">홍</text>
+
+  <!-- 검색 영역 -->
+  <rect x="20" y="72" width="350" height="48" rx="12" fill="white" filter="url(#shadow)"/>
+  <circle cx="44" cy="96" r="10" fill="none" stroke="#7B8B9A" stroke-width="1.5"/>
+  <line x1="51" y1="103" x2="56" y2="108" stroke="#7B8B9A" stroke-width="1.5" stroke-linecap="round"/>
+  <text x="64" y="100" font-family="'Noto Sans KR'" font-size="14" fill="#7B8B9A">성경 말씀을 검색하세요...</text>
+
+  <!-- 오늘의 말씀 섹션 -->
+  <text x="20" y="152" font-family="'Noto Serif KR', serif" font-weight="700" font-size="18" fill="#1A2B3C">오늘의 말씀</text>
+  <text x="290" y="152" font-family="'Noto Sans KR'" font-size="13" fill="#2E6B8A">더보기 →</text>
+
+  <!-- 말씀 카드 (선택된 메인) -->
+  <rect x="20" y="168" width="350" height="280" rx="16" fill="url(#cardBg1)" filter="url(#cardShadow)"/>
+  <!-- 배경 장식 원 -->
+  <circle cx="320" cy="200" r="80" fill="rgba(255,255,255,0.03)"/>
+  <circle cx="60" cy="400" r="60" fill="rgba(255,255,255,0.02)"/>
+  <!-- 말씀 텍스트 -->
+  <text x="40" y="230" font-family="'Noto Serif KR', serif" font-size="11" fill="rgba(255,255,255,0.5)">요한복음 3:16</text>
+  <text x="40" y="265" font-family="'Noto Serif KR', serif" font-weight="400" font-size="17" fill="white" opacity="0.95">
+    <tspan x="40" dy="0">하나님이 세상을 이처럼 사랑하사</tspan>
+    <tspan x="40" dy="28">독생자를 주셨으니</tspan>
+    <tspan x="40" dy="28">이는 그를 믿는 자마다</tspan>
+    <tspan x="40" dy="28">멸망하지 않고</tspan>
+    <tspan x="40" dy="28">영생을 얻게 하려 하심이라</tspan>
+  </text>
+  <!-- 영문 -->
+  <text x="40" y="410" font-family="Georgia, serif" font-size="10" fill="rgba(255,255,255,0.35)" font-style="italic">
+    <tspan x="40" dy="0">For God so loved the world that he gave</tspan>
+    <tspan x="40" dy="16">his one and only Son... — John 3:16 KJV</tspan>
+  </text>
+  <!-- 워터마크 -->
+  <text x="330" y="435" font-family="'Noto Sans KR'" font-size="9" fill="rgba(255,255,255,0.25)" text-anchor="end">Yebom Card</text>
+
+  <!-- 카드 스타일 선택 (3개 썸네일) -->
+  <text x="20" y="476" font-family="'Noto Sans KR'" font-weight="600" font-size="13" fill="#4A6175">스타일 선택</text>
+
+  <!-- 썸네일 A (다크, 선택됨) -->
+  <rect x="20" y="490" width="105" height="84" rx="10" fill="url(#cardBg1)" stroke="#2E6B8A" stroke-width="2.5"/>
+  <text x="72" y="525" font-family="'Noto Serif KR'" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">하나님이 세상을</text>
+  <text x="72" y="537" font-family="'Noto Serif KR'" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">이처럼 사랑하사</text>
+  <circle cx="72" cy="565" r="4" fill="#2E6B8A"/>
+
+  <!-- 썸네일 B (라이트) -->
+  <rect x="140" y="490" width="105" height="84" rx="10" fill="url(#cardBg2)" stroke="#D4DDE6" stroke-width="1"/>
+  <text x="192" y="525" font-family="'Noto Serif KR'" font-size="8" fill="#1A2B3C" text-anchor="middle" opacity="0.7">하나님이 세상을</text>
+  <text x="192" y="537" font-family="'Noto Serif KR'" font-size="8" fill="#1A2B3C" text-anchor="middle" opacity="0.7">이처럼 사랑하사</text>
+  <circle cx="192" cy="565" r="4" fill="none" stroke="#7B8B9A" stroke-width="1"/>
+
+  <!-- 썸네일 C (블루) -->
+  <rect x="260" y="490" width="105" height="84" rx="10" fill="url(#cardBg3)"/>
+  <text x="312" y="525" font-family="'Noto Serif KR'" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">하나님이 세상을</text>
+  <text x="312" y="537" font-family="'Noto Serif KR'" font-size="8" fill="rgba(255,255,255,0.7)" text-anchor="middle">이처럼 사랑하사</text>
+  <circle cx="312" cy="565" r="4" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+
+  <!-- 비율 선택 -->
+  <text x="20" y="608" font-family="'Noto Sans KR'" font-weight="600" font-size="13" fill="#4A6175">카드 비율</text>
+  <rect x="20" y="618" width="70" height="32" rx="8" fill="#2E6B8A"/>
+  <text x="55" y="638" font-family="'Noto Sans KR'" font-size="12" fill="white" text-anchor="middle">4:5</text>
+  <rect x="100" y="618" width="70" height="32" rx="8" fill="white" stroke="#D4DDE6" stroke-width="1"/>
+  <text x="135" y="638" font-family="'Noto Sans KR'" font-size="12" fill="#4A6175" text-anchor="middle">1:1</text>
+  <rect x="180" y="618" width="70" height="32" rx="8" fill="white" stroke="#D4DDE6" stroke-width="1"/>
+  <text x="215" y="638" font-family="'Noto Sans KR'" font-size="12" fill="#4A6175" text-anchor="middle">16:9</text>
+
+  <!-- 액션 버튼 -->
+  <rect x="20" y="674" width="230" height="48" rx="12" fill="url(#btnGrad)"/>
+  <text x="135" y="703" font-family="'Noto Sans KR'" font-weight="600" font-size="15" fill="white" text-anchor="middle">📥  카드 다운로드</text>
+
+  <rect x="260" y="674" width="110" height="48" rx="12" fill="#E8F2F7"/>
+  <text x="315" y="703" font-family="'Noto Sans KR'" font-weight="600" font-size="15" fill="#2E6B8A" text-anchor="middle">공유</text>
+
+  <!-- AI 추천 -->
+  <rect x="20" y="742" width="350" height="52" rx="12" fill="white" filter="url(#shadow)"/>
+  <text x="44" y="772" font-family="'Noto Sans KR'" font-size="14" fill="#B8860B">✨</text>
+  <text x="64" y="772" font-family="'Noto Sans KR'" font-size="13" fill="#4A6175">AI가 상황에 맞는 말씀을 추천해드려요</text>
+  <text x="340" y="772" font-family="'Noto Sans KR'" font-size="12" fill="#2E6B8A">시작 →</text>
+
+  <!-- 하단 푸터 -->
+  <text x="195" y="824" font-family="'Noto Sans KR'" font-size="11" fill="#7B8B9A" text-anchor="middle">예봄교회 · 예봄카드</text>
+</svg>
