@@ -35,19 +35,16 @@ export default function ScrapList({
     <div className="w-full max-w-[1200px] mx-auto">
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-900">
+          스크랩 <span className="text-sm font-normal text-gray-400">{scraps.length}개</span>
+        </h2>
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          돌아가기
+          닫기
         </button>
-        <span className="text-xs text-gray-400">{scraps.length}개</span>
       </div>
-
-      <h2 className="text-lg font-bold text-gray-900 mb-4">스크랩</h2>
 
       {/* Empty state */}
       {scraps.length === 0 && (
