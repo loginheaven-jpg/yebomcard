@@ -829,15 +829,17 @@ export default function SearchPanel({
                       <path d="M15 4 L4 14 L15 24 Z" />
                     </svg>
                   </button>
+                  <span className="text-[10px] text-gray-400 ml-2">가</span>
                   <input
                     type="range"
                     min={14}
                     max={24}
                     value={readingFontSize}
                     onChange={(e) => setReadingFontSize(Number(e.target.value))}
-                    className="w-16 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
+                    className="w-14 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
                     title={`글자 크기 ${readingFontSize}px`}
                   />
+                  <span className="text-base text-gray-400 mr-2">가</span>
                   <button
                     onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                     disabled={!canNextChapter}
