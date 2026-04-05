@@ -222,7 +222,39 @@ export function parseReference(input: string): ParsedReference | null {
     }
   }
 
-  // 패턴 4: 장만 지정 — "요3:" "요3" "마태복음3" "누가2장"
+  // 패턴 4: 책+장 붙여쓰기 + 공백 + 절 — "빌2 1" "빌2 1 3" "창1 1,3"
+  // 4토큰(범위) 먼저
+  const concatRangePattern = /^([가-힣]+)(\d+)\s+(\d+)\s+(\d+)\s*$/;
+  const concatRangeMatch = text.match(concatRangePattern);
+  if (concatRangeMatch) {
+    const bookCode = resolveBookCode(concatRangeMatch[1]);
+    if (bookCode) {
+      const chapter = parseInt(concatRangeMatch[2]);
+      const start = parseInt(concatRangeMatch[3]);
+      const end = parseInt(concatRangeMatch[4]);
+      if (chapter && start && end && end >= start) {
+        const verses: number[] = [];
+        for (let i = start; i <= end; i++) verses.push(i);
+        return { bookCode, chapter, verses };
+      }
+    }
+  }
+
+  // 3토큰
+  const concatPattern = /^([가-힣]+)(\d+)\s+(\d+(?:\s*[-~,]\s*\d+)?)\s*$/;
+  const concatMatch = text.match(concatPattern);
+  if (concatMatch) {
+    const bookCode = resolveBookCode(concatMatch[1]);
+    if (bookCode) {
+      const chapter = parseInt(concatMatch[2]);
+      const verses = parseVerses(concatMatch[3]);
+      if (chapter && verses.length > 0) {
+        return { bookCode, chapter, verses };
+      }
+    }
+  }
+
+  // 패턴 5: 장만 지정 — "요3:" "요3" "마태복음3" "누가2장"
   const chapterOnlyPattern = /^(.+?)\s*(\d+)\s*[:：장]?\s*$/;
   const chapterOnlyMatch = text.match(chapterOnlyPattern);
   if (chapterOnlyMatch) {
