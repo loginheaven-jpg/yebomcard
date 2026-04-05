@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
     "html-to-image": "^1.11.13",
+    "iron-session": "^8.0.4",
     "next": "16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4"

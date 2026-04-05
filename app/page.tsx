@@ -7,9 +7,11 @@ import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
 import { addScrap, getScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/hooks/useSession";
 import type { BibleVerse, ViewMode, ScrapItem } from "@/lib/types";
 
 export default function Home() {
+  const { session, requireAuth, isLoggedIn, logout } = useSession();
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
   const [isAddingMore, setIsAddingMore] = useState(false);
@@ -78,6 +80,7 @@ export default function Home() {
   }, []);
 
   const handleCreateCard = useCallback(() => {
+    if (!requireAuth()) return; // 로그인 필요
     // 카드 만들기 진입 시 스크랩 저장
     if (selectedVerses.length > 0) {
       addScrap(selectedVerses, selectedVerses[0].version as "nkrv" | "rnksv");
@@ -132,6 +135,7 @@ export default function Home() {
           onRemoveVerse={handleRemoveVerse}
           onCreateCard={handleCreateCard}
           onScrapSaved={handleScrapSaved}
+          requireAuth={requireAuth}
         />
       ) : (
         <SearchPanel
@@ -161,7 +165,7 @@ export default function Home() {
 
       {/* 플로팅 스크랩 아이콘 */}
       <button
-          onClick={() => setShowScrap(true)}
+          onClick={() => { if (requireAuth()) setShowScrap(true); }}
           className="fixed bottom-6 left-6 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-lg hover:bg-gray-50 active:scale-95 transition-all"
           title="스크랩"
         >

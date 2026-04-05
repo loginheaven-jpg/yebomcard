@@ -13,6 +13,7 @@ interface VerseDisplayProps {
   onRemoveVerse: (verse: BibleVerse) => void;
   onCreateCard: () => void;
   onScrapSaved?: () => void;
+  requireAuth?: () => boolean;
 }
 
 /**
@@ -112,6 +113,7 @@ export default function VerseDisplay({
   onRemoveVerse,
   onCreateCard,
   onScrapSaved,
+  requireAuth,
 }: VerseDisplayProps) {
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -303,6 +305,7 @@ export default function VerseDisplay({
         {!showShareOptions ? (
           <button
             onClick={() => {
+              if (requireAuth && !requireAuth()) return;
               addScrap(verses, verses[0].version as "nkrv" | "rnksv");
               onScrapSaved?.();
               setShowShareOptions(true);
