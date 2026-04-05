@@ -323,17 +323,30 @@ export default function SearchPanel({
 
   // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
   useEffect(() => {
-    if (rememberedVerse && browseVerses.length > 0 && scrollRef.current) {
-      requestAnimationFrame(() => {
-        if (!scrollRef.current) return;
-        const buttons = scrollRef.current.querySelectorAll("button");
-        const idx = browseVerses.findIndex((v) => v.verse === rememberedVerse);
-        if (idx >= 0 && buttons[idx]) {
-          buttons[idx].scrollIntoView({ block: "center" });
-        }
+    if (!rememberedVerse || browseVerses.length === 0) return;
+
+    const scrollToVerse = () => {
+      if (!scrollRef.current) return false;
+      const buttons = scrollRef.current.querySelectorAll("button");
+      const idx = browseVerses.findIndex((v) => v.verse === rememberedVerse);
+      if (idx >= 0 && buttons[idx]) {
+        buttons[idx].scrollIntoView({ block: "center" });
+        return true;
+      }
+      return false;
+    };
+
+    // 여러 번 시도 (렌더링 타이밍 문제 대응)
+    let attempts = 0;
+    const tryScroll = () => {
+      if (scrollToVerse() || attempts > 5) {
         setRememberedVerse(null);
-      });
-    }
+        return;
+      }
+      attempts++;
+      setTimeout(tryScroll, 100);
+    };
+    setTimeout(tryScroll, 50);
   }, [browseVerses, rememberedVerse]);
 
   // ─── 버전 전환 시 말씀 검색 결과 재조회 ───
