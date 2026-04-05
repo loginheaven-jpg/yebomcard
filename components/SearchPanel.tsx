@@ -541,7 +541,7 @@ export default function SearchPanel({
           <span
             className={`font-semibold text-sm mr-2 ${selected ? "text-gray-800" : "text-gray-500"}`}
           >
-            {verse.verse}절
+            {verse.verse}
           </span>
         )}
         <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
@@ -880,7 +880,7 @@ export default function SearchPanel({
                             <div className="lg:hidden">
                               <div className="flex items-start gap-1.5">
                                 <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800" : "text-gray-500"}`}>
-                                  {v.verse}절
+                                  {v.verse}
                                 </span>
                                 <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
                                   {v.text}
