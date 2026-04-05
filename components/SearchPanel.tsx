@@ -57,6 +57,8 @@ export default function SearchPanel({
   const [searchOffset, setSearchOffset] = useState(0);
   const [hasMoreResults, setHasMoreResults] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchResultsAlt, setSearchResultsAlt] = useState<BibleVerse[]>([]);
+  const [topicResultsAlt, setTopicResultsAlt] = useState<BibleVerse[]>([]);
 
   // Chapter browse state
   const [browseStep, setBrowseStep] = useState<"book" | "chapter" | "verse">("book");
@@ -387,6 +389,56 @@ export default function SearchPanel({
     }
   }, [version]);
 
+  // ─── 병기: 검색 결과 + 주제 추천 부 버전 조회 ───
+  useEffect(() => {
+    if (!parallel) {
+      setSearchResultsAlt([]);
+      setTopicResultsAlt([]);
+      return;
+    }
+    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+
+    // 검색 결과 부 버전
+    if (searchResults.length > 0) {
+      (async () => {
+        const promises = searchResults.map((v) =>
+          supabase
+            .from("bible_verses")
+            .select("*")
+            .eq("version", altVersion)
+            .eq("book_code", v.book_code)
+            .eq("chapter", v.chapter)
+            .eq("verse", v.verse)
+            .single()
+        );
+        const results = await Promise.all(promises);
+        setSearchResultsAlt(
+          results.filter((r) => r.data).map((r) => r.data as BibleVerse)
+        );
+      })();
+    }
+
+    // 주제 추천 부 버전
+    if (topicResults.length > 0) {
+      (async () => {
+        const promises = topicResults.map((v) =>
+          supabase
+            .from("bible_verses")
+            .select("*")
+            .eq("version", altVersion)
+            .eq("book_code", v.book_code)
+            .eq("chapter", v.chapter)
+            .eq("verse", v.verse)
+            .single()
+        );
+        const results = await Promise.all(promises);
+        setTopicResultsAlt(
+          results.filter((r) => r.data).map((r) => r.data as BibleVerse)
+        );
+      })();
+    }
+  }, [parallel, searchResults, topicResults, version]);
+
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
     const trimmed = topicInput.trim();
@@ -464,9 +516,11 @@ export default function SearchPanel({
   function VerseItem({
     verse,
     showBookInfo,
+    altText,
   }: {
     verse: BibleVerse;
     showBookInfo?: boolean;
+    altText?: string;
   }) {
     const selected = isSelected(verse, selectedVerses);
     return (
@@ -493,6 +547,11 @@ export default function SearchPanel({
         <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
           {verse.text}
         </span>
+        {altText && (
+          <div className="mt-1 text-gray-400 leading-relaxed" style={{ fontSize: `${readingFontSize - 2}px` }}>
+            {altText}
+          </div>
+        )}
         {selected && (
           <span className="float-right text-gray-700 text-sm">&#10003;</span>
         )}
@@ -634,9 +693,12 @@ export default function SearchPanel({
           {searchResults.length > 0 && (
             <>
               <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
-                {searchResults.map((v) => (
-                  <VerseItem key={v.id} verse={v} showBookInfo />
-                ))}
+                {searchResults.map((v) => {
+                  const alt = parallel ? searchResultsAlt.find(
+                    (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
+                  ) : undefined;
+                  return <VerseItem key={v.id} verse={v} showBookInfo altText={alt?.text} />;
+                })}
               </div>
               {lastSearchType === "word-and" && hasMoreResults && (
                 <button
@@ -928,9 +990,12 @@ export default function SearchPanel({
           {topicResults.length > 0 && (
             <>
               <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
-                {topicResults.map((v) => (
-                  <VerseItem key={v.id} verse={v} showBookInfo />
-                ))}
+                {topicResults.map((v) => {
+                  const alt = parallel ? topicResultsAlt.find(
+                    (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
+                  ) : undefined;
+                  return <VerseItem key={v.id} verse={v} showBookInfo altText={alt?.text} />;
+                })}
               </div>
               <p className="text-xs text-gray-400 mt-2 text-center">
                 추천 {topicResults.length}건
