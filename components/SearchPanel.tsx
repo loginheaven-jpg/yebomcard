@@ -835,7 +835,7 @@ export default function SearchPanel({
                     max={24}
                     value={readingFontSize}
                     onChange={(e) => setReadingFontSize(Number(e.target.value))}
-                    className="w-16 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer mx-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
+                    className="w-16 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-1 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
                     title={`글자 크기 ${readingFontSize}px`}
                   />
                   <button
