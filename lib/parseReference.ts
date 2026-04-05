@@ -191,7 +191,38 @@ export function parseReference(input: string): ParsedReference | null {
     }
   }
 
-  // 패턴 3: 장만 지정 — "요3:" "요3" "마태복음3" "누가2장"
+  // 패턴 3: 공백 구분 범위 — "엡 1 1 3" (1장 1~3절) — 4토큰 먼저
+  const spaceRangePattern = /^(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/;
+  const spaceRangeMatch = text.match(spaceRangePattern);
+  if (spaceRangeMatch) {
+    const bookCode = resolveBookCode(spaceRangeMatch[1]);
+    if (bookCode) {
+      const chapter = parseInt(spaceRangeMatch[2]);
+      const start = parseInt(spaceRangeMatch[3]);
+      const end = parseInt(spaceRangeMatch[4]);
+      if (chapter && start && end && end >= start) {
+        const verses: number[] = [];
+        for (let i = start; i <= end; i++) verses.push(i);
+        return { bookCode, chapter, verses };
+      }
+    }
+  }
+
+  // 패턴 3-2: 공백 구분 — "엡 1 1" "엡 1 1,3" — 3토큰
+  const spacePattern = /^(.+?)\s+(\d+)\s+(\d+(?:\s*[-~,]\s*\d+)?)\s*$/;
+  const spaceMatch = text.match(spacePattern);
+  if (spaceMatch) {
+    const bookCode = resolveBookCode(spaceMatch[1]);
+    if (bookCode) {
+      const chapter = parseInt(spaceMatch[2]);
+      const verses = parseVerses(spaceMatch[3]);
+      if (chapter && verses.length > 0) {
+        return { bookCode, chapter, verses };
+      }
+    }
+  }
+
+  // 패턴 4: 장만 지정 — "요3:" "요3" "마태복음3" "누가2장"
   const chapterOnlyPattern = /^(.+?)\s*(\d+)\s*[:：장]?\s*$/;
   const chapterOnlyMatch = text.match(chapterOnlyPattern);
   if (chapterOnlyMatch) {
