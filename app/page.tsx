@@ -118,7 +118,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gray-50 py-8 px-2 sm:px-4">
+    <main className="min-h-screen bg-gray-50 py-8 px-2 sm:px-4 overflow-x-clip">
       {view === "card" ? (
         <CardPreview
           verses={selectedVerses}
