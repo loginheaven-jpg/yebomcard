@@ -3,7 +3,7 @@ import { SessionOptions } from "iron-session";
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || undefined;
 
 export const sessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET || "dev-secret-must-be-32-chars-long!!",
+  password: process.env.SESSION_SECRET!,
   cookieName: "saint_record_session",
   cookieOptions: {
     httpOnly: true,
