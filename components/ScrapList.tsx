@@ -131,7 +131,7 @@ export default function ScrapList({
                   <p className="text-sm font-semibold text-gray-800">{scrap.reference}</p>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleRemove(scrap.id); }}
-                    className="p-1 text-gray-300 hover:text-gray-500 transition-colors shrink-0 ml-2"
+                    className="p-1 text-gray-400 hover:text-gray-700 transition-colors shrink-0 ml-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
