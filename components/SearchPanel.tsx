@@ -807,19 +807,21 @@ export default function SearchPanel({
           {/* Step: 절 본문 (리스트) */}
           {browseStep === "verse" && (
             <div>
-              {/* 헤더: 뒤로 + 책/장(총장수) + 글자크기 슬라이더 + 장 이동 */}
+              {/* 헤더: ← 목차로 | ◀ 책이름 장/총장 ▶ | 가━●━가 */}
               <div className="flex items-center justify-between mb-3">
+                {/* 좌: 목차로 */}
                 <button
                   onClick={() => setBrowseStep("chapter")}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
-                  {getBookByCode(bookCode)?.nameKr} {chapter}/{chapters.length}장
+                  목차로
                 </button>
 
-                <div className="flex items-center gap-0 shrink-0">
+                {/* 중앙: ◀ 책이름 장 ▶ */}
+                <div className="flex items-center gap-0">
                   <button
                     onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
                     disabled={!canPrevChapter}
@@ -829,17 +831,11 @@ export default function SearchPanel({
                       <path d="M15 4 L4 14 L15 24 Z" />
                     </svg>
                   </button>
-                  <span className="text-[10px] text-gray-400 ml-2">가</span>
-                  <input
-                    type="range"
-                    min={14}
-                    max={24}
-                    value={readingFontSize}
-                    onChange={(e) => setReadingFontSize(Number(e.target.value))}
-                    className="w-14 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
-                    title={`글자 크기 ${readingFontSize}px`}
-                  />
-                  <span className="text-base text-gray-400 mr-2">가</span>
+                  <span className="text-sm text-gray-600 mx-1">
+                    {getBookByCode(bookCode)?.nameKr}{" "}
+                    <span className="text-lg font-bold text-gray-900">{chapter}</span>
+                    <span className="text-gray-400">/{chapters.length}장</span>
+                  </span>
                   <button
                     onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                     disabled={!canNextChapter}
@@ -849,6 +845,21 @@ export default function SearchPanel({
                       <path d="M3 4 L14 14 L3 24 Z" />
                     </svg>
                   </button>
+                </div>
+
+                {/* 우: 글자크기 슬라이더 */}
+                <div className="flex items-center shrink-0">
+                  <span className="text-[10px] text-gray-400">가</span>
+                  <input
+                    type="range"
+                    min={14}
+                    max={24}
+                    value={readingFontSize}
+                    onChange={(e) => setReadingFontSize(Number(e.target.value))}
+                    className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
+                    title={`글자 크기 ${readingFontSize}px`}
+                  />
+                  <span className="text-base text-gray-400">가</span>
                 </div>
               </div>
 

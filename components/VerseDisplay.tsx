@@ -395,6 +395,21 @@ export default function VerseDisplay({
         >
           이 말씀으로 카드 만들기 ({verses.length}절)
         </button>
+
+        {/* 스크랩만 하기 */}
+        <button
+          onClick={async () => {
+            if (requireAuth && !requireAuth()) return;
+            await addScrapToServer(verses, verses[0].version as "nkrv" | "rnksv");
+            onScrapSaved?.();
+          }}
+          className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
+        >
+          스크랩만 하기
+          <span className="block text-[10px] text-gray-300 mt-0.5">
+            링크복사나 카드만들기하시면 자동스크랩
+          </span>
+        </button>
       </div>
     </div>
   );
