@@ -267,12 +267,14 @@ export default function SearchPanel({
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
     async function loadChapters() {
+      // 장 목록만 필요 — 시편(150장, 2461절)도 커버하도록 충분한 limit
       const { data, error } = await supabase
         .from("bible_verses")
         .select("chapter")
         .eq("version", version)
         .eq("book_code", bookCode)
-        .order("chapter");
+        .order("chapter")
+        .limit(5000);
 
       if (error || !data) return;
 
