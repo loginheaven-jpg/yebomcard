@@ -267,20 +267,15 @@ export default function SearchPanel({
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
     async function loadChapters() {
-      // 장 목록만 필요 — 시편(150장, 2461절)도 커버하도록 충분한 limit
-      const { data, error } = await supabase
-        .from("bible_verses")
-        .select("chapter")
-        .eq("version", version)
-        .eq("book_code", bookCode)
-        .order("chapter")
-        .limit(5000);
+      // RPC로 DISTINCT chapter 조회 (Supabase 1000행 제한 우회)
+      const { data, error } = await supabase.rpc("get_chapters", {
+        p_version: version,
+        p_book_code: bookCode,
+      });
 
       if (error || !data) return;
 
-      const unique = [...new Set(data.map((d) => d.chapter))].sort(
-        (a, b) => a - b
-      );
+      const unique = (data as { chapter: number }[]).map((d) => d.chapter);
       setChapters(unique);
       if (unique.length > 0 && !unique.includes(chapter)) {
         setChapter(unique[0]);
@@ -773,16 +768,22 @@ export default function SearchPanel({
           {/* Step: 장 선택 (그리드) */}
           {browseStep === "chapter" && (
             <div>
-              {/* 헤더: 뒤로 + 책 이름 */}
-              <button
-                onClick={() => setBrowseStep("book")}
-                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-3 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                {getBookByCode(bookCode)?.nameKr || "책 선택"}
-              </button>
+              {/* 헤더: ← 목차로 + 중앙 책이름 */}
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => setBrowseStep("book")}
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  목차로
+                </button>
+                <span className="text-sm font-semibold text-gray-800">
+                  {getBookByCode(bookCode)?.nameKr || "책 선택"}
+                </span>
+                <span className="w-14" />
+              </div>
 
               {/* 장 그리드 */}
               <div className="grid grid-cols-7 gap-1.5">

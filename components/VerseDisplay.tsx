@@ -403,10 +403,10 @@ export default function VerseDisplay({
             await addScrapToServer(verses, verses[0].version as "nkrv" | "rnksv");
             onScrapSaved?.();
           }}
-          className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors text-center"
+          className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center"
         >
           스크랩만 하기
-          <span className="block text-[10px] text-gray-300 mt-0.5">
+          <span className="block text-xs text-gray-500 mt-0.5">
             링크복사나 카드만들기하시면 자동스크랩
           </span>
         </button>
