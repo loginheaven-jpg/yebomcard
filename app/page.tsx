@@ -5,10 +5,10 @@ import SearchPanel from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
-import { addScrap, getScraps } from "@/lib/scrap";
+import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
-import type { BibleVerse, ViewMode, ScrapItem } from "@/lib/types";
+import type { BibleVerse, ViewMode } from "@/lib/types";
 
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
@@ -19,9 +19,15 @@ export default function Home() {
   const [showScrap, setShowScrap] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
   useEffect(() => {
-    setScrapCount(getScraps().length);
-  }, []);
+    if (!isLoggedIn) return;
+    (async () => {
+      await migrateLocalScraps();
+      const scraps = await fetchMyScraps();
+      setScrapCount(scraps.length);
+    })();
+  }, [isLoggedIn]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
@@ -79,43 +85,46 @@ export default function Home() {
     });
   }, []);
 
-  const handleCreateCard = useCallback(() => {
-    if (!requireAuth()) return; // 로그인 필요
-    // 카드 만들기 진입 시 스크랩 저장
+  const handleCreateCard = useCallback(async () => {
+    if (!requireAuth()) return;
     if (selectedVerses.length > 0) {
-      addScrap(selectedVerses, selectedVerses[0].version as "nkrv" | "rnksv");
-      setScrapCount(getScraps().length);
+      await addScrapToServer(selectedVerses, selectedVerses[0].version as "nkrv" | "rnksv");
+      const scraps = await fetchMyScraps();
+      setScrapCount(scraps.length);
       showToast("스크랩에 저장되었습니다");
     }
     setView("card");
-  }, [selectedVerses, showToast]);
+  }, [selectedVerses, showToast, requireAuth]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
   }, []);
 
-  // 스크랩 저장 콜백 (VerseDisplay에서 링크/텍스트 복사 시)
-  const handleScrapSaved = useCallback(() => {
-    setScrapCount(getScraps().length);
+  // 스크랩 저장 콜백 (VerseDisplay에서 링크 복사 시)
+  const handleScrapSaved = useCallback(async () => {
+    const scraps = await fetchMyScraps();
+    setScrapCount(scraps.length);
     showToast("스크랩에 저장되었습니다");
   }, [showToast]);
 
-  // 스크랩 목록에서 항목 선택
-  const handleSelectScrap = useCallback(async (scrap: ScrapItem) => {
-    const promises = scrap.verses.map((ref) =>
-      supabase
-        .from("bible_verses")
-        .select("*")
-        .eq("version", scrap.version)
-        .eq("book_code", ref.book_code)
-        .eq("chapter", ref.chapter)
-        .eq("verse", ref.verse)
-        .single()
-    );
-    const results = await Promise.all(promises);
-    const found = results.filter((r) => r.data).map((r) => r.data as BibleVerse);
-    if (found.length > 0) {
-      setSelectedVerses(found);
+  // 스크랩 목록에서 항목 선택 (version, bookCode, chapter, verseStart, verseEnd)
+  const handleSelectScrap = useCallback(async (
+    version: string, bookCode: string, chapter: number, verseStart: number, verseEnd: number
+  ) => {
+    const verses: number[] = [];
+    for (let v = verseStart; v <= verseEnd; v++) verses.push(v);
+
+    const { data } = await supabase
+      .from("bible_verses")
+      .select("*")
+      .eq("version", version)
+      .eq("book_code", bookCode)
+      .eq("chapter", chapter)
+      .in("verse", verses)
+      .order("verse");
+
+    if (data && data.length > 0) {
+      setSelectedVerses(data as BibleVerse[]);
       setView("display");
     }
   }, []);
@@ -156,7 +165,7 @@ export default function Home() {
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
             <ScrapList
               onBack={() => setShowScrap(false)}
-              onSelectScrap={(scrap) => { setShowScrap(false); handleSelectScrap(scrap); }}
+              onSelectScrap={(...args) => { setShowScrap(false); handleSelectScrap(...args); }}
               onScrapCountChange={setScrapCount}
             />
           </div>

@@ -1,91 +1,162 @@
-import type { BibleVerse, BibleVersion, ScrapItem } from "./types";
+import type { BibleVerse, BibleVersion } from "./types";
 
-const STORAGE_KEY = "yebom-scraps";
-const MAX_SCRAPS = 100;
+// ─── 서버 기반 스크랩 (Supabase) ───
 
-export function getScraps(): ScrapItem[] {
-  if (typeof window === "undefined") return [];
+export interface ServerScrap {
+  id: number;
+  user_id: string;
+  user_name: string;
+  book_code: string;
+  chapter: number;
+  verse_start: number;
+  verse_end: number;
+  version: string;
+  reference: string;
+  preview: string;
+  created_at: string;
+}
+
+export interface CommunityScrap {
+  book_code: string;
+  chapter: number;
+  verse_start: number;
+  verse_end: number;
+  version: string;
+  reference: string;
+  preview: string;
+  scrap_count: number;
+  latest_at: string;
+}
+
+export async function fetchMyScraps(): Promise<ServerScrap[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const items: ScrapItem[] = JSON.parse(raw);
-    return items.sort((a, b) => b.savedAt - a.savedAt);
+    const res = await fetch("/api/scrap");
+    if (!res.ok) return [];
+    const { scraps } = await res.json();
+    return scraps || [];
   } catch {
     return [];
   }
 }
 
-/**
- * 스크랩 추가 (중복이면 시간만 업데이트)
- */
-export function addScrap(verses: BibleVerse[], version: BibleVersion): ScrapItem {
-  const scraps = getScraps();
-
-  // 중복 체크: 같은 버전 + 같은 구절 세트
-  const verseKey = verses
-    .map((v) => `${v.book_code}.${v.chapter}.${v.verse}`)
-    .sort()
-    .join(",");
-
-  const existing = scraps.find((s) => {
-    const sKey = s.verses
-      .map((v) => `${v.book_code}.${v.chapter}.${v.verse}`)
-      .sort()
-      .join(",");
-    return s.version === version && sKey === verseKey;
-  });
-
-  if (existing) {
-    existing.savedAt = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(scraps));
-    return existing;
+export async function fetchCommunityScraps(): Promise<CommunityScrap[]> {
+  try {
+    const res = await fetch("/api/scrap/community");
+    if (!res.ok) return [];
+    const { scraps } = await res.json();
+    return scraps || [];
+  } catch {
+    return [];
   }
+}
 
-  // 새 스크랩 생성
+export async function addScrapToServer(
+  verses: BibleVerse[],
+  version: BibleVersion
+): Promise<boolean> {
   const firstVerse = verses[0];
+  const lastVerse = verses[verses.length - 1];
   const verseRange =
     verses.length === 1
       ? `${verses[0].verse}`
-      : `${verses[0].verse}-${verses[verses.length - 1].verse}`;
+      : `${verses[0].verse}-${lastVerse.verse}`;
 
-  const newScrap: ScrapItem = {
-    id: Date.now().toString(),
-    verses: verses.map((v) => ({
-      book_code: v.book_code,
-      book_name: v.book_name,
-      chapter: v.chapter,
-      verse: v.verse,
-    })),
-    version,
-    savedAt: Date.now(),
-    preview: verses.map((v) => v.text).join(" ").slice(0, 40),
-    reference: `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`,
-  };
+  try {
+    const res = await fetch("/api/scrap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        book_code: firstVerse.book_code,
+        chapter: firstVerse.chapter,
+        verse_start: firstVerse.verse,
+        verse_end: lastVerse.verse,
+        version,
+        reference: `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`,
+        preview: verses
+          .map((v) => v.text)
+          .join(" ")
+          .slice(0, 40),
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-  scraps.unshift(newScrap);
+export async function removeScrapFromServer(id: number): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/scrap?id=${id}`, { method: "DELETE" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-  // 최대 개수 초과 시 가장 오래된 것 삭제
-  if (scraps.length > MAX_SCRAPS) {
-    scraps.splice(MAX_SCRAPS);
+// ─── localStorage 마이그레이션 ───
+
+const OLD_STORAGE_KEY = "yebom-scraps";
+const MIGRATED_KEY = "yebom-scraps-migrated";
+
+interface OldScrapItem {
+  id: string;
+  verses: { book_code: string; book_name: string; chapter: number; verse: number }[];
+  version: string;
+  savedAt: number;
+  preview: string;
+  reference: string;
+}
+
+export async function migrateLocalScraps(): Promise<number> {
+  if (typeof window === "undefined") return 0;
+  if (localStorage.getItem(MIGRATED_KEY) === "1") return 0;
+
+  const raw = localStorage.getItem(OLD_STORAGE_KEY);
+  if (!raw) {
+    localStorage.setItem(MIGRATED_KEY, "1");
+    return 0;
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scraps));
-  return newScrap;
+  try {
+    const oldScraps: OldScrapItem[] = JSON.parse(raw);
+    let migrated = 0;
+
+    for (const scrap of oldScraps) {
+      if (scrap.verses.length === 0) continue;
+      const first = scrap.verses[0];
+      const last = scrap.verses[scrap.verses.length - 1];
+
+      await fetch("/api/scrap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book_code: first.book_code,
+          chapter: first.chapter,
+          verse_start: first.verse,
+          verse_end: last.verse,
+          version: scrap.version,
+          reference: scrap.reference,
+          preview: scrap.preview,
+        }),
+      });
+      migrated++;
+    }
+
+    localStorage.removeItem(OLD_STORAGE_KEY);
+    localStorage.setItem(MIGRATED_KEY, "1");
+    return migrated;
+  } catch {
+    return 0;
+  }
 }
 
-export function removeScrap(id: string): void {
-  const scraps = getScraps().filter((s) => s.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(scraps));
-}
+// ─── 시간 포맷 ───
 
-/**
- * 시간 표시: 오늘이면 상대시간, 다른 날이면 날짜+시간
- */
-export function formatScrapTime(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const today = new Date();
+export function formatScrapTime(timestamp: string): string {
   const date = new Date(timestamp);
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const today = new Date();
 
   const isToday =
     today.getFullYear() === date.getFullYear() &&

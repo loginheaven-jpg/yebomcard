@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
 import type { BibleVerse, BilingualVerse } from "@/lib/types";
-import { addScrap } from "@/lib/scrap";
+import { addScrapToServer } from "@/lib/scrap";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -306,7 +306,7 @@ export default function VerseDisplay({
           <button
             onClick={() => {
               if (requireAuth && !requireAuth()) return;
-              addScrap(verses, verses[0].version as "nkrv" | "rnksv");
+              addScrapToServer(verses, verses[0].version as "nkrv" | "rnksv");
               onScrapSaved?.();
               setShowShareOptions(true);
             }}
