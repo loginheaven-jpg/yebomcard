@@ -125,7 +125,7 @@ import type { NextRequest } from 'next/server'
 import { unsealData } from 'iron-session'
 
 const COOKIE_NAME = 'saint_record_session'
-const SERVICE_CODE = 'card' // 서비스별로 변경: prayer, finance, radio, card 등
+const SERVICE_CODE = 'bible' // 서비스별로 변경: prayer, finance, radio, bible 등
 
 // 인증 불필요 경로 (서비스에 맞게 수정)
 const publicPaths = ['/api/auth', '/api/bible']
@@ -288,7 +288,7 @@ const SERVICE_INFO = {
   prayer: { label: '기도의 집을 이용하려면', redirect: 'https://prayer.yebom.org' },
   radio:  { label: '라디오를 이용하려면',    redirect: 'https://radio-axi.pages.dev' },
   finance:{ label: '재정부를 이용하려면',    redirect: 'https://finance.yebom.org' },
-  card:   { label: '예봄카드를 이용하려면',   redirect: 'https://bible.yebom.org' },
+  bible:  { label: '예봄성경을 이용하려면',   redirect: 'https://bible.yebom.org' },
 }
 ```
 
