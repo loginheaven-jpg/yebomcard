@@ -137,10 +137,21 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
   const book = getBookByCode(firstVerse.book_code);
-  const verseRange =
-    verses.length === 1
-      ? `${verses[0].verse}`
-      : `${verses[0].verse}-${verses[verses.length - 1].verse}`;
+  // 연속 절은 범위(1-3), 비연속은 쉼표(1,2,6)로 표시
+  const formatVerseNums = (nums: number[]): string => {
+    if (nums.length === 0) return "";
+    if (nums.length === 1) return `${nums[0]}`;
+    const sorted = [...nums].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sorted[0], end = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) { end = sorted[i]; }
+      else { ranges.push(start === end ? `${start}` : `${start}-${end}`); start = sorted[i]; end = sorted[i]; }
+    }
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+    return ranges.join(",");
+  };
+  const verseRange = formatVerseNums(verses.map((v) => v.verse));
   const koreanRef = `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`;
   const englishRef = book
     ? `${book.nameEn} ${firstVerse.chapter}:${verseRange}`
