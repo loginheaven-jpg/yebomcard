@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { findGradients, type GradientPreset } from "@/lib/gradients";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
-import type { BibleVerse } from "@/lib/types";
+import { stripNotes, type BibleVerse } from "@/lib/types";
 
 /**
  * 슬라이더 값(0~100) → 흰→주조색→검 그라데이션 상의 색상
@@ -148,7 +148,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [cardRatio, setCardRatio] = useState<"4/5" | "9/16">("4/5");
   const [overlayStrength, setOverlayStrength] = useState(30); // 0~100%
 
-  const koreanText = verses.map((v) => v.text).join(" ");
+  const koreanText = verses.map((v) => stripNotes(v.text)).join(" ");
   const firstVerse = verses[0];
   const book = getBookByCode(firstVerse.book_code);
   // 연속 절은 범위(1-3), 비연속은 쉼표(1,2,6)로 표시

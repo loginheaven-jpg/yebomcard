@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
-import type { BibleVerse, BilingualVerse } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BilingualVerse } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
 
 interface VerseDisplayProps {
@@ -255,7 +255,7 @@ export default function VerseDisplay({
                   <sup className="text-xs text-gray-400 mr-0.5">
                     {v.verse}
                   </sup>
-                  {v.text}
+                  {stripNotes(v.text)}
                 </span>
               ))}
             </blockquote>
@@ -355,7 +355,7 @@ export default function VerseDisplay({
                   const vRange = g.verses.length === 1
                     ? `${g.verses[0].verse}`
                     : `${g.verses[0].verse}-${g.verses[g.verses.length - 1].verse}`;
-                  const krText = g.verses.map((v) => v.text).join(" ");
+                  const krText = g.verses.map((v) => stripNotes(v.text)).join(" ");
                   const krRef = `(${g.bookName} ${g.chapter}:${vRange})`;
                   const enText = g.englishVerses.map((v) => v.text).join(" ");
                   const enRef = book ? `(${book.nameEn} ${g.chapter}:${vRange})` : "";

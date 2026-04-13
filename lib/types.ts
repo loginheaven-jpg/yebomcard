@@ -42,3 +42,8 @@ export interface AIRecommendation {
   verse: number;
   preview: string;
 }
+
+/** 새번역 (주: ...) 주석을 제거한 텍스트 반환 — 선택완료 화면용 */
+export function stripNotes(text: string): string {
+  return text.replace(/\s*\(주\s*:[^)]*\)/g, "").trim();
+}

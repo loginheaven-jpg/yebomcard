@@ -1,4 +1,4 @@
-import type { BibleVerse, BibleVersion } from "./types";
+import { stripNotes, type BibleVerse, type BibleVersion } from "./types";
 
 // ─── 서버 기반 스크랩 (Supabase) ───
 
@@ -77,7 +77,7 @@ export async function addScrapToServer(
         version,
         reference: `${base.book_name} ${base.chapter}장 ${verseRange}절`,
         preview: sameChapter
-          .map((v) => v.text)
+          .map((v) => stripNotes(v.text))
           .join(" ")
           .slice(0, 40),
       }),
