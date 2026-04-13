@@ -83,3 +83,30 @@ export async function callImage(
 
   return res.json();
 }
+
+// ─── Image Edit (text removal etc.) ──────────────────────
+
+export async function callImageEdit(
+  imageBase64: string,
+  mediaType: string,
+  editType: string = "remove_text",
+  caller?: string
+): Promise<ImageResult> {
+  const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image/edit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      image: imageBase64,
+      media_type: mediaType,
+      edit_type: editType,
+      ...(caller && { caller }),
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Unknown" }));
+    throw new Error(`IMAGE_EDIT_ERROR: ${res.status} ${err.detail}`);
+  }
+
+  return res.json();
+}

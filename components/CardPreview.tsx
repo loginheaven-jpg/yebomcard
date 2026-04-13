@@ -125,8 +125,12 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [aiIllust, setAiIllust] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Upload state
-  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  // Upload state — 복수 이미지
+  interface UploadImage { id: string; dataUrl: string; }
+  const [uploads, setUploads] = useState<UploadImage[]>([]);
+  const [selectedUploadIdx, setSelectedUploadIdx] = useState(0);
+  const [uploadMode, setUploadMode] = useState<"as-is" | "remove-text">("as-is");
+  const [cleaningImage, setCleaningImage] = useState(false);
 
   // Photo page + AI 검색어 캐시
   const photoPage = useRef(1);
@@ -255,8 +259,47 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setUploadPreview(reader.result as string);
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const id = `upload-${Date.now()}`;
+
+      if (uploadMode === "remove-text") {
+        setCleaningImage(true);
+        try {
+          // base64 데이터 부분만 추출
+          const base64 = dataUrl.split(",")[1];
+          const mimeMatch = dataUrl.match(/data:([^;]+);/);
+          const mediaType = mimeMatch?.[1] || "image/jpeg";
+
+          const res = await fetch("/api/upload/clean", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64, media_type: mediaType }),
+          });
+          if (res.ok) {
+            const { data, media_type } = await res.json();
+            const cleanedUrl = `data:${media_type};base64,${data}`;
+            setUploads((prev) => [...prev, { id, dataUrl: cleanedUrl }]);
+            setSelectedUploadIdx(uploads.length);
+          } else {
+            // 실패 시 원본 사용
+            setUploads((prev) => [...prev, { id, dataUrl }]);
+            setSelectedUploadIdx(uploads.length);
+          }
+        } catch {
+          setUploads((prev) => [...prev, { id, dataUrl }]);
+          setSelectedUploadIdx(uploads.length);
+        } finally {
+          setCleaningImage(false);
+        }
+      } else {
+        setUploads((prev) => [...prev, { id, dataUrl }]);
+        setSelectedUploadIdx(uploads.length);
+      }
+    };
     reader.readAsDataURL(file);
+    // input 초기화 (같은 파일 재선택 허용)
+    e.target.value = "";
   }
 
   // 3. AI — 수동 생성 (서브 토글 선택 후 "생성" 버튼)
@@ -336,9 +379,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       textColorClass =
         currentAi.textColor === "dark" ? "text-gray-900" : "text-white";
     }
-  } else if (activeCard === "upload" && uploadPreview) {
+  } else if (activeCard === "upload" && uploads.length > 0) {
+    const sel = uploads[selectedUploadIdx] ?? uploads[0];
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${uploadPreview})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${sel.dataUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -347,7 +391,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
 
   const isLoading =
     (activeCard === "photo" && photoLoading) ||
-    (activeCard === "ai" && aiLoading);
+    (activeCard === "ai" && aiLoading) ||
+    (activeCard === "upload" && cleaningImage);
 
   // 주조색 추출 + 슬라이더 기본값 설정
   useEffect(() => {
@@ -369,8 +414,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           color = extractGradientColor(currentAi.gradient);
           defaultSlider = currentAi.textColor === "dark" ? 100 : 0;
         }
-      } else if (activeCard === "upload" && uploadPreview) {
-        color = await extractImageColor(uploadPreview);
+      } else if (activeCard === "upload" && uploads.length > 0) {
+        const sel = uploads[selectedUploadIdx] ?? uploads[0];
+        color = await extractImageColor(sel.dataUrl);
         defaultSlider = 0;
       }
 
@@ -378,7 +424,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       setTextColorSlider(defaultSlider);
     }
     updateDominant();
-  }, [activeCard, selectedGradientIdx, selectedPhotoIdx, currentAi, uploadPreview]);
+  }, [activeCard, selectedGradientIdx, selectedPhotoIdx, currentAi, uploads, selectedUploadIdx]);
 
   // 슬라이더 기반 텍스트 색상
   const userTextColor = sliderToColor(textColorSlider, dominantColor);
@@ -622,37 +668,81 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </div>
       )}
 
-      {/* Upload UI */}
+      {/* Upload — 썸네일 + 토글 + 업로드 버튼 */}
       {activeCard === "upload" && (
-        <div className="mt-3">
-          <label className={`block w-full py-6 border-2 border-dashed rounded-xl text-center text-sm cursor-pointer transition-colors ${
-            uploadPreview
-              ? "border-gray-300 text-gray-500 hover:border-gray-400"
-              : "border-gray-300 text-gray-400 hover:border-gray-400 hover:bg-gray-50"
-          }`}>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-            {uploadPreview ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
-                </svg>
-                다른 사진 선택
-              </span>
-            ) : (
-              <span className="flex flex-col items-center gap-1">
-                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
-                </svg>
-                갤러리에서 사진을 선택하세요
-                <span className="text-xs text-gray-300">5MB 이하</span>
-              </span>
-            )}
-          </label>
+        <div className="mt-3 space-y-2">
+          {/* 썸네일 가로 스크롤 */}
+          {uploads.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 justify-start">
+              {uploads.map((img, i) => (
+                <button
+                  key={img.id}
+                  onClick={() => setSelectedUploadIdx(i)}
+                  className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                    i === selectedUploadIdx
+                      ? "border-gray-900 scale-110"
+                      : "border-transparent opacity-60 hover:opacity-80"
+                  }`}
+                >
+                  <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 글자지움 | 그냥 토글 + 업로드 버튼 */}
+          <div className="flex gap-2 items-center">
+            <div className="flex gap-0.5 bg-gray-100 p-0.5 rounded-lg">
+              <button
+                onClick={() => setUploadMode("as-is")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  uploadMode === "as-is" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                그냥
+              </button>
+              <button
+                onClick={() => setUploadMode("remove-text")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  uploadMode === "remove-text" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                글자지움
+              </button>
+            </div>
+            <label className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-pointer hover:bg-gray-50 transition-colors">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+                disabled={cleaningImage}
+              />
+              {cleaningImage ? (
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  글자 제거 중...
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  사진 추가
+                </span>
+              )}
+            </label>
+          </div>
+
+          {/* 빈 상태 안내 */}
+          {uploads.length === 0 && !cleaningImage && (
+            <p className="text-center text-xs text-gray-300 py-2">
+              사진을 추가하면 카드 배경으로 사용됩니다
+            </p>
+          )}
         </div>
       )}
 
