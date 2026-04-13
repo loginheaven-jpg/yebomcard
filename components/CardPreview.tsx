@@ -697,17 +697,28 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           {uploads.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1 justify-start">
               {uploads.map((img, i) => (
-                <button
-                  key={img.id}
-                  onClick={() => setSelectedUploadIdx(i)}
-                  className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
-                    i === selectedUploadIdx
-                      ? "border-gray-900 scale-110"
-                      : "border-transparent opacity-60 hover:opacity-80"
-                  }`}
-                >
-                  <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
-                </button>
+                <div key={img.id} className="relative shrink-0">
+                  <button
+                    onClick={() => setSelectedUploadIdx(i)}
+                    className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all ${
+                      i === selectedUploadIdx
+                        ? "border-gray-900 scale-110"
+                        : "border-transparent opacity-60 hover:opacity-80"
+                    }`}
+                  >
+                    <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!confirm("이 사진을 삭제하시겠습니까?")) return;
+                      setUploads((prev) => prev.filter((_, idx) => idx !== i));
+                      setSelectedUploadIdx((prev) => Math.max(0, Math.min(prev, uploads.length - 2)));
+                    }}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-gray-600 text-white rounded-full flex items-center justify-center text-[9px] leading-none hover:bg-gray-800 transition-colors"
+                  >
+                    x
+                  </button>
+                </div>
               ))}
             </div>
           )}
