@@ -111,8 +111,10 @@ export default function Home() {
   const handleSelectScrap = useCallback(async (
     version: string, bookCode: string, chapter: number, verseStart: number, verseEnd: number
   ) => {
+    const lo = Math.min(verseStart, verseEnd);
+    const hi = Math.max(verseStart, verseEnd);
     const verses: number[] = [];
-    for (let v = verseStart; v <= verseEnd; v++) verses.push(v);
+    for (let v = lo; v <= hi; v++) verses.push(v);
 
     const { data } = await supabase
       .from("bible_verses")

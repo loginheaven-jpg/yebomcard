@@ -54,25 +54,29 @@ export async function addScrapToServer(
   verses: BibleVerse[],
   version: BibleVersion
 ): Promise<boolean> {
-  const firstVerse = verses[0];
-  const lastVerse = verses[verses.length - 1];
-  const verseRange =
-    verses.length === 1
-      ? `${verses[0].verse}`
-      : `${verses[0].verse}-${lastVerse.verse}`;
+  const base = verses[0];
+  // 같은 책+장의 절만 필터 → 절 번호순 정렬
+  const sameChapter = verses
+    .filter((v) => v.book_code === base.book_code && v.chapter === base.chapter)
+    .sort((a, b) => a.verse - b.verse);
+  if (sameChapter.length === 0) return false;
+
+  const vStart = sameChapter[0].verse;
+  const vEnd = sameChapter[sameChapter.length - 1].verse;
+  const verseRange = vStart === vEnd ? `${vStart}` : `${vStart}-${vEnd}`;
 
   try {
     const res = await fetch("/api/scrap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        book_code: firstVerse.book_code,
-        chapter: firstVerse.chapter,
-        verse_start: firstVerse.verse,
-        verse_end: lastVerse.verse,
+        book_code: base.book_code,
+        chapter: base.chapter,
+        verse_start: vStart,
+        verse_end: vEnd,
         version,
-        reference: `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`,
-        preview: verses
+        reference: `${base.book_name} ${base.chapter}장 ${verseRange}절`,
+        preview: sameChapter
           .map((v) => v.text)
           .join(" ")
           .slice(0, 40),
