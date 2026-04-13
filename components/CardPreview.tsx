@@ -128,8 +128,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   // Upload state
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
 
-  // Photo page (새로고침용)
+  // Photo page + AI 검색어 캐시
   const photoPage = useRef(1);
+  const [cachedQuery, setCachedQuery] = useState<string | null>(null);
 
   // English + download + text color
   const [englishText, setEnglishText] = useState("");
@@ -195,11 +196,28 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     setGradients(findGradients(koreanText, 6));
   }, [koreanText]);
 
-  // 2. Unsplash — 6장
+  // 2. Unsplash — 6장 (AI 검색어 → fallback 정적 매핑)
   async function fetchPhotos(page?: number) {
     setPhotoLoading(true);
     try {
-      const query = getUnsplashQuery(keywords, koreanText);
+      // 캐시된 검색어가 있으면 재사용, 없으면 AI 생성
+      let query = cachedQuery;
+      if (!query) {
+        try {
+          const suggestRes = await fetch("/api/unsplash/suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ verseText: koreanText }),
+          });
+          if (suggestRes.ok) {
+            const { query: aiQuery } = await suggestRes.json();
+            query = aiQuery;
+          }
+        } catch { /* AI 실패 → fallback */ }
+        if (!query) query = getUnsplashQuery(keywords, koreanText);
+        setCachedQuery(query);
+      }
+
       const p = page ?? photoPage.current;
       const res = await fetch(
         `/api/unsplash?query=${encodeURIComponent(query)}&per_page=6&page=${p}`
