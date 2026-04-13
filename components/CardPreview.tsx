@@ -95,7 +95,7 @@ interface CardPreviewProps {
   onBack: () => void;
 }
 
-type CardType = "gradient" | "photo" | "ai";
+type CardType = "gradient" | "photo" | "ai" | "upload";
 type AiMode = "background" | "illustration";
 type FontChoice = "noto-serif" | "ibm-plex" | "gowun-dodum";
 
@@ -124,6 +124,12 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [aiBg, setAiBg] = useState<AiBackground | null>(null);
   const [aiIllust, setAiIllust] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // Upload state
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+
+  // Photo page (새로고침용)
+  const photoPage = useRef(1);
 
   // English + download + text color
   const [englishText, setEnglishText] = useState("");
@@ -189,28 +195,51 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     setGradients(findGradients(koreanText, 6));
   }, [koreanText]);
 
-  // 2. Unsplash — 5장
+  // 2. Unsplash — 6장
+  async function fetchPhotos(page?: number) {
+    setPhotoLoading(true);
+    try {
+      const query = getUnsplashQuery(keywords, koreanText);
+      const p = page ?? photoPage.current;
+      const res = await fetch(
+        `/api/unsplash?query=${encodeURIComponent(query)}&per_page=6&page=${p}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.length > 0) {
+          setPhotos(data);
+          setSelectedPhotoIdx(0);
+        }
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setPhotoLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (activeCard !== "photo" || photos.length > 0) return;
-    async function loadPhotos() {
-      setPhotoLoading(true);
-      try {
-        const query = getUnsplashQuery(keywords, koreanText);
-        const res = await fetch(
-          `/api/unsplash?query=${encodeURIComponent(query)}&per_page=6`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.length > 0) setPhotos(data);
-        }
-      } catch {
-        /* silent */
-      } finally {
-        setPhotoLoading(false);
-      }
-    }
-    loadPhotos();
+    fetchPhotos(1);
   }, [activeCard, photos.length, keywords]);
+
+  function refreshPhotos() {
+    photoPage.current += 1;
+    fetchPhotos(photoPage.current);
+  }
+
+  // 3. Upload 핸들러
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("5MB 이하의 사진을 선택해 주세요");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setUploadPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   // 3. AI — 수동 생성 (서브 토글 선택 후 "생성" 버튼)
   const currentAi = aiMode === "illustration" ? aiIllust : aiBg;
@@ -262,7 +291,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   } else if (activeCard === "photo" && photos.length > 0) {
     const selectedPhoto = photos[selectedPhotoIdx];
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url(${selectedPhoto.url})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${selectedPhoto.url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -289,6 +318,13 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       textColorClass =
         currentAi.textColor === "dark" ? "text-gray-900" : "text-white";
     }
+  } else if (activeCard === "upload" && uploadPreview) {
+    cardStyle = {
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${uploadPreview})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+    textColorClass = "text-white";
   }
 
   const isLoading =
@@ -315,13 +351,16 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           color = extractGradientColor(currentAi.gradient);
           defaultSlider = currentAi.textColor === "dark" ? 100 : 0;
         }
+      } else if (activeCard === "upload" && uploadPreview) {
+        color = await extractImageColor(uploadPreview);
+        defaultSlider = 0;
       }
 
       setDominantColor(color);
       setTextColorSlider(defaultSlider);
     }
     updateDominant();
-  }, [activeCard, selectedGradientIdx, selectedPhotoIdx, currentAi]);
+  }, [activeCard, selectedGradientIdx, selectedPhotoIdx, currentAi, uploadPreview]);
 
   // 슬라이더 기반 텍스트 색상
   const userTextColor = sliderToColor(textColorSlider, dominantColor);
@@ -386,9 +425,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         <button onClick={() => setActiveCard("photo")} className={tabClass("photo")}>
           사진 배경
         </button>
-        <button onClick={() => setActiveCard("ai")} className={tabClass("ai")}>
-          AI 아트
+        <button onClick={() => setActiveCard("upload")} className={tabClass("upload")}>
+          내 사진
         </button>
+        {/* AI 아트 — 퀄리티 개선 후 재활성화 */}
       </div>
 
       {/* AI sub-toggle + generate button */}
@@ -535,9 +575,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </div>
       )}
 
-      {/* Photo thumbnails */}
+      {/* Photo thumbnails + 새로고침 */}
       {activeCard === "photo" && photos.length > 1 && (
-        <div className="flex gap-2 mt-3 justify-center">
+        <div className="flex gap-2 mt-3 justify-center items-center">
           {photos.map((p, i) => (
             <button
               key={p.id}
@@ -551,6 +591,50 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
               <img src={p.url} alt="" className="w-full h-full object-cover" />
             </button>
           ))}
+          <button
+            onClick={refreshPhotos}
+            disabled={photoLoading}
+            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            title="다른 사진 보기"
+          >
+            <svg className={`w-4 h-4 ${photoLoading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Upload UI */}
+      {activeCard === "upload" && (
+        <div className="mt-3">
+          <label className={`block w-full py-6 border-2 border-dashed rounded-xl text-center text-sm cursor-pointer transition-colors ${
+            uploadPreview
+              ? "border-gray-300 text-gray-500 hover:border-gray-400"
+              : "border-gray-300 text-gray-400 hover:border-gray-400 hover:bg-gray-50"
+          }`}>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            {uploadPreview ? (
+              <span className="flex items-center justify-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
+                </svg>
+                다른 사진 선택
+              </span>
+            ) : (
+              <span className="flex flex-col items-center gap-1">
+                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
+                </svg>
+                갤러리에서 사진을 선택하세요
+                <span className="text-xs text-gray-300">5MB 이하</span>
+              </span>
+            )}
+          </label>
         </div>
       )}
 
