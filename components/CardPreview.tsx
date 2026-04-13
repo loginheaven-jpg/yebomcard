@@ -129,8 +129,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   interface UploadImage { id: string; dataUrl: string; }
   const [uploads, setUploads] = useState<UploadImage[]>([]);
   const [selectedUploadIdx, setSelectedUploadIdx] = useState(0);
-  const [uploadMode, setUploadMode] = useState<"as-is" | "remove-text">("as-is");
   const [cleaningImage, setCleaningImage] = useState(false);
+  const [showUploadPopup, setShowUploadPopup] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadMode = useRef<"as-is" | "remove-text">("as-is");
 
   // Photo page + AI 검색어 캐시
   const photoPage = useRef(1);
@@ -144,6 +146,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [fontScale, setFontScale] = useState(100); // 80~140%
   const [verticalPos, setVerticalPos] = useState(50);
   const [cardRatio, setCardRatio] = useState<"4/5" | "9/16">("4/5");
+  const [overlayStrength, setOverlayStrength] = useState(30); // 0~100%
 
   const koreanText = verses.map((v) => v.text).join(" ");
   const firstVerse = verses[0];
@@ -250,7 +253,13 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     fetchPhotos(photoPage.current);
   }
 
-  // 3. Upload 핸들러
+  // 3. Upload — 팝업에서 모드 선택 후 파일 선택
+  function triggerUpload(mode: "as-is" | "remove-text") {
+    pendingUploadMode.current = mode;
+    setShowUploadPopup(false);
+    fileInputRef.current?.click();
+  }
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -263,10 +272,9 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       const dataUrl = reader.result as string;
       const id = `upload-${Date.now()}`;
 
-      if (uploadMode === "remove-text") {
+      if (pendingUploadMode.current === "remove-text") {
         setCleaningImage(true);
         try {
-          // base64 데이터 부분만 추출
           const base64 = dataUrl.split(",")[1];
           const mimeMatch = dataUrl.match(/data:([^;]+);/);
           const mediaType = mimeMatch?.[1] || "image/jpeg";
@@ -282,7 +290,6 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             setUploads((prev) => [...prev, { id, dataUrl: cleanedUrl }]);
             setSelectedUploadIdx(uploads.length);
           } else {
-            // 실패 시 원본 사용
             setUploads((prev) => [...prev, { id, dataUrl }]);
             setSelectedUploadIdx(uploads.length);
           }
@@ -351,8 +358,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       selectedGradient.textColor === "dark" ? "text-gray-900" : "text-white";
   } else if (activeCard === "photo" && photos.length > 0) {
     const selectedPhoto = photos[selectedPhotoIdx];
+    const oTop = (overlayStrength / 100).toFixed(2);
+    const oBot = (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${selectedPhoto.url})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,${oTop}), rgba(0,0,0,${oBot})), url(${selectedPhoto.url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -381,8 +390,10 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     }
   } else if (activeCard === "upload" && uploads.length > 0) {
     const sel = uploads[selectedUploadIdx] ?? uploads[0];
+    const oTop = (overlayStrength / 100).toFixed(2);
+    const oBot = (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
     cardStyle = {
-      backgroundImage: `linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.55)), url(${sel.dataUrl})`,
+      backgroundImage: `linear-gradient(rgba(0,0,0,${oTop}), rgba(0,0,0,${oBot})), url(${sel.dataUrl})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -405,7 +416,8 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         defaultSlider = selectedGradient.textColor === "dark" ? 100 : 0;
       } else if (activeCard === "photo" && photos.length > 0) {
         color = photos[selectedPhotoIdx]?.color || "#808080";
-        defaultSlider = 0; // 사진은 어두운 overlay → 흰 글씨
+        defaultSlider = 0;
+        setOverlayStrength(30);
       } else if (activeCard === "ai" && currentAi) {
         if (currentAi.type === "image" && currentAi.imageDataUrl) {
           color = await extractImageColor(currentAi.imageDataUrl);
@@ -418,6 +430,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         const sel = uploads[selectedUploadIdx] ?? uploads[0];
         color = await extractImageColor(sel.dataUrl);
         defaultSlider = 0;
+        setOverlayStrength(15);
       }
 
       setDominantColor(color);
@@ -668,9 +681,18 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         </div>
       )}
 
-      {/* Upload — 썸네일 + 토글 + 업로드 버튼 */}
+      {/* Upload — 썸네일 + 사진 추가 버튼 */}
       {activeCard === "upload" && (
         <div className="mt-3 space-y-2">
+          {/* hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
           {/* 썸네일 가로 스크롤 */}
           {uploads.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1 justify-start">
@@ -690,52 +712,52 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             </div>
           )}
 
-          {/* 글자지움 | 그냥 토글 + 업로드 버튼 */}
-          <div className="flex gap-2 items-center">
-            <div className="flex gap-0.5 bg-gray-100 p-0.5 rounded-lg">
-              <button
-                onClick={() => setUploadMode("as-is")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  uploadMode === "as-is" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                그냥
-              </button>
-              <button
-                onClick={() => setUploadMode("remove-text")}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  uploadMode === "remove-text" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                글자지움
-              </button>
+          {/* 사진 추가 버튼 / 글자 제거 중 표시 */}
+          {cleaningImage ? (
+            <div className="flex items-center justify-center gap-2 py-3 text-sm text-gray-400">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              글자 제거 중...
             </div>
-            <label className="flex-1 flex items-center justify-center gap-1.5 py-2 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-pointer hover:bg-gray-50 transition-colors">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileSelect}
-                disabled={cleaningImage}
-              />
-              {cleaningImage ? (
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  글자 제거 중...
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                  사진 추가
-                </span>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setShowUploadPopup(!showUploadPopup)}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                사진 추가
+              </button>
+
+              {/* 팝업: 그냥 | 글자지움 */}
+              {showUploadPopup && (
+                <div className="absolute z-50 left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  <button
+                    onClick={() => triggerUpload("as-is")}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
+                    </svg>
+                    그냥 사용
+                  </button>
+                  <button
+                    onClick={() => triggerUpload("remove-text")}
+                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 border-t border-gray-100 flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    글자 지우고 사용
+                  </button>
+                </div>
               )}
-            </label>
-          </div>
+            </div>
+          )}
 
           {/* 빈 상태 안내 */}
           {uploads.length === 0 && !cleaningImage && (
@@ -839,6 +861,24 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
             ))}
           </div>
         </div>
+
+        {/* Row 3: 오버레이 — 사진/업로드 모드에서만 */}
+        {(activeCard === "photo" || activeCard === "upload") && (
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-gray-400">어둡기</p>
+              <p className="text-xs text-gray-400">{overlayStrength}%</p>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={70}
+              value={overlayStrength}
+              onChange={(e) => setOverlayStrength(Number(e.target.value))}
+              className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
+            />
+          </div>
+        )}
       </div>
 
       {/* Download */}
