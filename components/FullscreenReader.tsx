@@ -8,23 +8,32 @@ export interface FullscreenVerseItem {
   sub?: string;
 }
 
+type BibleVersion = "nkrv" | "rnksv";
+
 interface Props {
   verses: FullscreenVerseItem[];
-  mainVersionLabel: string;
-  subVersionLabel?: string;
+  version: BibleVersion;
+  onVersionChange: (v: BibleVersion) => void;
   parallel: boolean;
   onParallelToggle: () => void;
+  /** 마지막 절에서 우측 → 호출 시 → 다음 장 로드. 없으면 내부 루프(1절로 순환) */
+  onOverscrollNext?: () => void;
+  /** 첫 절에서 좌측 ← 호출 시 → 이전 장 로드. 없으면 내부 루프(마지막 절로 순환) */
+  onOverscrollPrev?: () => void;
   onClose: () => void;
 }
 
 export default function FullscreenReader({
   verses,
-  mainVersionLabel,
-  subVersionLabel,
+  version,
+  onVersionChange,
   parallel,
   onParallelToggle,
+  onOverscrollNext,
+  onOverscrollPrev,
   onClose,
 }: Props) {
+  const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
   const [idx, setIdx] = useState(0);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
@@ -45,6 +54,16 @@ export default function FullscreenReader({
   useEffect(() => {
     if (idx >= verses.length) setIdx(Math.max(0, verses.length - 1));
   }, [verses.length, idx]);
+
+  // 장 전환 직후 idx를 처음(next) / 끝(prev)으로 점프시키기 위한 플래그
+  const [pendingDirection, setPendingDirection] = useState<1 | -1 | null>(null);
+  useEffect(() => {
+    if (pendingDirection === null) return;
+    if (verses.length === 0) return;
+    if (pendingDirection === 1) setIdx(0);
+    else setIdx(verses.length - 1);
+    setPendingDirection(null);
+  }, [verses, pendingDirection]);
 
   // 카드 박스를 넘치면 효과 폰트를 자동 축소 (사용자 설정은 유지)
   const MIN_FIT_SIZE = 24;
@@ -74,9 +93,28 @@ export default function FullscreenReader({
 
   const go = useCallback(
     (delta: number) => {
-      setIdx((i) => Math.max(0, Math.min(verses.length - 1, i + delta)));
+      const next = idx + delta;
+      if (next < 0) {
+        if (onOverscrollPrev) {
+          setPendingDirection(-1);
+          onOverscrollPrev();
+        } else {
+          setIdx(verses.length - 1); // 루프
+        }
+        return;
+      }
+      if (next >= verses.length) {
+        if (onOverscrollNext) {
+          setPendingDirection(1);
+          onOverscrollNext();
+        } else {
+          setIdx(0); // 루프
+        }
+        return;
+      }
+      setIdx(next);
     },
-    [verses.length]
+    [idx, verses.length, onOverscrollNext, onOverscrollPrev]
   );
 
   useEffect(() => {
@@ -102,6 +140,7 @@ export default function FullscreenReader({
     ? {
         bg: "#1A1A1A",
         card: "#242424",
+        arrow: "#3D352A",  // 카드 계열 웜톤, 다크 배경에서 은은하게 보임
         text: "#E6DDCE",
         muted: "#9A948A",
         divider: "rgba(230,221,206,0.14)",
@@ -115,6 +154,7 @@ export default function FullscreenReader({
     : {
         bg: "#DDD3C1",
         card: "#D5CAB6",
+        arrow: "#BFB392",  // 카드 계열의 연한 웜 베이지 (회색 아님)
         text: "#1C1C1C",
         muted: "#575247",
         divider: "rgba(28,28,28,0.12)",
@@ -144,82 +184,96 @@ export default function FullscreenReader({
         WebkitFontSmoothing: "antialiased",
       }}
     >
+      <style>{`
+        .yb-fs-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 14px; height: 14px; border-radius: 50%;
+          background: ${vars.text}; cursor: pointer;
+          border: none;
+        }
+        .yb-fs-range::-moz-range-thumb {
+          width: 14px; height: 14px; border-radius: 50%;
+          background: ${vars.text}; cursor: pointer; border: none;
+        }
+      `}</style>
       {/* 상단 바 */}
       <header
         style={{
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
-          justifyContent: "space-between",
           gap: 16,
+          marginBottom: "clamp(8px, 1vw, 16px)",
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            color: vars.muted,
-            fontSize: 11,
-            letterSpacing: "0.25em",
-            fontWeight: 500,
-          }}
-        >
-          <span
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: "50%",
-              background: vars.text,
-              opacity: 0.85,
-              color: vars.bg,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 10,
-              fontWeight: 700,
-            }}
-          >
-            예
-          </span>
-          <span>YEBOM BIBLE</span>
-          <span style={{ opacity: 0.5, marginLeft: 10 }}>· {mainVersionLabel}</span>
+        <div />
+        <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
+          <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
+            개역개정
+          </VersionPill>
+          <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
+            새번역
+          </VersionPill>
+          <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
+            병기
+          </VersionPill>
         </div>
-        <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-          {subVersionLabel && (
-            <TbBtn
-              vars={vars}
-              pressed={parallel}
-              onClick={onParallelToggle}
-              title="병기 — 다른 번역을 부가 표시"
-            >
-              ⇅ 병기
-            </TbBtn>
-          )}
-          <TbBtn
-            vars={vars}
+        <div style={{ display: "inline-flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
+          <button
             onClick={() => setTheme(isDark ? "light" : "dark")}
             title="다크/라이트 전환"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: vars.muted,
+              padding: "6px 12px",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              borderRadius: 999,
+              transition: "background .15s, color .15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = vars.ctrlHover;
+              e.currentTarget.style.color = vars.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = vars.muted;
+            }}
           >
-            {isDark ? "☀" : "☾"} {isDark ? "Light" : "Dark"}
-          </TbBtn>
+            <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
+            {isDark ? "Light" : "Dark"}
+          </button>
           <button
             onClick={onClose}
             aria-label="닫기 (Esc)"
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               borderRadius: "50%",
-              border: `1px solid ${vars.ctrlBorder}`,
+              border: "none",
               background: "transparent",
-              color: vars.text,
+              color: vars.muted,
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 14,
+              fontSize: 15,
+              transition: "background .15s, color .15s",
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = vars.ctrlHover)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = vars.ctrlHover;
+              e.currentTarget.style.color = vars.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = vars.muted;
+            }}
           >
             ✕
           </button>
@@ -236,13 +290,8 @@ export default function FullscreenReader({
           minHeight: 0,
         }}
       >
-        <NavBtn vars={vars} side="prev" disabled={idx === 0} onClick={() => go(-1)} />
-        <NavBtn
-          vars={vars}
-          side="next"
-          disabled={idx === verses.length - 1}
-          onClick={() => go(1)}
-        />
+        <NavBtn vars={vars} side="prev" onClick={() => go(-1)} />
+        <NavBtn vars={vars} side="next" onClick={() => go(1)} />
 
         <section
           ref={cardRef}
@@ -250,11 +299,11 @@ export default function FullscreenReader({
             background: vars.card,
             borderRadius: "clamp(14px, 1.4vw, 22px)",
             boxShadow: vars.shadow,
-            width: "min(1480px, 96%)",
+            width: "min(1400px, 88%)",
             height: "100%",
             maxHeight: "100%",
             margin: "0 auto",
-            padding: "clamp(36px, 5vw, 88px) clamp(32px, 6vw, 120px)",
+            padding: "clamp(18px, 2.5vw, 44px) clamp(16px, 3vw, 60px)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -267,7 +316,7 @@ export default function FullscreenReader({
             style={{
               fontSize: "clamp(22px, 2.2vw, 36px)",
               color: vars.muted,
-              marginBottom: "clamp(28px, 3.4vw, 56px)",
+              marginBottom: "clamp(14px, 1.7vw, 28px)",
               fontWeight: 500,
               letterSpacing: "0.01em",
             }}
@@ -281,7 +330,7 @@ export default function FullscreenReader({
               lineHeight: 1.42,
               wordBreak: "keep-all",
               overflowWrap: "anywhere",
-              maxWidth: "min(1280px, 94%)",
+              maxWidth: "96%",
               color: vars.text,
               letterSpacing: "-0.015em",
             }}
@@ -291,14 +340,14 @@ export default function FullscreenReader({
           {parallel && current.sub && (
             <div
               style={{
-                marginTop: "clamp(28px, 3vw, 48px)",
+                marginTop: "clamp(14px, 1.5vw, 24px)",
                 fontSize: `${Math.round(effectiveFontSize * 0.46)}px`,
                 fontWeight: 400,
                 lineHeight: 1.55,
                 color: vars.subText,
                 wordBreak: "keep-all",
-                maxWidth: "min(1100px, 88%)",
-                paddingTop: "clamp(16px, 1.8vw, 24px)",
+                maxWidth: "94%",
+                paddingTop: "clamp(8px, 1vw, 12px)",
                 borderTop: `1px solid ${vars.divider}`,
               }}
             >
@@ -322,160 +371,186 @@ export default function FullscreenReader({
         </section>
       </main>
 
-      {/* 하단 바 */}
+      {/* 하단 바 — 카드 폭과 동일하게 정렬 */}
       <footer
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          color: vars.muted,
-          fontSize: 11,
+          marginTop: "clamp(10px, 1.2vw, 18px)",
         }}
       >
         <div
           style={{
-            fontWeight: 500,
-            letterSpacing: "0.03em",
-            color: vars.credit,
-            fontSize: 10,
-          }}
-        >
-          예봄성경 · <b style={{ color: vars.muted, fontWeight: 500 }}>reading bible together</b>
-        </div>
-        <div
-          style={{
-            fontFamily: '"Playfair Display", serif',
-            fontStyle: "italic",
-            fontSize: 14,
-            color: vars.muted,
-            letterSpacing: "0.05em",
-          }}
-        >
-          <b style={{ color: vars.text, fontStyle: "normal", fontWeight: 500 }}>{idx + 1}</b> /{" "}
-          {verses.length}
-        </div>
-        <div
-          style={{
-            display: "inline-flex",
+            width: "min(1400px, 88%)",
+            margin: "0 auto",
+            display: "flex",
             alignItems: "center",
-            gap: 10,
-            background: vars.ctrlBg,
-            padding: "6px 14px",
-            borderRadius: 999,
-            border: `1px solid ${vars.ctrlBorder}`,
+            justifyContent: "space-between",
+            gap: 24,
+            color: vars.muted,
           }}
         >
-          <span style={{ fontSize: 10, opacity: 0.7 }}>가</span>
-          <input
-            type="range"
-            min={40}
-            max={120}
-            value={fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value))}
+          <div
             style={{
-              WebkitAppearance: "none",
-              appearance: "none",
-              width: 120,
-              height: 2,
-              background: vars.ctrlBorder,
-              borderRadius: 999,
-              outline: "none",
+              fontFamily: '"Playfair Display", serif',
+              fontStyle: "italic",
+              fontSize: 15,
+              color: vars.muted,
+              letterSpacing: "0.05em",
             }}
-          />
-          <span style={{ fontSize: 15, opacity: 0.9 }}>가</span>
+          >
+            <b style={{ color: vars.text, fontStyle: "normal", fontWeight: 600 }}>{idx + 1}</b>
+            <span style={{ opacity: 0.5, margin: "0 6px" }}>/</span>
+            {verses.length}
+          </div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 11, opacity: 0.6, color: vars.muted }}>가</span>
+            <input
+              type="range"
+              min={40}
+              max={120}
+              value={fontSize}
+              onChange={(e) => setFontSize(Number(e.target.value))}
+              className="yb-fs-range"
+              style={{
+                WebkitAppearance: "none",
+                appearance: "none",
+                width: 160,
+                height: 2,
+                background: vars.ctrlBorder,
+                borderRadius: 999,
+                outline: "none",
+                cursor: "pointer",
+              }}
+            />
+            <span style={{ fontSize: 17, opacity: 0.85, color: vars.muted }}>가</span>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
 
-function TbBtn({
-  children,
-  onClick,
-  pressed,
-  title,
-  vars,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  pressed?: boolean;
-  title?: string;
-  vars: { text: string; bg: string; ctrlBorder: string; ctrlHover: string };
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      aria-pressed={pressed}
-      style={{
-        background: pressed ? vars.text : "transparent",
-        border: `1px solid ${pressed ? vars.text : vars.ctrlBorder}`,
-        color: pressed ? vars.bg : vars.text,
-        padding: "6px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        cursor: "pointer",
-        fontFamily: "inherit",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        transition: "background .15s, border-color .15s",
-      }}
-      onMouseEnter={(e) => {
-        if (!pressed) e.currentTarget.style.background = vars.ctrlHover;
-      }}
-      onMouseLeave={(e) => {
-        if (!pressed) e.currentTarget.style.background = "transparent";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function NavBtn({
   side,
-  disabled,
   onClick,
   vars,
 }: {
   side: "prev" | "next";
-  disabled?: boolean;
   onClick: () => void;
-  vars: { text: string; ctrlBg: string; ctrlHover: string; ctrlBorder: string };
+  vars: { arrow: string };
+}) {
+  const gradId = `yb-fs-nav-${side}`;
+  // 삼각형 (40×280 viewBox, 꼭짓점 안쪽)
+  const path =
+    side === "prev"
+      ? "M 36 10 L 6 140 L 36 270 Z"
+      : "M 4 10 L 34 140 L 4 270 Z";
+  return (
+    <button
+      onClick={onClick}
+      aria-label={side === "prev" ? "이전 구절" : "다음 구절"}
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        [side === "prev" ? "left" : "right"]: "clamp(2px, 0.4vw, 8px)",
+        width: 64,
+        height: "100%",
+        border: "none",
+        background: "transparent",
+        padding: 0,
+        color: vars.arrow,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "opacity .2s",
+        zIndex: 2,
+      } as React.CSSProperties}
+      onMouseEnter={(e) => {
+        const svg = e.currentTarget.querySelector("svg");
+        if (svg) (svg as SVGSVGElement).style.opacity = "1";
+      }}
+      onMouseLeave={(e) => {
+        const svg = e.currentTarget.querySelector("svg");
+        if (svg) (svg as SVGSVGElement).style.opacity = "0.75";
+      }}
+    >
+      <svg
+        width="40"
+        height="280"
+        viewBox="0 0 40 280"
+        aria-hidden
+        style={{
+          maxHeight: "86%",
+          opacity: 0.75,
+          transition: "opacity .2s",
+          filter: "blur(0.5px)",
+        }}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="currentColor" stopOpacity="0" />
+            <stop offset="0.18" stopColor="currentColor" stopOpacity="0.35" />
+            <stop offset="0.5" stopColor="currentColor" stopOpacity="1" />
+            <stop offset="0.82" stopColor="currentColor" stopOpacity="0.35" />
+            <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={path} fill={`url(#${gradId})`} />
+      </svg>
+    </button>
+  );
+}
+
+function VersionPill({
+  children,
+  onClick,
+  active,
+  vars,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  vars: { text: string; bg: string; ctrlHover: string; muted: string };
 }) {
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      aria-label={side === "prev" ? "이전 구절" : "다음 구절"}
+      aria-pressed={active}
       style={{
-        position: "absolute",
-        top: "50%",
-        transform: "translateY(-50%)",
-        [side === "prev" ? "left" : "right"]: "clamp(6px, 1vw, 16px)",
-        width: 48,
-        height: 48,
-        borderRadius: "50%",
-        background: vars.ctrlBg,
-        border: `1px solid ${vars.ctrlBorder}`,
-        color: vars.text,
-        cursor: disabled ? "not-allowed" : "pointer",
+        background: active ? vars.text : "transparent",
+        border: "none",
+        color: active ? vars.bg : vars.muted,
+        padding: "6px 14px",
+        borderRadius: 999,
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        cursor: "pointer",
         fontFamily: "inherit",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 18,
-        opacity: disabled ? 0.25 : 1,
-        zIndex: 2,
-      } as React.CSSProperties}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.background = vars.ctrlHover;
+        transition: "background .15s, color .15s",
+        letterSpacing: "-0.005em",
       }}
-      onMouseLeave={(e) => (e.currentTarget.style.background = vars.ctrlBg)}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = vars.ctrlHover;
+          e.currentTarget.style.color = vars.text;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = vars.muted;
+        }
+      }}
     >
-      {side === "prev" ? "‹" : "›"}
+      {children}
     </button>
   );
 }

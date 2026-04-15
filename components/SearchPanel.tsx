@@ -754,10 +754,20 @@ export default function SearchPanel({
       {showFullscreen && (
         <FullscreenReader
           verses={fullscreenVerses}
-          mainVersionLabel={mainVersionLabel}
-          subVersionLabel={parallel ? subVersionLabel : undefined}
+          version={version}
+          onVersionChange={setVersion}
           parallel={parallel}
           onParallelToggle={() => setParallel((p) => !p)}
+          onOverscrollNext={
+            mode === "chapter" && browseStep === "verse" && canNextChapter
+              ? () => setChapter(chapters[chapterIdx + 1])
+              : undefined
+          }
+          onOverscrollPrev={
+            mode === "chapter" && browseStep === "verse" && canPrevChapter
+              ? () => setChapter(chapters[chapterIdx - 1])
+              : undefined
+          }
           onClose={() => setShowFullscreen(false)}
         />
       )}
