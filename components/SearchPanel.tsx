@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
-import type { BibleVerse, BibleVersion, SearchMode, AIRecommendation } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
@@ -97,6 +97,93 @@ export default function SearchPanel({
   const [topicResults, setTopicResults] = useState<BibleVerse[]>([]);
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState("");
+
+  // ─── 클립보드 복사 피드백 ───
+  const [copied, setCopied] = useState(false);
+
+  // ─── 선택구절 → 형식화된 텍스트 ───
+  const VERSION_LABEL: Record<string, string> = { nkrv: "개역개정", rnksv: "새번역", kjv: "KJV" };
+
+  function formatVerseNums(nums: number[]): string {
+    if (nums.length === 0) return "";
+    const sorted = [...nums].sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let start = sorted[0];
+    let end = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) { end = sorted[i]; }
+      else { ranges.push(start === end ? `${start}` : `${start}-${end}`); start = sorted[i]; end = sorted[i]; }
+    }
+    ranges.push(start === end ? `${start}` : `${start}-${end}`);
+    return ranges.join(",");
+  }
+
+  async function handleCopyToClipboard() {
+    if (selectedVerses.length === 0) return;
+
+    // book+chapter 기준 그룹화 (정렬: book_order → chapter → verse)
+    const sorted = [...selectedVerses].sort((a, b) => {
+      if (a.book_order !== b.book_order) return a.book_order - b.book_order;
+      if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+      return a.verse - b.verse;
+    });
+    const groups: { book_code: string; book_name: string; chapter: number; verses: BibleVerse[] }[] = [];
+    for (const v of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && last.book_code === v.book_code && last.chapter === v.chapter) {
+        last.verses.push(v);
+      } else {
+        groups.push({ book_code: v.book_code, book_name: v.book_name, chapter: v.chapter, verses: [v] });
+      }
+    }
+
+    // 병기 ON: 부 버전 일괄 조회
+    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    let altMap = new Map<string, string>();
+    if (parallel) {
+      try {
+        const results = await Promise.all(groups.map((g) =>
+          supabase.from("bible_verses").select("*")
+            .eq("version", altVersion)
+            .eq("book_code", g.book_code)
+            .eq("chapter", g.chapter)
+            .in("verse", g.verses.map((v) => v.verse))
+        ));
+        for (const res of results) {
+          if (res.data) {
+            for (const a of res.data as BibleVerse[]) {
+              altMap.set(`${a.book_code}-${a.chapter}-${a.verse}`, stripNotes(a.text));
+            }
+          }
+        }
+      } catch { /* 실패 시 병기 라인 생략 */ }
+    }
+
+    // 각 그룹 → 형식화
+    const parts = groups.map((g) => {
+      const mainText = g.verses.map((v) => stripNotes(v.text)).join(" ");
+      const range = formatVerseNums(g.verses.map((v) => v.verse));
+      const ref = `(${g.book_name} ${g.chapter}장 ${range}절)`;
+      let out = `'${mainText}'\n${ref}`;
+      if (parallel && altMap.size > 0) {
+        const altText = g.verses
+          .map((v) => altMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) || "")
+          .filter(Boolean)
+          .join(" ");
+        if (altText) out += `\n${altText} (${VERSION_LABEL[altVersion]})`;
+      }
+      return out;
+    });
+
+    const fullText = parts.join("\n\n");
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* 클립보드 실패 시 silent */
+    }
+  }
 
   // ─── 말씀 검색 (auto-detect: reference or word) ───
   const executeSearch = useCallback(async () => {
@@ -1099,6 +1186,12 @@ export default function SearchPanel({
             className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
           >
             선택 완료 ({selectedVerses.length}절)
+          </button>
+          <button
+            onClick={handleCopyToClipboard}
+            className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            {copied ? "✓ 복사됨" : "클립보드로 복사"}
           </button>
         </div>
       )}
