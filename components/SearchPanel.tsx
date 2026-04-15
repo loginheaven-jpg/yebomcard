@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
+import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
@@ -47,6 +48,9 @@ export default function SearchPanel({
   useEffect(() => {
     localStorage.setItem("readingFontSize", String(readingFontSize));
   }, [readingFontSize]);
+
+  // 풀스크린 모드
+  const [showFullscreen, setShowFullscreen] = useState(false);
 
   // ─── 검색 히스토리 (localStorage) ───
   const HISTORY_KEY = "yebom_search_history";
@@ -670,20 +674,71 @@ export default function SearchPanel({
   const canPrevChapter = chapterIdx > 0;
   const canNextChapter = chapterIdx < chapters.length - 1;
 
-  // 공용 글자크기 슬라이더 (말씀검색 / 주제추천 탭용 — 장절선택 verse step은 헤더에 자체 배치)
+  // 현재 탭의 표시 구절 (풀스크린 입력용)
+  const visibleMain: BibleVerse[] = useMemo(() => {
+    if (mode === "search") return searchResults;
+    if (mode === "chapter" && browseStep === "verse") return browseVerses;
+    if (mode === "topic") return topicResults;
+    return [];
+  }, [mode, browseStep, searchResults, browseVerses, topicResults]);
+
+  const visibleAlt: BibleVerse[] = useMemo(() => {
+    if (mode === "search") return searchResultsAlt;
+    if (mode === "chapter" && browseStep === "verse") return browseVersesAlt;
+    if (mode === "topic") return topicResultsAlt;
+    return [];
+  }, [mode, browseStep, searchResultsAlt, browseVersesAlt, topicResultsAlt]);
+
+  const VERSION_NAME: Record<string, string> = { nkrv: "개역개정", rnksv: "새번역", kjv: "KJV" };
+  const mainVersionLabel = VERSION_NAME[version] || version;
+  const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
+
+  const fullscreenVerses: FullscreenVerseItem[] = useMemo(() => {
+    return visibleMain.map((v) => {
+      const alt = visibleAlt.find(
+        (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
+      );
+      return {
+        ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
+        main: stripNotes(v.text),
+        sub: alt ? stripNotes(alt.text) : undefined,
+      };
+    });
+  }, [visibleMain, visibleAlt]);
+
+  const canFullscreen = visibleMain.length > 0;
+
+  // 공용 글자크기 슬라이더 + 풀스크린 버튼 (말씀검색 / 주제추천 탭용)
   const fontSlider = (
-    <div className="flex items-center justify-end mb-2">
-      <span className="text-[10px] text-gray-400">가</span>
-      <input
-        type="range"
-        min={14}
-        max={24}
-        value={readingFontSize}
-        onChange={(e) => setReadingFontSize(Number(e.target.value))}
-        className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
-        title={`글자 크기 ${readingFontSize}px`}
-      />
-      <span className="text-base text-gray-400">가</span>
+    <div className="flex items-center justify-end mb-2 gap-2">
+      <div className="flex items-center">
+        <span className="text-[10px] text-gray-400">가</span>
+        <input
+          type="range"
+          min={14}
+          max={24}
+          value={readingFontSize}
+          onChange={(e) => setReadingFontSize(Number(e.target.value))}
+          className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
+          title={`글자 크기 ${readingFontSize}px`}
+        />
+        <span className="text-base text-gray-400">가</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowFullscreen(true)}
+        disabled={!canFullscreen}
+        title="풀스크린 (빔프로젝터 읽기 모드)"
+        aria-label="풀스크린"
+        className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 9V5a1 1 0 011-1h4" />
+          <path d="M20 9V5a1 1 0 00-1-1h-4" />
+          <path d="M4 15v4a1 1 0 001 1h4" />
+          <path d="M20 15v4a1 1 0 01-1 1h-4" />
+        </svg>
+      </button>
     </div>
   );
 
@@ -696,6 +751,16 @@ export default function SearchPanel({
 
   return (
     <div className="w-full max-w-[1200px] mx-auto">
+      {showFullscreen && (
+        <FullscreenReader
+          verses={fullscreenVerses}
+          mainVersionLabel={mainVersionLabel}
+          subVersionLabel={parallel ? subVersionLabel : undefined}
+          parallel={parallel}
+          onParallelToggle={() => setParallel((p) => !p)}
+          onClose={() => setShowFullscreen(false)}
+        />
+      )}
       {/* Header */}
       {!isAddingMore && (
         <div className="text-center mb-6">
@@ -999,19 +1064,36 @@ export default function SearchPanel({
                   </button>
                 </div>
 
-                {/* 우: 글자크기 슬라이더 */}
-                <div className="flex items-center shrink-0">
-                  <span className="text-[10px] text-gray-400">가</span>
-                  <input
-                    type="range"
-                    min={14}
-                    max={24}
-                    value={readingFontSize}
-                    onChange={(e) => setReadingFontSize(Number(e.target.value))}
-                    className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
-                    title={`글자 크기 ${readingFontSize}px`}
-                  />
-                  <span className="text-base text-gray-400">가</span>
+                {/* 우: 글자크기 슬라이더 + 풀스크린 버튼 */}
+                <div className="flex items-center shrink-0 gap-1.5">
+                  <div className="flex items-center">
+                    <span className="text-[10px] text-gray-400">가</span>
+                    <input
+                      type="range"
+                      min={14}
+                      max={24}
+                      value={readingFontSize}
+                      onChange={(e) => setReadingFontSize(Number(e.target.value))}
+                      className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
+                      title={`글자 크기 ${readingFontSize}px`}
+                    />
+                    <span className="text-base text-gray-400">가</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowFullscreen(true)}
+                    disabled={!canFullscreen}
+                    title="풀스크린 (빔프로젝터 읽기 모드)"
+                    aria-label="풀스크린"
+                    className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 9V5a1 1 0 011-1h4" />
+                      <path d="M20 9V5a1 1 0 00-1-1h-4" />
+                      <path d="M4 15v4a1 1 0 001 1h4" />
+                      <path d="M20 15v4a1 1 0 01-1 1h-4" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 

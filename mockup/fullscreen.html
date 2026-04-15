@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>풀스크린 모드 — mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,500;1,400&display=swap" rel="stylesheet" />
+<style>
+  /* 색상표: 첨부 이미지(readingjesus.net)와 동일 */
+  :root {
+    --bg: #DDD3C1;          /* 외곽 배경 — 첨부 이미지 바깥 톤 (warm greige) */
+    --card: #D5CAB6;        /* 내부 카드 — 외곽보다 살짝 짙음 */
+    --text: #1C1C1C;
+    --muted: #575247;       /* 장절 표기 (좀 더 짙게) */
+    --divider: rgba(28,28,28,0.12);
+    --sub-text: #3F3A2E;
+    --control-bg: rgba(28,28,28,0.04);
+    --control-hover: rgba(28,28,28,0.09);
+    --control-border: rgba(28,28,28,0.18);
+    --credit: #8A8578;
+    --card-shadow: 0 2px 24px rgba(50,40,20,0.08), 0 0 0 1px rgba(28,28,28,0.05);
+  }
+  [data-theme="dark"] {
+    --bg: #1A1A1A;
+    --card: #242424;
+    --text: #E6DDCE;
+    --muted: #9A948A;
+    --divider: rgba(230,221,206,0.14);
+    --sub-text: #C7BFAE;
+    --control-bg: rgba(230,221,206,0.06);
+    --control-hover: rgba(230,221,206,0.12);
+    --control-border: rgba(230,221,206,0.18);
+    --credit: #6E6A60;
+    --card-shadow: 0 2px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(230,221,206,0.05);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 전체 컨테이너 */
+  .stage {
+    position: fixed; inset: 0;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: clamp(16px, 2vw, 28px) clamp(20px, 3vw, 48px);
+  }
+
+  /* 상단 바 */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .brand {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--muted); font-size: 11px; letter-spacing: 0.25em;
+    font-weight: 500;
+  }
+  .brand .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--text); opacity: 0.85;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--bg); font-size: 10px; font-weight: 700;
+  }
+  .actions { display: inline-flex; gap: 6px; align-items: center; }
+  .tb-btn {
+    background: transparent; border: 1px solid var(--control-border);
+    color: var(--text); padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; cursor: pointer; font-family: inherit;
+    transition: background .15s, border-color .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .tb-btn:hover { background: var(--control-hover); }
+  .tb-btn[aria-pressed="true"] {
+    background: var(--text); color: var(--bg); border-color: var(--text);
+  }
+  .tb-close {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 1px solid var(--control-border); background: transparent;
+    color: var(--text); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .tb-close:hover { background: var(--control-hover); }
+
+  /* 본문 — 내부 카드 */
+  .card {
+    background: var(--card);
+    border-radius: clamp(14px, 1.4vw, 22px);
+    box-shadow: var(--card-shadow);
+    width: min(1480px, 96%);
+    height: 100%;
+    max-height: 100%;
+    margin: 0 auto;
+    padding: clamp(36px, 5vw, 88px) clamp(32px, 6vw, 120px);
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    text-align: center;
+    position: relative;
+  }
+  .ref {
+    font-size: clamp(22px, 2.2vw, 36px);
+    color: var(--muted);
+    margin-bottom: clamp(28px, 3.4vw, 56px);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  .main-text {
+    font-size: var(--size, 74px);
+    font-weight: 700;
+    line-height: 1.42;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    max-width: min(1280px, 94%);
+    color: var(--text);
+    letter-spacing: -0.015em;
+  }
+  .sub-text {
+    margin-top: clamp(28px, 3vw, 48px);
+    font-size: calc(var(--size, 74px) * 0.46);
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--sub-text);
+    word-break: keep-all;
+    max-width: min(1100px, 88%);
+    padding-top: clamp(16px, 1.8vw, 24px);
+    border-top: 1px solid var(--divider);
+  }
+  .sub-label {
+    display: block; font-size: 11px; letter-spacing: 0.2em;
+    color: var(--muted); margin-bottom: 10px; font-weight: 500;
+  }
+
+  /* 좌우 네비 화살표 */
+  .nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--control-bg); border: 1px solid var(--control-border);
+    color: var(--text); cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    transition: background .15s, opacity .15s;
+  }
+  .nav:hover { background: var(--control-hover); }
+  .nav:disabled { opacity: 0.25; cursor: not-allowed; }
+  .nav.prev { left: clamp(6px, 1vw, 16px); }
+  .nav.next { right: clamp(6px, 1vw, 16px); }
+
+  /* 하단 바 */
+  .bottombar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; color: var(--muted); font-size: 11px;
+  }
+  .credit {
+    font-weight: 500; letter-spacing: 0.03em;
+    color: var(--credit);
+    font-size: 10px;
+  }
+  .credit b { color: var(--muted); font-weight: 500; }
+  .counter {
+    font-family: "Playfair Display", serif; font-style: italic;
+    font-size: 14px; color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .counter b { color: var(--text); font-style: normal; font-weight: 500; }
+  .slider-wrap {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--control-bg); padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--control-border);
+  }
+  .slider-wrap input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 120px; height: 2px; background: var(--control-border);
+    border-radius: 999px; outline: none;
+  }
+  .slider-wrap input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--text); cursor: pointer;
+  }
+  .ga-s { font-size: 10px; opacity: 0.7; }
+  .ga-l { font-size: 15px; opacity: 0.9; }
+</style>
+</head>
+<body>
+  <div class="stage" role="dialog" aria-label="성경 풀스크린 보기">
+
+    <!-- 상단 바 -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot">예</span>
+        <span>YEBOM BIBLE</span>
+      </div>
+      <div class="actions">
+        <button class="tb-btn" id="btn-parallel" aria-pressed="false" title="병기 — 다른 번역을 부가 표시">
+          ⇅ 병기
+        </button>
+        <button class="tb-btn" id="btn-theme" title="다크/라이트 전환">
+          <span id="theme-icon">☾</span> <span id="theme-label">Dark</span>
+        </button>
+        <button class="tb-close" id="btn-close" aria-label="닫기 (Esc)">✕</button>
+      </div>
+    </header>
+
+    <!-- 본문 슬라이드 -->
+    <main style="position:relative; display:flex; align-items:center; justify-content:center;">
+      <button class="nav prev" id="btn-prev" aria-label="이전 구절">‹</button>
+      <button class="nav next" id="btn-next" aria-label="다음 구절">›</button>
+
+      <section class="card" id="slide">
+        <div class="ref" id="ref">시편 23편 1절</div>
+        <div class="main-text" id="main"></div>
+        <div class="sub-text" id="sub" style="display:none">
+          <span class="sub-label" id="sub-label">새번역</span>
+          <span id="sub-body"></span>
+        </div>
+      </section>
+    </main>
+
+    <!-- 하단 바 -->
+    <footer class="bottombar">
+      <div class="credit">
+        예봄성경 · <b>reading bible together</b>
+      </div>
+      <div class="counter">
+        <b id="cur">1</b> / <span id="total">6</span>
+      </div>
+      <div class="slider-wrap">
+        <span class="ga-s">가</span>
+        <input id="size" type="range" min="40" max="120" value="74" />
+        <span class="ga-l">가</span>
+      </div>
+    </footer>
+  </div>
+
+<script>
+  const VERSES = [
+    { ref: "시편 23편 1절", main: "여호와는 나의 목자시니 내게 부족함이 없으리로다", sub: "주님은 나의 목자시니, 내게 부족함 없어라." },
+    { ref: "시편 23편 2절", main: "그가 나를 푸른 풀밭에 누이시며 쉴 만한 물 가로 인도하시는도다", sub: "그가 나를 푸른 풀밭에 누이시며, 쉴 만한 물 가로 인도하신다." },
+    { ref: "시편 23편 3절", main: "내 영혼을 소생시키시고 자기 이름을 위하여 의의 길로 인도하시는도다", sub: "내 영혼을 소생시켜 주시고, 주님의 이름을 위하여 나를 바른 길로 인도해 주신다." },
+    { ref: "시편 23편 4절", main: "내가 사망의 음침한 골짜기로 다닐지라도 해를 두려워하지 않을 것은 주께서 나와 함께 하심이라 주의 지팡이와 막대기가 나를 안위하시나이다", sub: "내가 비록 죽음의 그늘 골짜기로 다닐지라도, 주님께서 나와 함께 계시고, 주님의 막대기와 지팡이로 나를 지켜 주시니, 내게는 두려움이 없습니다." },
+    { ref: "시편 23편 5절", main: "주께서 내 원수의 목전에서 내게 상을 차려 주시고 기름을 내 머리에 부으셨으니 내 잔이 넘치나이다", sub: "주님께서는, 내 원수들이 보는 앞에서 내게 잔칫상을 차려 주시고, 내 머리에 기름 부으시어 나를 귀한 손님으로 맞아 주시니, 내 잔이 넘칩니다." },
+    { ref: "시편 23편 6절", main: "내 평생에 선하심과 인자하심이 반드시 나를 따르리니 내가 여호와의 집에 영원히 살리로다", sub: "진실로 주님의 선하심과 인자하심이 내가 사는 날 동안 나를 따르리니, 나는 주님의 집으로 돌아가 영원히 그 곳에서 살겠습니다." },
+  ];
+
+  let idx = 0;
+  const refEl = document.getElementById("ref");
+  const mainEl = document.getElementById("main");
+  const subEl = document.getElementById("sub");
+  const subBody = document.getElementById("sub-body");
+  const curEl = document.getElementById("cur");
+  const totalEl = document.getElementById("total");
+  const btnPrev = document.getElementById("btn-prev");
+  const btnNext = document.getElementById("btn-next");
+  totalEl.textContent = VERSES.length;
+
+  function render() {
+    const v = VERSES[idx];
+    refEl.textContent = v.ref;
+    mainEl.textContent = v.main;
+    subBody.textContent = v.sub;
+    curEl.textContent = idx + 1;
+    btnPrev.disabled = idx === 0;
+    btnNext.disabled = idx === VERSES.length - 1;
+  }
+
+  function go(delta) {
+    const next = Math.max(0, Math.min(VERSES.length - 1, idx + delta));
+    if (next !== idx) { idx = next; render(); }
+  }
+
+  btnPrev.addEventListener("click", () => go(-1));
+  btnNext.addEventListener("click", () => go(1));
+
+  // 병기 토글
+  const btnParallel = document.getElementById("btn-parallel");
+  btnParallel.addEventListener("click", () => {
+    const pressed = btnParallel.getAttribute("aria-pressed") === "true";
+    btnParallel.setAttribute("aria-pressed", String(!pressed));
+    subEl.style.display = pressed ? "none" : "";
+  });
+
+  // 테마 토글
+  const root = document.documentElement;
+  const btnTheme = document.getElementById("btn-theme");
+  const themeIcon = document.getElementById("theme-icon");
+  const themeLabel = document.getElementById("theme-label");
+  btnTheme.addEventListener("click", () => {
+    const next = root.dataset.theme === "light" ? "dark" : "light";
+    root.dataset.theme = next;
+    themeIcon.textContent = next === "light" ? "☾" : "☀";
+    themeLabel.textContent = next === "light" ? "Dark" : "Light";
+  });
+
+  // 폰트 크기
+  const size = document.getElementById("size");
+  const apply = (v) => document.getElementById("slide").style.setProperty("--size", v + "px");
+  size.addEventListener("input", e => apply(e.target.value));
+  apply(size.value);
+
+  // 키보드
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") document.getElementById("btn-close").click();
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { go(-1); e.preventDefault(); }
+    if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { go(1); e.preventDefault(); }
+  });
+
+  document.getElementById("btn-close").addEventListener("click", () => {
+    alert("실제 구현에서는 상단 헤더 화면으로 복귀합니다.");
+  });
+
+  render();
+</script>
+</body>
+</html>
