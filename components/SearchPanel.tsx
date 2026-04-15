@@ -670,6 +670,23 @@ export default function SearchPanel({
   const canPrevChapter = chapterIdx > 0;
   const canNextChapter = chapterIdx < chapters.length - 1;
 
+  // 공용 글자크기 슬라이더 (말씀검색 / 주제추천 탭용 — 장절선택 verse step은 헤더에 자체 배치)
+  const fontSlider = (
+    <div className="flex items-center justify-end mb-2">
+      <span className="text-[10px] text-gray-400">가</span>
+      <input
+        type="range"
+        min={14}
+        max={24}
+        value={readingFontSize}
+        onChange={(e) => setReadingFontSize(Number(e.target.value))}
+        className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
+        title={`글자 크기 ${readingFontSize}px`}
+      />
+      <span className="text-base text-gray-400">가</span>
+    </div>
+  );
+
   const tabClass = (tab: SearchMode) =>
     `flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
       mode === tab
@@ -820,6 +837,7 @@ export default function SearchPanel({
 
           {searchResults.length > 0 && (
             <>
+              {fontSlider}
               <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
                 {searchResults.map((v) => {
                   const alt = parallel ? searchResultsAlt.find(
@@ -1136,6 +1154,7 @@ export default function SearchPanel({
 
           {topicResults.length > 0 && (
             <>
+              {fontSlider}
               <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
                 {topicResults.map((v) => {
                   const alt = parallel ? topicResultsAlt.find(
