@@ -150,7 +150,6 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
 
   const koreanText = verses.map((v) => stripNotes(v.text)).join(" ");
   const firstVerse = verses[0];
-  const book = getBookByCode(firstVerse.book_code);
   // 연속 절은 범위(1-3), 비연속은 쉼표(1,2,6)로 표시
   const formatVerseNums = (nums: number[]): string => {
     if (nums.length === 0) return "";
@@ -165,11 +164,32 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     ranges.push(start === end ? `${start}` : `${start}-${end}`);
     return ranges.join(",");
   };
-  const verseRange = formatVerseNums(verses.map((v) => v.verse));
-  const koreanRef = `${firstVerse.book_name} ${firstVerse.chapter}장 ${verseRange}절`;
-  const englishRef = book
-    ? `${book.nameEn} ${firstVerse.chapter}:${verseRange}`
-    : "";
+  // 책+장 단위로 그룹화하여 레퍼런스 생성
+  // 예: 욥 17:7 + 요 14:27 → "욥기 17장 7절. 요한복음 14장 27절."
+  const refGroups: { book_code: string; book_name: string; chapter: number; verses: number[] }[] = [];
+  const sortedVerses = [...verses].sort((a, b) => {
+    if (a.book_order !== b.book_order) return a.book_order - b.book_order;
+    if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+    return a.verse - b.verse;
+  });
+  for (const v of sortedVerses) {
+    const last = refGroups[refGroups.length - 1];
+    if (last && last.book_code === v.book_code && last.chapter === v.chapter) {
+      last.verses.push(v.verse);
+    } else {
+      refGroups.push({ book_code: v.book_code, book_name: v.book_name, chapter: v.chapter, verses: [v.verse] });
+    }
+  }
+  const koreanRef = refGroups
+    .map((g) => `${g.book_name} ${g.chapter}장 ${formatVerseNums(g.verses)}절`)
+    .join(". ");
+  const englishRef = refGroups
+    .map((g) => {
+      const b = getBookByCode(g.book_code);
+      return b ? `${b.nameEn} ${g.chapter}:${formatVerseNums(g.verses)}` : "";
+    })
+    .filter(Boolean)
+    .join("; ");
   const keywords = extractKeywords(koreanText);
   const fontCss =
     FONT_OPTIONS.find((f) => f.key === selectedFont)?.css || FONT_OPTIONS[0].css;
