@@ -10,17 +10,24 @@ export interface FullscreenVerseItem {
 
 type BibleVersion = "nkrv" | "rnksv";
 
+interface JumpRef {
+  book_abbr: string;
+  book_code: string;
+  chapter: number;
+  verse: number;
+}
+
 interface Props {
   verses: FullscreenVerseItem[];
   version: BibleVersion;
   onVersionChange: (v: BibleVersion) => void;
   parallel: boolean;
   onParallelToggle: () => void;
-  /** 마지막 절에서 우측 → 호출 시 → 다음 장 로드. 없으면 내부 루프(1절로 순환) */
   onOverscrollNext?: () => void;
-  /** 첫 절에서 좌측 ← 호출 시 → 이전 장 로드. 없으면 내부 루프(마지막 절로 순환) */
   onOverscrollPrev?: () => void;
   onClose: () => void;
+  jumpMode?: boolean;
+  jumpRefs?: JumpRef[];
 }
 
 export default function FullscreenReader({
@@ -32,9 +39,67 @@ export default function FullscreenReader({
   onOverscrollNext,
   onOverscrollPrev,
   onClose,
+  jumpMode = false,
+  jumpRefs,
 }: Props) {
   const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
   const [idx, setIdx] = useState(0);
+
+  // ─── 레퍼런스 필 바 (jumpMode) ───
+  const [pillsVisible, setPillsVisible] = useState(true);
+  const pillsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pillsScrollRef = useRef<HTMLDivElement>(null);
+
+  const resetPillsTimer = useCallback(() => {
+    setPillsVisible(true);
+    if (pillsTimer.current) clearTimeout(pillsTimer.current);
+    pillsTimer.current = setTimeout(() => setPillsVisible(false), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!jumpMode) return;
+    resetPillsTimer();
+    return () => { if (pillsTimer.current) clearTimeout(pillsTimer.current); };
+  }, [jumpMode, resetPillsTimer]);
+
+  useEffect(() => {
+    if (!jumpMode) return;
+    resetPillsTimer();
+    // 현재 필을 스크롤 뷰에 표시
+    const container = pillsScrollRef.current;
+    if (container) {
+      const activePill = container.children[idx] as HTMLElement;
+      if (activePill) activePill.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }, [idx, jumpMode, resetPillsTimer]);
+
+  // 마우스/터치 시 필 바 복귀
+  useEffect(() => {
+    if (!jumpMode) return;
+    const show = () => resetPillsTimer();
+    window.addEventListener("mousemove", show);
+    window.addEventListener("touchstart", show);
+    return () => { window.removeEventListener("mousemove", show); window.removeEventListener("touchstart", show); };
+  }, [jumpMode, resetPillsTimer]);
+
+  // 필 약칭 생성: 6개 이하면 [욥 17:7], 7개 이상이면 그룹 압축 [요4:1] [2] [3] [시10:10] [15]
+  function buildPillLabels(refs: JumpRef[]): string[] {
+    if (refs.length <= 6) {
+      return refs.map((r) => `${r.book_abbr} ${r.chapter}:${r.verse}`);
+    }
+    const labels: string[] = [];
+    let prevGroup = "";
+    for (const r of refs) {
+      const group = `${r.book_code}-${r.chapter}`;
+      if (group === prevGroup) {
+        labels.push(`${r.verse}`);
+      } else {
+        labels.push(`${r.book_abbr}${r.chapter}:${r.verse}`);
+        prevGroup = group;
+      }
+    }
+    return labels;
+  }
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
     return (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
@@ -44,12 +109,50 @@ export default function FullscreenReader({
     return parseInt(localStorage.getItem("fullscreenFontSize") || "74");
   });
 
+  // 폰트 5종
+  const FONTS = [
+    { key: "noto-serif", label: "명조", css: "var(--font-noto-serif-kr), 'Noto Serif KR', serif", weight: 600 },
+    { key: "noto-sans", label: "고딕", css: "var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif", weight: 700 },
+    { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum), 'Gowun Dodum', sans-serif", weight: 400 },
+    { key: "gothic-a1", label: "Gothic", css: "var(--font-gothic-a1), 'Gothic A1', sans-serif", weight: 600 },
+    { key: "ibm-plex", label: "Plex", css: "var(--font-ibm-plex), 'IBM Plex Sans KR', sans-serif", weight: 600 },
+  ] as const;
+  type FontKey = typeof FONTS[number]["key"];
+
+  const defaultFontFor = (v: BibleVersion) => v === "nkrv" ? "noto-serif" as FontKey : "gowun-dodum" as FontKey;
+  const [fontKey, setFontKey] = useState<FontKey>(() => {
+    if (typeof window === "undefined") return defaultFontFor(version);
+    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFontFor(version);
+  });
+  // 버전 전환 시 기본 폰트 자동 변경 (사용자가 수동 선택 안 했으면)
+  const userPickedFont = useRef(false);
+  useEffect(() => {
+    if (!userPickedFont.current) setFontKey(defaultFontFor(version));
+  }, [version]);
+  const [showFontPicker, setShowFontPicker] = useState(false);
+  const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
+
   useEffect(() => {
     localStorage.setItem("fullscreenTheme", theme);
   }, [theme]);
   useEffect(() => {
     localStorage.setItem("fullscreenFontSize", String(fontSize));
   }, [fontSize]);
+  useEffect(() => {
+    localStorage.setItem("fullscreenFont", fontKey);
+  }, [fontKey]);
+
+  // 브라우저 Fullscreen API 진입/해제
+  useEffect(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (idx >= verses.length) setIdx(Math.max(0, verses.length - 1));
@@ -192,6 +295,7 @@ export default function FullscreenReader({
         display: "grid",
         gridTemplateRows: "auto 1fr auto",
         padding: "clamp(16px, 2vw, 28px) clamp(20px, 3vw, 48px)",
+        overflow: "hidden",
         fontFamily:
           '"Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         WebkitFontSmoothing: "antialiased",
@@ -217,7 +321,7 @@ export default function FullscreenReader({
           gridTemplateColumns: "1fr auto 1fr",
           alignItems: "center",
           gap: 16,
-          marginBottom: "clamp(8px, 1vw, 16px)",
+          marginBottom: "clamp(4px, 0.5vw, 8px)",
         }}
       >
         <div />
@@ -232,36 +336,7 @@ export default function FullscreenReader({
             병기
           </VersionPill>
         </div>
-        <div style={{ display: "inline-flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            aria-label="닫기 (Esc)"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "none",
-              background: "transparent",
-              color: vars.muted,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 15,
-              transition: "background .15s, color .15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = vars.ctrlHover;
-              e.currentTarget.style.color = vars.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = vars.muted;
-            }}
-          >
-            ✕
-          </button>
-        </div>
+        <div />
       </header>
 
       {/* 본문 카드 */}
@@ -290,7 +365,7 @@ export default function FullscreenReader({
             style={{
               fontFamily: '"Playfair Display", serif',
               fontStyle: "italic",
-              fontSize: 14,
+              fontSize: 16,
               letterSpacing: "0.05em",
             }}
           >
@@ -306,6 +381,7 @@ export default function FullscreenReader({
         <section
           ref={cardRef}
           style={{
+            position: "relative",
             background: vars.card,
             borderRadius: "clamp(14px, 1.4vw, 22px)",
             boxShadow: vars.shadow,
@@ -322,6 +398,31 @@ export default function FullscreenReader({
             overflow: "hidden",
           }}
         >
+          {/* 좌/우 절반 클릭 → 이전/다음 구절 */}
+          <div
+            onClick={() => go(-1)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "50%",
+              height: "100%",
+              cursor: "pointer",
+              zIndex: 3,
+            }}
+          />
+          <div
+            onClick={() => go(1)}
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              width: "50%",
+              height: "100%",
+              cursor: "pointer",
+              zIndex: 3,
+            }}
+          />
           {/* 레퍼런스 — 양옆 얇은 장식선 */}
           <div
             style={{
@@ -351,14 +452,14 @@ export default function FullscreenReader({
           <div
             style={{
               fontSize: `${effectiveFontSize}px`,
-              fontWeight: 600,
+              fontWeight: currentFont.weight,
               lineHeight: 1.5,
               wordBreak: "keep-all",
               overflowWrap: "anywhere",
               maxWidth: "96%",
               color: vars.text,
               letterSpacing: "-0.01em",
-              fontFamily: "var(--font-noto-serif-kr), 'Noto Serif KR', serif",
+              fontFamily: currentFont.css,
             }}
           >
             {current.main}
@@ -367,7 +468,7 @@ export default function FullscreenReader({
             <div
               style={{
                 marginTop: "clamp(14px, 1.5vw, 24px)",
-                fontSize: `${Math.round(effectiveFontSize * 0.46)}px`,
+                fontSize: `${Math.round(effectiveFontSize * 0.52)}px`,
                 fontWeight: 400,
                 lineHeight: 1.55,
                 color: vars.subText,
@@ -400,9 +501,56 @@ export default function FullscreenReader({
       {/* 하단 바 — 카드 폭과 동일하게 정렬 */}
       <footer
         style={{
-          marginTop: "clamp(10px, 1.2vw, 18px)",
+          marginTop: "clamp(16px, 2vw, 28px)",
         }}
       >
+        {/* 레퍼런스 필 바 (jumpMode) — 컨트롤 위, 고정 위치 */}
+        {jumpMode && jumpRefs && jumpRefs.length > 1 && (() => {
+          const labels = buildPillLabels(jumpRefs);
+          return (
+            <div
+              ref={pillsScrollRef}
+              style={{
+                width: "min(1400px, 88%)",
+                margin: "0 auto",
+                display: "flex",
+                gap: 10,
+                overflowX: "auto",
+                paddingBottom: "clamp(8px, 1vw, 12px)",
+                marginBottom: "clamp(4px, 0.5vw, 8px)",
+                scrollbarWidth: "none",
+                justifyContent: "center",
+                flexWrap: "wrap",
+                opacity: pillsVisible ? 1 : 0.12,
+                transition: "opacity 0.6s ease",
+              }}
+            >
+              {labels.map((label, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setIdx(i); resetPillsTimer(); }}
+                  style={{
+                    flexShrink: 0,
+                    padding: "7px 18px",
+                    borderRadius: 999,
+                    border: i === idx ? "none" : `1px solid ${vars.ctrlBorder}`,
+                    fontSize: 13,
+                    fontWeight: i === idx ? 600 : 400,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    background: i === idx ? vars.text : "transparent",
+                    color: i === idx ? vars.card : vars.muted,
+                    transition: "background .15s, color .15s",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+
         <div
           style={{
             width: "min(1400px, 88%)",
@@ -444,11 +592,97 @@ export default function FullscreenReader({
             <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
             {isDark ? "Light" : "Dark"}
           </button>
-          {/* 구분: 미세한 세로선 */}
-          <span
-            aria-hidden
-            style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }}
-          />
+          {/* 구분 */}
+          <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
+
+          {/* 폰트 선택 버튼 + 팝업 */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowFontPicker(!showFontPicker)}
+              style={{
+                background: "transparent",
+                border: `1px solid ${vars.ctrlBorder}`,
+                color: vars.muted,
+                padding: "4px 12px",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: currentFont.css,
+                borderRadius: 999,
+                transition: "background .15s, color .15s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = vars.ctrlHover;
+                e.currentTarget.style.color = vars.text;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = vars.muted;
+              }}
+            >
+              {currentFont.label}
+            </button>
+            {showFontPicker && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: vars.card,
+                  border: `1px solid ${vars.ctrlBorder}`,
+                  borderRadius: 12,
+                  padding: 6,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                  zIndex: 10,
+                  minWidth: 120,
+                }}
+              >
+                {FONTS.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => { userPickedFont.current = true; setFontKey(f.key); setShowFontPicker(false); }}
+                    style={{
+                      background: fontKey === f.key ? vars.text : "transparent",
+                      color: fontKey === f.key ? vars.card : vars.muted,
+                      border: "none",
+                      padding: "7px 14px",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontFamily: f.css,
+                      fontWeight: f.weight,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "background .12s, color .12s",
+                      whiteSpace: "nowrap",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (fontKey !== f.key) {
+                        e.currentTarget.style.background = vars.ctrlHover;
+                        e.currentTarget.style.color = vars.text;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (fontKey !== f.key) {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = vars.muted;
+                      }
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 구분 */}
+          <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
+
+          {/* 폰트 크기 슬라이더 */}
           <div
             style={{
               display: "inline-flex",
@@ -467,7 +701,7 @@ export default function FullscreenReader({
               style={{
                 WebkitAppearance: "none",
                 appearance: "none",
-                width: 160,
+                width: 140,
                 height: 2,
                 background: vars.ctrlBorder,
                 borderRadius: 999,
@@ -477,6 +711,39 @@ export default function FullscreenReader({
             />
             <span style={{ fontSize: 17, opacity: 0.85, color: vars.muted }}>가</span>
           </div>
+
+          {/* 구분 */}
+          <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
+
+          {/* 닫기 버튼 — 우하단 */}
+          <button
+            onClick={onClose}
+            aria-label="닫기 (Esc)"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "none",
+              background: "transparent",
+              color: vars.muted,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 15,
+              transition: "background .15s, color .15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = vars.ctrlHover;
+              e.currentTarget.style.color = vars.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = vars.muted;
+            }}
+          >
+            ✕
+          </button>
         </div>
       </footer>
     </div>

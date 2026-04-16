@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import {
+  Noto_Sans_KR,
   Noto_Serif_KR,
   Gothic_A1,
   Gowun_Dodum,
@@ -9,6 +10,12 @@ import {
 import "./globals.css";
 import VersionCheck from "@/components/VersionCheck";
 import PwaInstall from "@/components/PwaInstall";
+
+const notoSansKr = Noto_Sans_KR({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  variable: "--font-noto-sans-kr",
+});
 
 const notoSerifKr = Noto_Serif_KR({
   subsets: ["latin"],
@@ -72,7 +79,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${ibmPlexSansKr.variable} ${playfairDisplay.variable} h-full antialiased`}
+      className={`${notoSansKr.variable} ${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${ibmPlexSansKr.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
         {children}

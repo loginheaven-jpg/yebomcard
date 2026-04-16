@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
 import { stripNotes, type BibleVerse, type BilingualVerse } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
+import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -119,6 +120,9 @@ export default function VerseDisplay({
   const [loading, setLoading] = useState(true);
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [copiedType, setCopiedType] = useState<"link" | "text" | null>(null);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  const [fsVersion, setFsVersion] = useState<"nkrv" | "rnksv">(verses[0]?.version as "nkrv" | "rnksv" || "nkrv");
+  const [fsParallel, setFsParallel] = useState(false);
 
   useEffect(() => {
     async function loadEnglish() {
@@ -410,7 +414,60 @@ export default function VerseDisplay({
             링크복사나 카드만들기하시면 자동스크랩
           </span>
         </button>
+
+        {/* 풀스크린으로 보기 */}
+        <button
+          onClick={() => setShowFullscreen(true)}
+          className="w-full py-3 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
+          </svg>
+          풀스크린으로 보기
+        </button>
       </div>
+
+      {/* 풀스크린 리더 */}
+      {showFullscreen && (() => {
+        const sorted = [...verses].sort((a, b) => {
+          if (a.book_order !== b.book_order) return a.book_order - b.book_order;
+          if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+          return a.verse - b.verse;
+        });
+        const mainVersion = fsVersion;
+        const altVersion = mainVersion === "nkrv" ? "rnksv" : "nkrv";
+        const fsVerses: FullscreenVerseItem[] = sorted.map((v) => {
+          const mainText = stripNotes(v.version === mainVersion
+            ? v.text
+            : englishVerses.find((e) => e.book_code === v.book_code && e.chapter === v.chapter && e.verse === v.verse)?.text || v.text);
+          const altVerse = englishVerses.find(
+            (e) => e.book_code === v.book_code && e.chapter === v.chapter && e.verse === v.verse
+          );
+          return {
+            ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
+            main: stripNotes(v.text),
+            sub: altVerse ? stripNotes(altVerse.text) : undefined,
+          };
+        });
+        const jumpRefs = sorted.map((v) => ({
+          book_abbr: v.book_abbr,
+          book_code: v.book_code,
+          chapter: v.chapter,
+          verse: v.verse,
+        }));
+        return (
+          <FullscreenReader
+            verses={fsVerses}
+            version={fsVersion}
+            onVersionChange={setFsVersion}
+            parallel={fsParallel}
+            onParallelToggle={() => setFsParallel(!fsParallel)}
+            onClose={() => setShowFullscreen(false)}
+            jumpMode
+            jumpRefs={jumpRefs}
+          />
+        );
+      })()}
     </div>
   );
 }
