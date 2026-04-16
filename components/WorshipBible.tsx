@@ -265,7 +265,10 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
   const allVerses = parsedItems.flatMap((item) => item.verses);
 
-  function sendToPresent(idx: number, overrides?: { fontKey?: FontKey; fontSize?: number; theme?: "light" | "dark" }) {
+  function sendToPresent(
+    idx: number,
+    overrides?: { fontKey?: FontKey; fontSize?: number; theme?: "light" | "dark"; parallel?: boolean; altMap?: Map<string, string> }
+  ) {
     if (!presentChannel.current || allVerses.length === 0) return;
     const v = allVerses[idx];
     if (!v) return;
@@ -273,13 +276,15 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
     const fs = overrides?.fontSize ?? pFontSize;
     const th = overrides?.theme ?? pTheme;
+    const par = overrides?.parallel ?? parallel;
+    const aMap = overrides?.altMap ?? altVerseMap;
     presentChannel.current.postMessage({
       type: "verse",
       ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
       main: stripNotes(v.text),
-      sub: parallel ? altVerseMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
+      sub: par ? aMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
       fontKey: fk, fontCss: font.css, fontWeight: font.weight,
-      fontSize: fs, theme: th, parallel,
+      fontSize: fs, theme: th, parallel: par,
       subVersionLabel: version === "nkrv" ? "새번역" : "개역개정",
     });
   }
@@ -585,7 +590,26 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                     </button>
                   ))}
                   <button
-                    onClick={() => { setParallel(!parallel); setTimeout(() => sendToPresent(presentIdx), 200); }}
+                    onClick={async () => {
+                      const newParallel = !parallel;
+                      setParallel(newParallel);
+                      if (newParallel && altVerseMap.size === 0) {
+                        // 즉석 fetch
+                        const altV = version === "nkrv" ? "rnksv" : "nkrv";
+                        const map = new Map<string, string>();
+                        for (const item of parsedItems) {
+                          let q = supabase.from("bible_verses").select("*")
+                            .eq("version", altV).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                          if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+                          const { data } = await q.order("verse");
+                          if (data) for (const row of data as BibleVerse[]) map.set(`${row.book_code}-${row.chapter}-${row.verse}`, stripNotes(row.text));
+                        }
+                        setAltVerseMap(map);
+                        sendToPresent(presentIdx, { parallel: true, altMap: map });
+                      } else {
+                        sendToPresent(presentIdx, { parallel: newParallel });
+                      }
+                    }}
                     className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
                       parallel ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
                     }`}
