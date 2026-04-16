@@ -68,6 +68,13 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [altVerseMap, setAltVerseMap] = useState<Map<string, string>>(new Map());
 
+  // 프레젠테이션 모드
+  const presentChannel = useRef<BroadcastChannel | null>(null);
+  const presentWindow = useRef<Window | null>(null);
+  const [presentActive, setPresentActive] = useState(false);
+  const [presentIdx, setPresentIdx] = useState(0);
+  const [showMonitorPicker, setShowMonitorPicker] = useState(false);
+
   // 병기: parallel 토글 시 alt 버전 fetch
   useEffect(() => {
     if (!parallel || parsedItems.length === 0) { setAltVerseMap(new Map()); return; }
@@ -225,9 +232,95 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     if (newItems.length > 0) setParsedItems((prev) => [...prev, ...newItems]);
   }
 
-  // ─── 풀스크린 데이터 생성 ───
+  // ─── 프레젠테이션 모드 ───
+  const FONTS_MAP: Record<string, { css: string; weight: number }> = {
+    "noto-serif": { css: "var(--font-noto-serif-kr), 'Noto Serif KR', serif", weight: 600 },
+    "noto-sans": { css: "var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif", weight: 700 },
+    "gowun-dodum": { css: "var(--font-gowun-dodum), 'Gowun Dodum', sans-serif", weight: 400 },
+    "gothic-a1": { css: "var(--font-gothic-a1), 'Gothic A1', sans-serif", weight: 600 },
+    "ibm-plex": { css: "var(--font-ibm-plex), 'IBM Plex Sans KR', sans-serif", weight: 600 },
+  };
+
   const allVerses = parsedItems.flatMap((item) => item.verses);
 
+  function sendToPresent(idx: number) {
+    if (!presentChannel.current || allVerses.length === 0) return;
+    const v = allVerses[idx];
+    if (!v) return;
+    const fontKey = localStorage.getItem("fullscreenFont") || (version === "nkrv" ? "noto-serif" : "gowun-dodum");
+    const font = FONTS_MAP[fontKey] || FONTS_MAP["noto-serif"];
+    const fontSize = parseInt(localStorage.getItem("fullscreenFontSize") || "74");
+    const theme = (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
+    presentChannel.current.postMessage({
+      type: "verse",
+      ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
+      main: stripNotes(v.text),
+      sub: parallel ? altVerseMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
+      fontKey, fontCss: font.css, fontWeight: font.weight,
+      fontSize, theme, parallel,
+      subVersionLabel: version === "nkrv" ? "새번역" : "개역개정",
+    });
+  }
+
+  async function openPresentation() {
+    // BroadcastChannel 초기화
+    if (!presentChannel.current) {
+      presentChannel.current = new BroadcastChannel("yebom-worship");
+    }
+
+    // Window Management API 시도 (Chrome/Edge)
+    if ("getScreenDetails" in window) {
+      try {
+        const screenDetails = await (window as unknown as { getScreenDetails: () => Promise<{ screens: Array<{ left: number; top: number; width: number; height: number; label: string; isPrimary: boolean }> }> }).getScreenDetails();
+        const screens = screenDetails.screens;
+        const secondary = screens.find((s) => !s.isPrimary) || screens[screens.length - 1];
+        presentWindow.current = window.open(
+          "/present",
+          "yebom-present",
+          `left=${secondary.left},top=${secondary.top},width=${secondary.width},height=${secondary.height}`
+        );
+      } catch {
+        // 권한 거부 또는 에러 → 기본 window.open
+        presentWindow.current = window.open("/present", "yebom-present", "width=1024,height=768");
+      }
+    } else {
+      presentWindow.current = window.open("/present", "yebom-present", "width=1024,height=768");
+    }
+
+    if (presentWindow.current) {
+      setPresentActive(true);
+      setPresentIdx(0);
+      // 창 로드 후 첫 구절 전송
+      setTimeout(() => sendToPresent(0), 1000);
+      // 창 닫힘 감지
+      const checkClosed = setInterval(() => {
+        if (presentWindow.current?.closed) {
+          clearInterval(checkClosed);
+          setPresentActive(false);
+        }
+      }, 1000);
+    }
+  }
+
+  function presentGo(delta: number) {
+    const next = Math.max(0, Math.min(allVerses.length - 1, presentIdx + delta));
+    setPresentIdx(next);
+    sendToPresent(next);
+  }
+
+  function presentJump(idx: number) {
+    setPresentIdx(idx);
+    sendToPresent(idx);
+  }
+
+  // 프레젠테이션 종료
+  function closePresentation() {
+    presentChannel.current?.postMessage({ type: "close" });
+    presentWindow.current?.close();
+    setPresentActive(false);
+  }
+
+  // ─── 풀스크린 데이터 생성 ───
   const fsVerses: FullscreenVerseItem[] = allVerses.map((v) => ({
     ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
     main: stripNotes(v.text),
@@ -385,17 +478,78 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
               </div>
             )}
 
-            {/* 풀스크린 시작 버튼 */}
-            {allVerses.length > 0 && (
-              <button
-                onClick={() => setShowFullscreen(true)}
-                className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
-                </svg>
-                풀스크린 시작 ({allVerses.length}절)
-              </button>
+            {/* 시작 버튼 */}
+            {allVerses.length > 0 && !presentActive && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowFullscreen(true)}
+                  className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
+                  </svg>
+                  풀스크린
+                </button>
+                <button
+                  onClick={openPresentation}
+                  className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125z" />
+                  </svg>
+                  프레젠테이션
+                </button>
+              </div>
+            )}
+
+            {/* 프레젠테이션 컨트롤 패널 */}
+            {presentActive && allVerses.length > 0 && (
+              <div className="space-y-3">
+                {/* 구절 필 바 */}
+                <div className="flex gap-2 flex-wrap justify-center">
+                  {allVerses.map((v, i) => (
+                    <button
+                      key={`${v.book_code}-${v.chapter}-${v.verse}-${i}`}
+                      onClick={() => presentJump(i)}
+                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                        i === presentIdx
+                          ? "bg-gray-900 text-white border-gray-900"
+                          : "text-gray-600 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {v.book_abbr} {v.chapter}:{v.verse}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 이전/다음 + 종료 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => presentGo(-1)}
+                    disabled={presentIdx === 0}
+                    className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                  >
+                    ← 이전
+                  </button>
+                  <button
+                    onClick={() => presentGo(1)}
+                    disabled={presentIdx >= allVerses.length - 1}
+                    className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                  >
+                    다음 →
+                  </button>
+                  <button
+                    onClick={closePresentation}
+                    className="px-4 py-2.5 text-sm font-medium text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+                  >
+                    종료
+                  </button>
+                </div>
+
+                <p className="text-center text-xs text-gray-400">
+                  {presentIdx + 1} / {allVerses.length} · 프레젠테이션 중
+                </p>
+              </div>
             )}
 
             {parsedItems.length === 0 && !loading && (
