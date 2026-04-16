@@ -640,8 +640,12 @@ export default function FullscreenReader({
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: "clamp(10px, 1.2vw, 16px)",
             color: vars.muted,
+            position: "relative",
+            opacity: pillsVisible ? 1 : 0.12,
+            transition: "opacity 0.6s ease",
           }}
         >
           {/* 좌측: 다크/라이트 토글 */}
@@ -799,8 +803,6 @@ export default function FullscreenReader({
               display: "inline-flex",
               gap: 4,
               alignItems: "center",
-              opacity: pillsVisible ? 1 : 0.12,
-              transition: "opacity 0.6s ease",
             }}>
               <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7, marginRight: 4 }} />
               <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
@@ -815,14 +817,13 @@ export default function FullscreenReader({
             </div>
           )}
 
-          {/* 우측 여백 채움 → 닫기 버튼을 카드 우측 라인으로 */}
-          <div style={{ flex: 1 }} />
-
-          {/* 닫기 버튼 — 카드 우측 라인 */}
+          {/* 닫기 버튼 — absolute 우측끝 */}
           <button
             onClick={onClose}
             aria-label="닫기 (Esc)"
             style={{
+              position: "absolute",
+              right: 0,
               width: 44,
               height: 44,
               borderRadius: "50%",
