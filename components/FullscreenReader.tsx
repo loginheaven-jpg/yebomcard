@@ -28,6 +28,9 @@ interface Props {
   onClose: () => void;
   jumpMode?: boolean;
   jumpRefs?: JumpRef[];
+  hideVersionButtons?: boolean;
+  /** jumpMode: 풀스크린에서 구절 추가. 입력 문자열 → 부모가 파싱/fetch → verses 업데이트 */
+  onAddVerses?: (input: string) => Promise<void>;
 }
 
 export default function FullscreenReader({
@@ -41,6 +44,8 @@ export default function FullscreenReader({
   onClose,
   jumpMode = false,
   jumpRefs,
+  hideVersionButtons = false,
+  onAddVerses,
 }: Props) {
   const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
   const [idx, setIdx] = useState(0);
@@ -100,6 +105,22 @@ export default function FullscreenReader({
     }
     return labels;
   }
+
+  // 추가 입력행
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [addInput, setAddInput] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const addInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleAddSubmit() {
+    if (!addInput.trim() || !onAddVerses) return;
+    setAddLoading(true);
+    await onAddVerses(addInput.trim());
+    setAddInput("");
+    setShowAddInput(false);
+    setAddLoading(false);
+  }
+
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
     return (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
@@ -260,7 +281,7 @@ export default function FullscreenReader({
       }
     : {
         bg: "#ded4c8",
-        card: "#e6e0d8",
+        card: "#ece7e0",
         arrow: "#BFB392",
         text: "#1C1C1C",
         muted: "#575247",
@@ -328,17 +349,19 @@ export default function FullscreenReader({
         }}
       >
         <div />
-        <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
-          <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
-            개역개정
-          </VersionPill>
-          <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
-            새번역
-          </VersionPill>
-          <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
-            병기
-          </VersionPill>
-        </div>
+        {hideVersionButtons ? <div /> : (
+          <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
+            <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
+              개역개정
+            </VersionPill>
+            <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
+              새번역
+            </VersionPill>
+            <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
+              병기
+            </VersionPill>
+          </div>
+        )}
         <div />
       </header>
 
@@ -356,7 +379,7 @@ export default function FullscreenReader({
         {/* 페이지 표시 — 카드 위 우측 정렬 */}
         <div
           style={{
-            width: "min(1400px, 88%)",
+            width: "min(1400px, 94%)",
             margin: "0 auto",
             paddingBottom: "clamp(6px, 0.8vw, 12px)",
             display: "flex",
@@ -378,8 +401,16 @@ export default function FullscreenReader({
           </span>
         </div>
 
-        <NavBtn vars={vars} side="prev" onClick={() => go(-1)} />
-        <NavBtn vars={vars} side="next" onClick={() => go(1)} />
+        {/* 외부 좌측 클릭존 — 이전 구절 */}
+        <div
+          onClick={() => go(-1)}
+          style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "6%", cursor: "pointer", zIndex: 2 }}
+        />
+        {/* 외부 우측 클릭존 — 다음 구절 */}
+        <div
+          onClick={() => go(1)}
+          style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "6%", cursor: "pointer", zIndex: 2 }}
+        />
 
         <section
           ref={cardRef}
@@ -388,7 +419,7 @@ export default function FullscreenReader({
             background: vars.card,
             borderRadius: "clamp(14px, 1.4vw, 22px)",
             boxShadow: vars.shadow,
-            width: "min(1400px, 88%)",
+            width: "min(1400px, 94%)",
             height: "100%",
             maxHeight: "100%",
             margin: "0 auto",
@@ -511,10 +542,11 @@ export default function FullscreenReader({
         {jumpMode && jumpRefs && jumpRefs.length > 1 && (() => {
           const labels = buildPillLabels(jumpRefs);
           return (
+            <>
             <div
               ref={pillsScrollRef}
               style={{
-                width: "min(1400px, 88%)",
+                width: "min(1400px, 94%)",
                 margin: "0 auto",
                 display: "flex",
                 gap: 10,
@@ -550,13 +582,85 @@ export default function FullscreenReader({
                   {label}
                 </button>
               ))}
+              {/* [+] 추가 버튼 */}
+              {onAddVerses && (
+                <button
+                  onClick={() => { setShowAddInput(true); setTimeout(() => addInputRef.current?.focus(), 100); }}
+                  style={{
+                    flexShrink: 0,
+                    padding: "7px 14px",
+                    borderRadius: 999,
+                    border: `1px solid ${vars.ctrlBorder}`,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    background: "transparent",
+                    color: vars.muted,
+                    transition: "background .15s, color .15s",
+                  }}
+                >
+                  +
+                </button>
+              )}
             </div>
+            {/* 입력행 — [+] 클릭 시 슬라이드 */}
+            {showAddInput && onAddVerses && (
+              <div
+                style={{
+                  width: "min(1400px, 94%)",
+                  margin: "0 auto",
+                  display: "flex",
+                  gap: 8,
+                  paddingBottom: "clamp(6px, 0.8vw, 10px)",
+                }}
+              >
+                <input
+                  ref={addInputRef}
+                  type="text"
+                  value={addInput}
+                  onChange={(e) => setAddInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddSubmit(); if (e.key === "Escape") { setShowAddInput(false); setAddInput(""); } }}
+                  placeholder="롬8:28, 시23:1-6"
+                  style={{
+                    flex: 1,
+                    padding: "8px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${vars.ctrlBorder}`,
+                    background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    color: vars.text,
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleAddSubmit}
+                  disabled={addLoading || !addInput.trim()}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: vars.text,
+                    color: vars.card,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    opacity: addLoading || !addInput.trim() ? 0.4 : 1,
+                  }}
+                >
+                  {addLoading ? "..." : "추가"}
+                </button>
+              </div>
+            )}
+            </>
           );
         })()}
 
         <div
           style={{
-            width: "min(1400px, 88%)",
+            width: "min(1400px, 94%)",
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
