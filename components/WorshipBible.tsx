@@ -66,6 +66,28 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [version, setVersion] = useState<BibleVersion>("rnksv");
   const [parallel, setParallel] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [altVerseMap, setAltVerseMap] = useState<Map<string, string>>(new Map());
+
+  // 병기: parallel 토글 시 alt 버전 fetch
+  useEffect(() => {
+    if (!parallel || parsedItems.length === 0) { setAltVerseMap(new Map()); return; }
+    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    (async () => {
+      const map = new Map<string, string>();
+      for (const item of parsedItems) {
+        let q = supabase.from("bible_verses").select("*")
+          .eq("version", altVersion).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+        if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+        const { data } = await q.order("verse");
+        if (data) {
+          for (const v of data as BibleVerse[]) {
+            map.set(`${v.book_code}-${v.chapter}-${v.verse}`, stripNotes(v.text));
+          }
+        }
+      }
+      setAltVerseMap(map);
+    })();
+  }, [parallel, version, parsedItems]);
 
   // 슬롯 관리
   const [slots, setSlots] = useState<WorshipSlot[]>(() => {
@@ -209,6 +231,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const fsVerses: FullscreenVerseItem[] = allVerses.map((v) => ({
     ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
     main: stripNotes(v.text),
+    sub: parallel ? altVerseMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
   }));
 
   const jumpRefs = allVerses.map((v) => ({

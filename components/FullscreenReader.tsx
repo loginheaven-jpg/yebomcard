@@ -62,13 +62,13 @@ export default function FullscreenReader({
   }, []);
 
   useEffect(() => {
-    if (!jumpMode) return;
+    if (!jumpMode && hideVersionButtons) return;
     resetPillsTimer();
     return () => { if (pillsTimer.current) clearTimeout(pillsTimer.current); };
   }, [jumpMode, resetPillsTimer]);
 
   useEffect(() => {
-    if (!jumpMode) return;
+    if (!jumpMode && hideVersionButtons) return;
     resetPillsTimer();
     // 현재 필을 스크롤 뷰에 표시
     const container = pillsScrollRef.current;
@@ -80,7 +80,7 @@ export default function FullscreenReader({
 
   // 마우스/터치 시 필 바 복귀
   useEffect(() => {
-    if (!jumpMode) return;
+    if (!jumpMode && hideVersionButtons) return;
     const show = () => resetPillsTimer();
     window.addEventListener("mousemove", show);
     window.addEventListener("touchstart", show);
@@ -338,32 +338,8 @@ export default function FullscreenReader({
           background: ${vars.text}; cursor: pointer; border: none;
         }
       `}</style>
-      {/* 상단 바 */}
-      <header
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-          gap: 16,
-          marginBottom: "clamp(4px, 0.5vw, 8px)",
-        }}
-      >
-        <div />
-        {hideVersionButtons ? <div /> : (
-          <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
-            <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
-              개역개정
-            </VersionPill>
-            <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
-              새번역
-            </VersionPill>
-            <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
-              병기
-            </VersionPill>
-          </div>
-        )}
-        <div />
-      </header>
+      {/* 상단 — 최소 여백 */}
+      <header style={{ height: "clamp(4px, 0.5vw, 8px)" }} />
 
       {/* 본문 카드 */}
       <main
@@ -664,12 +640,11 @@ export default function FullscreenReader({
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            gap: "clamp(12px, 1.6vw, 20px)",
+            gap: "clamp(10px, 1.2vw, 16px)",
             color: vars.muted,
           }}
         >
-          {/* 다크/라이트 토글 — 폰트 슬라이더 왼쪽 */}
+          {/* 좌측: 다크/라이트 토글 */}
           <button
             onClick={() => setTheme(isDark ? "light" : "dark")}
             title="다크/라이트 전환"
@@ -699,7 +674,6 @@ export default function FullscreenReader({
             <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
             {isDark ? "Light" : "Dark"}
           </button>
-          {/* 구분 */}
           <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
 
           {/* 폰트 선택 버튼 + 팝업 */}
@@ -819,16 +793,38 @@ export default function FullscreenReader({
             <span style={{ fontSize: 17, opacity: 0.85, color: vars.muted }}>가</span>
           </div>
 
-          {/* 구분 */}
-          <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
+          {/* 버전 버튼 — 폰트 슬라이더 우측 (자동 숨김) */}
+          {!hideVersionButtons && (
+            <div style={{
+              display: "inline-flex",
+              gap: 4,
+              alignItems: "center",
+              opacity: pillsVisible ? 1 : 0.12,
+              transition: "opacity 0.6s ease",
+            }}>
+              <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7, marginRight: 4 }} />
+              <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
+                개역개정
+              </VersionPill>
+              <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
+                새번역
+              </VersionPill>
+              <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
+                병기
+              </VersionPill>
+            </div>
+          )}
 
-          {/* 닫기 버튼 — 우하단 */}
+          {/* 우측 여백 채움 → 닫기 버튼을 카드 우측 라인으로 */}
+          <div style={{ flex: 1 }} />
+
+          {/* 닫기 버튼 — 카드 우측 라인 */}
           <button
             onClick={onClose}
             aria-label="닫기 (Esc)"
             style={{
-              width: 36,
-              height: 36,
+              width: 44,
+              height: 44,
               borderRadius: "50%",
               border: "none",
               background: "transparent",
@@ -837,7 +833,7 @@ export default function FullscreenReader({
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 15,
+              fontSize: 18,
               transition: "background .15s, color .15s",
             }}
             onMouseEnter={(e) => {
