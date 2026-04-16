@@ -75,6 +75,28 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [presentIdx, setPresentIdx] = useState(0);
   const [showMonitorPicker, setShowMonitorPicker] = useState(false);
 
+  // 프레젠테이션 설정 (보조 모니터에 전송)
+  type FontKey = "noto-serif" | "noto-sans" | "gowun-dodum" | "gothic-a1" | "ibm-plex";
+  const FONT_LABELS: { key: FontKey; label: string }[] = [
+    { key: "noto-serif", label: "명조" }, { key: "noto-sans", label: "고딕" },
+    { key: "gowun-dodum", label: "돋움" }, { key: "gothic-a1", label: "Gothic" },
+    { key: "ibm-plex", label: "Plex" },
+  ];
+  const defaultFont = (v: BibleVersion): FontKey => v === "nkrv" ? "noto-serif" : "gowun-dodum";
+  const [pFontKey, setPFontKey] = useState<FontKey>(() => {
+    if (typeof window === "undefined") return defaultFont(version);
+    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFont(version);
+  });
+  const [pFontSize, setPFontSize] = useState(() => {
+    if (typeof window === "undefined") return 74;
+    return parseInt(localStorage.getItem("fullscreenFontSize") || "74");
+  });
+  const [pTheme, setPTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    return (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
+  });
+  const [showPFontPicker, setShowPFontPicker] = useState(false);
+
   // 병기: parallel 토글 시 alt 버전 fetch
   useEffect(() => {
     if (!parallel || parsedItems.length === 0) { setAltVerseMap(new Map()); return; }
@@ -243,21 +265,21 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
   const allVerses = parsedItems.flatMap((item) => item.verses);
 
-  function sendToPresent(idx: number) {
+  function sendToPresent(idx: number, overrides?: { fontKey?: FontKey; fontSize?: number; theme?: "light" | "dark" }) {
     if (!presentChannel.current || allVerses.length === 0) return;
     const v = allVerses[idx];
     if (!v) return;
-    const fontKey = localStorage.getItem("fullscreenFont") || (version === "nkrv" ? "noto-serif" : "gowun-dodum");
-    const font = FONTS_MAP[fontKey] || FONTS_MAP["noto-serif"];
-    const fontSize = parseInt(localStorage.getItem("fullscreenFontSize") || "74");
-    const theme = (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
+    const fk = overrides?.fontKey ?? pFontKey;
+    const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
+    const fs = overrides?.fontSize ?? pFontSize;
+    const th = overrides?.theme ?? pTheme;
     presentChannel.current.postMessage({
       type: "verse",
       ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
       main: stripNotes(v.text),
       sub: parallel ? altVerseMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
-      fontKey, fontCss: font.css, fontWeight: font.weight,
-      fontSize, theme, parallel,
+      fontKey: fk, fontCss: font.css, fontWeight: font.weight,
+      fontSize: fs, theme: th, parallel,
       subVersionLabel: version === "nkrv" ? "새번역" : "개역개정",
     });
   }
@@ -504,51 +526,124 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
             {/* 프레젠테이션 컨트롤 패널 */}
             {presentActive && allVerses.length > 0 && (
-              <div className="space-y-3">
-                {/* 구절 필 바 */}
-                <div className="flex gap-2 flex-wrap justify-center">
-                  {allVerses.map((v, i) => (
-                    <button
-                      key={`${v.book_code}-${v.chapter}-${v.verse}-${i}`}
-                      onClick={() => presentJump(i)}
-                      className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
-                        i === presentIdx
-                          ? "bg-gray-900 text-white border-gray-900"
-                          : "text-gray-600 border-gray-200 hover:bg-gray-100"
-                      }`}
-                    >
-                      {v.book_abbr} {v.chapter}:{v.verse}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 이전/다음 + 종료 */}
-                <div className="flex gap-2">
+              <div className="space-y-3 bg-white border border-gray-200 rounded-xl p-4">
+                {/* 상단: 페이지 + 이전/다음 + 종료 */}
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => presentGo(-1)}
                     disabled={presentIdx === 0}
-                    className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                   >
-                    ← 이전
+                    ←
                   </button>
+                  <span className="flex-1 text-center text-sm text-gray-500">
+                    <b className="text-gray-900">{presentIdx + 1}</b> / {allVerses.length}
+                  </span>
                   <button
                     onClick={() => presentGo(1)}
                     disabled={presentIdx >= allVerses.length - 1}
-                    className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-30 transition-colors"
+                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                   >
-                    다음 →
+                    →
                   </button>
                   <button
                     onClick={closePresentation}
-                    className="px-4 py-2.5 text-sm font-medium text-red-500 bg-white border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+                    className="px-3 py-2 text-sm font-medium text-red-500 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
                   >
                     종료
                   </button>
                 </div>
 
-                <p className="text-center text-xs text-gray-400">
-                  {presentIdx + 1} / {allVerses.length} · 프레젠테이션 중
-                </p>
+                {/* 구절 필 바 */}
+                <div className="flex gap-1.5 flex-wrap justify-center max-h-24 overflow-y-auto">
+                  {allVerses.map((v, i) => (
+                    <button
+                      key={`${v.book_code}-${v.chapter}-${v.verse}-${i}`}
+                      onClick={() => presentJump(i)}
+                      className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                        i === presentIdx
+                          ? "bg-gray-900 text-white border-gray-900"
+                          : "text-gray-500 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      {v.book_abbr}{v.chapter}:{v.verse}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 번역본 + 병기 */}
+                <div className="flex gap-1 justify-center">
+                  {(["nkrv", "rnksv"] as const).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => { setVersion(v); setPFontKey(defaultFont(v)); setTimeout(() => sendToPresent(presentIdx), 100); }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                        version === v ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                      }`}
+                    >
+                      {v === "nkrv" ? "개역개정" : "새번역"}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => { setParallel(!parallel); setTimeout(() => sendToPresent(presentIdx), 200); }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                      parallel ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                    }`}
+                  >
+                    병기
+                  </button>
+                </div>
+
+                {/* 폰트 + 크기 + 다크모드 */}
+                <div className="flex items-center gap-3 justify-center">
+                  {/* 다크/라이트 */}
+                  <button
+                    onClick={() => { const t = pTheme === "dark" ? "light" : "dark"; setPTheme(t); localStorage.setItem("fullscreenTheme", t); sendToPresent(presentIdx, { theme: t }); }}
+                    className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    {pTheme === "dark" ? "☀ Light" : "☾ Dark"}
+                  </button>
+
+                  <span className="w-px h-3 bg-gray-200" />
+
+                  {/* 폰트 선택 */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowPFontPicker(!showPFontPicker)}
+                      className="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+                    >
+                      {FONT_LABELS.find((f) => f.key === pFontKey)?.label || "명조"}
+                    </button>
+                    {showPFontPicker && (
+                      <div className="absolute z-10 bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg p-1 min-w-[100px]">
+                        {FONT_LABELS.map((f) => (
+                          <button
+                            key={f.key}
+                            onClick={() => { setPFontKey(f.key); setShowPFontPicker(false); localStorage.setItem("fullscreenFont", f.key); sendToPresent(presentIdx, { fontKey: f.key }); }}
+                            className={`w-full px-3 py-1.5 text-xs text-left rounded-md transition-colors ${
+                              pFontKey === f.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <span className="w-px h-3 bg-gray-200" />
+
+                  {/* 폰트 크기 */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400">가</span>
+                    <input
+                      type="range" min={40} max={120} value={pFontSize}
+                      onChange={(e) => { const s = Number(e.target.value); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }}
+                      className="w-24 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
+                    />
+                    <span className="text-sm text-gray-400">가</span>
+                  </div>
+                </div>
               </div>
             )}
 
