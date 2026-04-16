@@ -149,12 +149,13 @@ export default function FullscreenReader({
         ctrlHover: "rgba(230,221,206,0.12)",
         ctrlBorder: "rgba(230,221,206,0.18)",
         credit: "#6E6A60",
-        shadow: "0 2px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(230,221,206,0.05)",
+        shadow:
+          "0 24px 48px -16px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.25), 0 0 0 1px rgba(230,221,206,0.08), inset 0 1px 0 rgba(255,255,255,0.04)",
       }
     : {
-        bg: "#DDD3C1",
-        card: "#D5CAB6",
-        arrow: "#BFB392",  // 카드 계열의 연한 웜 베이지 (회색 아님)
+        bg: "#ded4c8",
+        card: "#e6e0d8",
+        arrow: "#BFB392",
         text: "#1C1C1C",
         muted: "#575247",
         divider: "rgba(28,28,28,0.12)",
@@ -163,7 +164,19 @@ export default function FullscreenReader({
         ctrlHover: "rgba(28,28,28,0.09)",
         ctrlBorder: "rgba(28,28,28,0.18)",
         credit: "#8A8578",
-        shadow: "0 2px 24px rgba(50,40,20,0.08), 0 0 0 1px rgba(28,28,28,0.05)",
+        // 카드 그림자 더 부드럽게 + 도드라진 윤곽 (#d2c8bc) + 상단 1px highlight
+        shadow:
+          "0 24px 48px -16px rgba(60,45,20,0.18), 0 6px 14px rgba(60,45,20,0.08), 0 0 0 1px #d2c8bc, inset 0 1px 0 rgba(255,255,255,0.55)",
+      };
+
+  // 라이트 모드: 외곽에 미세한 격자 패턴 (#dbd0c5, 24px 간격)
+  const outerStyle: React.CSSProperties = isDark
+    ? { background: vars.bg }
+    : {
+        backgroundColor: vars.bg,
+        backgroundImage:
+          "repeating-linear-gradient(0deg, #dbd0c5 0 1px, transparent 1px 24px), " +
+          "repeating-linear-gradient(90deg, #dbd0c5 0 1px, transparent 1px 24px)",
       };
 
   return (
@@ -174,7 +187,7 @@ export default function FullscreenReader({
         position: "fixed",
         inset: 0,
         zIndex: 1000,
-        background: vars.bg,
+        ...outerStyle,
         color: vars.text,
         display: "grid",
         gridTemplateRows: "auto 1fr auto",
@@ -221,35 +234,6 @@ export default function FullscreenReader({
         </div>
         <div style={{ display: "inline-flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
           <button
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            title="다크/라이트 전환"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: vars.muted,
-              padding: "6px 12px",
-              fontSize: 13,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 999,
-              transition: "background .15s, color .15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = vars.ctrlHover;
-              e.currentTarget.style.color = vars.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = vars.muted;
-            }}
-          >
-            <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
-            {isDark ? "Light" : "Dark"}
-          </button>
-          <button
             onClick={onClose}
             aria-label="닫기 (Esc)"
             style={{
@@ -285,11 +269,37 @@ export default function FullscreenReader({
         style={{
           position: "relative",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
           minHeight: 0,
         }}
       >
+        {/* 페이지 표시 — 카드 위 우측 정렬 */}
+        <div
+          style={{
+            width: "min(1400px, 88%)",
+            margin: "0 auto",
+            paddingBottom: "clamp(6px, 0.8vw, 12px)",
+            display: "flex",
+            justifyContent: "flex-end",
+            color: vars.muted,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: '"Playfair Display", serif',
+              fontStyle: "italic",
+              fontSize: 14,
+              letterSpacing: "0.05em",
+            }}
+          >
+            <b style={{ color: vars.text, fontStyle: "normal", fontWeight: 600 }}>{idx + 1}</b>
+            <span style={{ opacity: 0.5, margin: "0 6px" }}>/</span>
+            {verses.length}
+          </span>
+        </div>
+
         <NavBtn vars={vars} side="prev" onClick={() => go(-1)} />
         <NavBtn vars={vars} side="next" onClick={() => go(1)} />
 
@@ -312,27 +322,43 @@ export default function FullscreenReader({
             overflow: "hidden",
           }}
         >
+          {/* 레퍼런스 — 양옆 얇은 장식선 */}
           <div
             style={{
-              fontSize: "clamp(22px, 2.2vw, 36px)",
-              color: vars.muted,
-              marginBottom: "clamp(14px, 1.7vw, 28px)",
-              fontWeight: 500,
-              letterSpacing: "0.01em",
+              display: "flex",
+              alignItems: "center",
+              gap: "clamp(12px, 1.2vw, 20px)",
+              marginBottom: "clamp(18px, 2vw, 32px)",
+              maxWidth: "70%",
+              width: "100%",
+              justifyContent: "center",
             }}
           >
-            {current.ref}
+            <span style={{ flex: 1, height: 1, background: vars.divider }} />
+            <span
+              style={{
+                fontSize: "clamp(20px, 1.9vw, 32px)",
+                color: vars.muted,
+                fontWeight: 500,
+                letterSpacing: "0.02em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {current.ref}
+            </span>
+            <span style={{ flex: 1, height: 1, background: vars.divider }} />
           </div>
           <div
             style={{
               fontSize: `${effectiveFontSize}px`,
-              fontWeight: 700,
-              lineHeight: 1.42,
+              fontWeight: 600,
+              lineHeight: 1.5,
               wordBreak: "keep-all",
               overflowWrap: "anywhere",
               maxWidth: "96%",
               color: vars.text,
-              letterSpacing: "-0.015em",
+              letterSpacing: "-0.01em",
+              fontFamily: "var(--font-noto-serif-kr), 'Noto Serif KR', serif",
             }}
           >
             {current.main}
@@ -383,24 +409,46 @@ export default function FullscreenReader({
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 24,
+            justifyContent: "center",
+            gap: "clamp(12px, 1.6vw, 20px)",
             color: vars.muted,
           }}
         >
-          <div
+          {/* 다크/라이트 토글 — 폰트 슬라이더 왼쪽 */}
+          <button
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            title="다크/라이트 전환"
             style={{
-              fontFamily: '"Playfair Display", serif',
-              fontStyle: "italic",
-              fontSize: 15,
+              background: "transparent",
+              border: "none",
               color: vars.muted,
-              letterSpacing: "0.05em",
+              padding: "6px 12px",
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              borderRadius: 999,
+              transition: "background .15s, color .15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = vars.ctrlHover;
+              e.currentTarget.style.color = vars.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = vars.muted;
             }}
           >
-            <b style={{ color: vars.text, fontStyle: "normal", fontWeight: 600 }}>{idx + 1}</b>
-            <span style={{ opacity: 0.5, margin: "0 6px" }}>/</span>
-            {verses.length}
-          </div>
+            <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
+            {isDark ? "Light" : "Dark"}
+          </button>
+          {/* 구분: 미세한 세로선 */}
+          <span
+            aria-hidden
+            style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }}
+          />
           <div
             style={{
               display: "inline-flex",
