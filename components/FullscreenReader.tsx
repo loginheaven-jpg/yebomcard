@@ -142,12 +142,15 @@ export default function FullscreenReader({
     localStorage.setItem("fullscreenFont", fontKey);
   }, [fontKey]);
 
-  // 브라우저 Fullscreen API 진입/해제
+  // 브라우저 Fullscreen API 진입/해제 + body 스크롤 잠금
   useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.().catch(() => {});
     }
     return () => {
+      document.body.style.overflow = prev;
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
