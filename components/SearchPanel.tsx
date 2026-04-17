@@ -1274,9 +1274,9 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* ─── 하단 버튼 ─── */}
+      {/* ─── 플로팅 액션 (선택 절이 있을 때) ─── */}
       {selectedVerses.length > 0 && (
-        <div className="sticky bottom-4 mt-4 space-y-2">
+        <div className="fixed bottom-24 right-4 sm:right-6 z-40 flex flex-col items-end gap-2 pointer-events-none">
           {mode !== "chapter" && (
             <button
               onClick={() => {
@@ -1287,22 +1287,25 @@ export default function SearchPanel({
                 setBrowseStep("verse");
                 setMode("chapter");
               }}
-              className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-full shadow-md hover:bg-gray-50 active:scale-95 transition-all"
             >
               본문으로 가기
             </button>
           )}
           <button
-            onClick={onConfirm}
-            className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
+            onClick={handleCopyToClipboard}
+            className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-full shadow-md hover:bg-gray-50 active:scale-95 transition-all"
           >
-            선택 완료 ({selectedVerses.length}절)
+            {copied ? "✓ 복사됨" : "클립보드 복사"}
           </button>
           <button
-            onClick={handleCopyToClipboard}
-            className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            onClick={onConfirm}
+            className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[#B8860B] rounded-full shadow-xl hover:bg-[#9A7009] active:scale-95 transition-all flex items-center gap-2"
           >
-            {copied ? "✓ 복사됨" : "클립보드로 복사"}
+            선택 완료
+            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs bg-white/25 rounded-full">
+              {selectedVerses.length}
+            </span>
           </button>
         </div>
       )}

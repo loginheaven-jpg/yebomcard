@@ -388,9 +388,9 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
               </button>
             </div>
 
-            {/* 슬롯 관리 */}
-            <div className="flex gap-2 mb-3 items-center">
-              <div className="relative flex-1">
+            {/* 슬롯 불러오기 */}
+            <div className="mb-3">
+              <div className="relative">
                 <button
                   onClick={() => setShowSlotMenu(!showSlotMenu)}
                   className="w-full py-2 px-3 text-left text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center justify-between"
@@ -424,48 +424,53 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                   </div>
                 )}
               </div>
-              {showSaveInput ? (
-                <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && saveSlot()}
-                    placeholder="이름 (예: 주일예배)"
-                    className="w-28 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400"
-                    autoFocus
-                  />
-                  <button onClick={saveSlot} className="px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg">
-                    확인
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowSaveInput(true)}
-                  className="px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
-                >
-                  저장
-                </button>
-              )}
             </div>
 
             {/* 입력 영역 */}
-            <div className="flex gap-2 mb-2">
+            <div className="flex gap-2 mb-2 items-stretch">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleParse(); } }}
                 placeholder="요2:1, 신12:10-12, 계10:10,17 요일2:1"
-                rows={2}
+                rows={4}
                 className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
               />
-              <button
-                onClick={handleParse}
-                disabled={loading || !input.trim()}
-                className="shrink-0 px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors self-end"
-              >
-                {loading ? "..." : "구절 추가"}
-              </button>
+              <div className="shrink-0 flex flex-col gap-2 w-24 relative">
+                <button
+                  onClick={handleParse}
+                  disabled={loading || !input.trim()}
+                  className="flex-1 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                >
+                  {loading ? "..." : "구절 추가"}
+                </button>
+                <button
+                  onClick={() => setShowSaveInput(true)}
+                  disabled={!input.trim()}
+                  className="flex-1 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  저장
+                </button>
+                {showSaveInput && (
+                  <div className="absolute z-20 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex gap-1 w-[220px]">
+                    <input
+                      type="text"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveSlot();
+                        else if (e.key === "Escape") { setShowSaveInput(false); setSaveName(""); }
+                      }}
+                      placeholder="이름 (예: 주일예배)"
+                      className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      autoFocus
+                    />
+                    <button onClick={saveSlot} className="shrink-0 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg">
+                      확인
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-xs text-gray-400 mb-3">
               쉼표 또는 스페이스로 구분 · 예: 요2:1, 시23:1-6 롬8:28
