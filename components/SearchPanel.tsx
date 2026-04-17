@@ -712,7 +712,7 @@ export default function SearchPanel({
   const fontSlider = (
     <div className="flex items-center justify-end mb-2 gap-2">
       <div className="flex items-center">
-        <span className="text-[10px] text-gray-400">가</span>
+        <button onClick={() => setReadingFontSize(Math.max(14, readingFontSize - 1))} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
         <input
           type="range"
           min={14}
@@ -722,7 +722,7 @@ export default function SearchPanel({
           className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
           title={`글자 크기 ${readingFontSize}px`}
         />
-        <span className="text-base text-gray-400">가</span>
+        <button onClick={() => setReadingFontSize(Math.min(24, readingFontSize + 1))} className="text-base text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
       </div>
       <button
         type="button"
@@ -1077,7 +1077,7 @@ export default function SearchPanel({
                 {/* 우: 글자크기 슬라이더 + 풀스크린 버튼 */}
                 <div className="flex items-center shrink-0 gap-1.5">
                   <div className="flex items-center">
-                    <span className="text-[10px] text-gray-400">가</span>
+                    <button onClick={() => setReadingFontSize(Math.max(14, readingFontSize - 1))} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
                     <input
                       type="range"
                       min={14}
@@ -1087,7 +1087,7 @@ export default function SearchPanel({
                       className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
                       title={`글자 크기 ${readingFontSize}px`}
                     />
-                    <span className="text-base text-gray-400">가</span>
+                    <button onClick={() => setReadingFontSize(Math.min(24, readingFontSize + 1))} className="text-base text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
                   </div>
                   <button
                     type="button"

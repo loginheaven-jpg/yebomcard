@@ -775,7 +775,7 @@ export default function FullscreenReader({
               gap: 12,
             }}
           >
-            <span style={{ fontSize: 11, opacity: 0.6, color: vars.muted }}>가</span>
+            <button onClick={() => setFontSize(Math.max(40, fontSize - 6))} style={{ fontSize: 11, opacity: 0.6, color: vars.muted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>가</button>
             <input
               type="range"
               min={40}
@@ -794,7 +794,7 @@ export default function FullscreenReader({
                 cursor: "pointer",
               }}
             />
-            <span style={{ fontSize: 17, opacity: 0.85, color: vars.muted }}>가</span>
+            <button onClick={() => setFontSize(Math.min(120, fontSize + 6))} style={{ fontSize: 17, opacity: 0.85, color: vars.muted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>가</button>
           </div>
 
           {/* 버전 버튼 — 폰트 슬라이더 우측 (자동 숨김) */}

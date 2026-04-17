@@ -609,15 +609,45 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
                 {/* 번역본 + 병기 */}
                 <div className="flex gap-1 justify-center">
-                  {(["nkrv", "rnksv"] as const).map((v) => (
+                  {(["nkrv", "rnksv"] as const).map((bv) => (
                     <button
-                      key={v}
-                      onClick={() => { setVersion(v); setPFontKey(defaultFont(v)); setTimeout(() => sendToPresent(presentIdx), 100); }}
+                      key={bv}
+                      onClick={async () => {
+                        setVersion(bv);
+                        setPFontKey(defaultFont(bv));
+                        // 즉석 re-fetch 후 전송
+                        const updated: ParsedItem[] = [];
+                        for (const item of parsedItems) {
+                          let q = supabase.from("bible_verses").select("*")
+                            .eq("version", bv).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                          if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+                          const { data } = await q.order("verse");
+                          if (data && data.length > 0) updated.push({ ...item, verses: data as BibleVerse[] });
+                        }
+                        setParsedItems(updated);
+                        // 새 데이터로 즉시 전송
+                        const newAll = updated.flatMap((it) => it.verses);
+                        const idx = Math.min(presentIdx, newAll.length - 1);
+                        const nv = newAll[idx];
+                        if (nv && presentChannel.current) {
+                          const fk = defaultFont(bv);
+                          const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
+                          presentChannel.current.postMessage({
+                            type: "verse",
+                            ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
+                            main: stripNotes(nv.text),
+                            sub: parallel ? altVerseMap.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`) : undefined,
+                            fontKey: fk, fontCss: font.css, fontWeight: font.weight,
+                            fontSize: pFontSize, theme: pTheme, parallel,
+                            subVersionLabel: bv === "nkrv" ? "새번역" : "개역개정",
+                          });
+                        }
+                      }}
                       className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                        version === v ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                        version === bv ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
                       }`}
                     >
-                      {v === "nkrv" ? "개역개정" : "새번역"}
+                      {bv === "nkrv" ? "개역개정" : "새번역"}
                     </button>
                   ))}
                   <button
@@ -690,13 +720,13 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
                   {/* 폰트 크기 */}
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-gray-400">가</span>
+                    <button onClick={() => { const s = Math.max(40, pFontSize - 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
                     <input
                       type="range" min={40} max={120} value={pFontSize}
                       onChange={(e) => { const s = Number(e.target.value); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }}
                       className="w-24 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
                     />
-                    <span className="text-sm text-gray-400">가</span>
+                    <button onClick={() => { const s = Math.min(120, pFontSize + 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-sm text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
                   </div>
                 </div>
               </div>
