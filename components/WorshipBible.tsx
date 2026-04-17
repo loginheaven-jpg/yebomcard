@@ -347,6 +347,32 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     setPresentActive(false);
   }
 
+  // 메인 창 키보드 + 프레젠테이션 창에서 키 전달 수신
+  useEffect(() => {
+    if (!presentActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); presentGo(-1); }
+      else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); presentGo(1); }
+      else if (e.key === "Escape") closePresentation();
+    };
+    window.addEventListener("keydown", onKey);
+
+    // 프레젠테이션 창에서 키 이벤트 수신
+    const ch = presentChannel.current;
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === "key") {
+        if (e.data.key === "ArrowLeft" || e.data.key === "PageUp") presentGo(-1);
+        else if (e.data.key === "ArrowRight" || e.data.key === "PageDown" || e.data.key === " ") presentGo(1);
+      }
+    };
+    ch?.addEventListener("message", onMsg);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      ch?.removeEventListener("message", onMsg);
+    };
+  });
+
   // ─── 풀스크린 데이터 생성 ───
   const fsVerses: FullscreenVerseItem[] = allVerses.map((v) => ({
     ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
@@ -542,17 +568,17 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                   <button
                     onClick={() => presentGo(-1)}
                     disabled={presentIdx === 0}
-                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                    className="flex-1 py-3 text-base font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                   >
                     ←
                   </button>
-                  <span className="flex-1 text-center text-sm text-gray-500">
+                  <span className="shrink-0 text-center text-sm text-gray-500 min-w-[60px]">
                     <b className="text-gray-900">{presentIdx + 1}</b> / {allVerses.length}
                   </span>
                   <button
                     onClick={() => presentGo(1)}
                     disabled={presentIdx >= allVerses.length - 1}
-                    className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                    className="flex-1 py-3 text-base font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
                   >
                     →
                   </button>

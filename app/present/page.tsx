@@ -48,7 +48,16 @@ export default function PresentPage() {
     }
     document.body.style.overflow = "hidden";
 
-    return () => ch.close();
+    // 키보드 이벤트 → 메인 창에 전달
+    const onKey = (e: KeyboardEvent) => {
+      if (["ArrowLeft", "ArrowRight", "PageUp", "PageDown", " "].includes(e.key)) {
+        e.preventDefault();
+        ch.postMessage({ type: "key", key: e.key });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => { ch.close(); window.removeEventListener("keydown", onKey); };
   }, []);
 
   // 폰트 자동 축소
