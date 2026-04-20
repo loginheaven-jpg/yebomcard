@@ -749,6 +749,37 @@ yebom-card/
 3. 반환된 public URL을 ScrapItem에 `imageUrl` 필드로 저장
 4. 스크랩 목록에서 이미지 썸네일 표시
 
+### 12.3 사용자 배경사진 클라우드 마이그레이션 (Supabase → Cloudflare R2)
+
+**현재 (Phase 1)**: Supabase Storage에 사용자 업로드 배경사진 저장
+- 버킷: `user-photos`, 메타데이터 테이블: `user_photos`
+- 무료 1GB 저장 + 2GB/월 egress
+- 예상 규모: 100명 × 5장 × 300KB = 150MB, 월 egress ~500MB → 무료 내 충분
+
+**향후 (Phase 3, 확장 시)**: Cloudflare R2로 마이그레이션
+- 트리거 조건:
+  - Supabase 무료 티어 초과 (1GB 저장 또는 2GB egress)
+  - 글로벌 사용자 증가로 CDN 필요
+  - 이미지 조회 빈도 상승
+
+**마이그레이션 이점**:
+- R2 무료 10GB (Supabase 대비 10배)
+- Egress 무료 무제한 (Supabase는 2GB 이후 $0.09/GB)
+- 전세계 Cloudflare edge CDN (읽기 지연 20~50ms)
+- 유료 확장 시 $0.015/GB (Supabase $0.021/GB 대비 저렴)
+
+**마이그레이션 방식**:
+1. yebomradio의 Cloudflare worker에 `/api/yebomcard/photos/*` 엔드포인트 추가
+   - POST: 업로드 (R2 저장 + URL 반환)
+   - GET: 사용자별 목록
+   - DELETE: 파일 삭제
+2. yebomcard API route가 yebomradio worker에 proxy (ADMIN_KEY Bearer 인증)
+3. 기존 Supabase의 `user_photos` 레코드는 그대로 유지
+4. 스키마 변경 없음 (`public_url` 필드에 Cloudflare URL 저장)
+5. 배치 스크립트로 기존 Supabase Storage 파일을 R2로 복사 후 URL 업데이트
+
+**인프라 공유**: yebomradio의 R2 버킷 `coachdb-files` 재사용, 경로는 `yebomcard/photos/{userId}/{uuid}.{ext}`
+
 ---
 
 ## 변경 이력

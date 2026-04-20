@@ -9,6 +9,7 @@ import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
 import WorshipBible from "@/components/WorshipBible";
+import CardBuilder from "@/components/CardBuilder";
 import type { BibleVerse, ViewMode } from "@/lib/types";
 
 export default function Home() {
@@ -21,6 +22,7 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showToolMenu, setShowToolMenu] = useState(false);
   const [showWorship, setShowWorship] = useState(false);
+  const [showCardBuilder, setShowCardBuilder] = useState(false);
 
   // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
   useEffect(() => {
@@ -216,6 +218,15 @@ export default function Home() {
               </svg>
               예배성경
             </button>
+            <button
+              onClick={() => { setShowToolMenu(false); setShowCardBuilder(true); }}
+              className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 border-t border-gray-100"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
+              </svg>
+              성경카드
+            </button>
           </div>
         )}
       </div>
@@ -223,6 +234,18 @@ export default function Home() {
       {/* 예배성경 패널 */}
       {showWorship && (
         <WorshipBible onClose={() => setShowWorship(false)} />
+      )}
+
+      {/* 성경카드 빌더 */}
+      {showCardBuilder && (
+        <CardBuilder
+          onClose={() => setShowCardBuilder(false)}
+          onStart={(verses) => {
+            setSelectedVerses(verses);
+            setView("card");
+            setShowCardBuilder(false);
+          }}
+        />
       )}
 
       {/* 토스트 */}

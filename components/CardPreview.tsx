@@ -125,7 +125,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [aiIllust, setAiIllust] = useState<AiBackground | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Upload state — 복수 이미지
+  // Upload state — 서버 연동 (Supabase Storage)
   interface UploadImage { id: string; dataUrl: string; }
   const [uploads, setUploads] = useState<UploadImage[]>([]);
   const [selectedUploadIdx, setSelectedUploadIdx] = useState(0);
@@ -133,6 +133,46 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
   const [showUploadPopup, setShowUploadPopup] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadMode = useRef<"as-is" | "remove-text">("as-is");
+
+  // 서버에서 사용자 사진 불러오기
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/photos");
+        if (!res.ok) return;
+        const { photos } = await res.json();
+        if (Array.isArray(photos) && photos.length > 0) {
+          setUploads(photos.map((p: { id: string; public_url: string }) => ({ id: p.id, dataUrl: p.public_url })));
+        }
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  // 이미지 리사이즈 (긴 변 1200px, JPEG 80%)
+  function resizeImage(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
+          else { w = Math.round((w * MAX) / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas fail")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error("toBlob fail"));
+        }, "image/jpeg", 0.8);
+      };
+      img.onerror = () => reject(new Error("image load fail"));
+      img.src = URL.createObjectURL(file);
+    });
+  }
 
   // Photo page + AI 검색어 캐시
   const photoPage = useRef(1);
@@ -280,25 +320,38 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
     fileInputRef.current?.click();
   }
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       alert("5MB 이하의 사진을 선택해 주세요");
+      e.target.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const id = `upload-${Date.now()}`;
 
+    // 같은 파일 재선택 허용
+    e.target.value = "";
+
+    setCleaningImage(true);
+    try {
+      // 1. 리사이즈 (긴 변 1200px, JPEG 80%)
+      let blob: Blob = file;
+      try {
+        blob = await resizeImage(file);
+      } catch { /* 리사이즈 실패 시 원본 사용 */ }
+
+      // 2. 글자지움 모드면 AI 편집
       if (pendingUploadMode.current === "remove-text") {
-        setCleaningImage(true);
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
         try {
           const base64 = dataUrl.split(",")[1];
           const mimeMatch = dataUrl.match(/data:([^;]+);/);
           const mediaType = mimeMatch?.[1] || "image/jpeg";
-
           const res = await fetch("/api/upload/clean", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -306,27 +359,32 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
           });
           if (res.ok) {
             const { data, media_type } = await res.json();
-            const cleanedUrl = `data:${media_type};base64,${data}`;
-            setUploads((prev) => [...prev, { id, dataUrl: cleanedUrl }]);
-            setSelectedUploadIdx(uploads.length);
-          } else {
-            setUploads((prev) => [...prev, { id, dataUrl }]);
-            setSelectedUploadIdx(uploads.length);
+            const b64 = atob(data);
+            const arr = new Uint8Array(b64.length);
+            for (let i = 0; i < b64.length; i++) arr[i] = b64.charCodeAt(i);
+            blob = new Blob([arr], { type: media_type });
           }
-        } catch {
-          setUploads((prev) => [...prev, { id, dataUrl }]);
-          setSelectedUploadIdx(uploads.length);
-        } finally {
-          setCleaningImage(false);
-        }
-      } else {
-        setUploads((prev) => [...prev, { id, dataUrl }]);
-        setSelectedUploadIdx(uploads.length);
+        } catch { /* 실패 시 원본 사용 */ }
       }
-    };
-    reader.readAsDataURL(file);
-    // input 초기화 (같은 파일 재선택 허용)
-    e.target.value = "";
+
+      // 3. 서버 업로드
+      const form = new FormData();
+      form.append("file", blob, `upload.${blob.type === "image/png" ? "png" : "jpg"}`);
+      const res = await fetch("/api/photos", { method: "POST", body: form });
+      if (res.ok) {
+        const { photo } = await res.json();
+        setUploads((prev) => {
+          const next = [...prev, { id: photo.id, dataUrl: photo.public_url }];
+          setSelectedUploadIdx(next.length - 1);
+          return next;
+        });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "업로드 실패");
+      }
+    } finally {
+      setCleaningImage(false);
+    }
   }
 
   // 3. AI — 수동 생성 (서브 토글 선택 후 "생성" 버튼)
@@ -729,8 +787,14 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
                     <img src={img.dataUrl} alt="" className="w-full h-full object-cover" />
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!confirm("이 사진을 삭제하시겠습니까?")) return;
+                      // 서버에서 삭제 (UUID가 아닌 경우 무시)
+                      if (img.id && img.id.length === 36) {
+                        try {
+                          await fetch(`/api/photos?id=${img.id}`, { method: "DELETE" });
+                        } catch { /* silent */ }
+                      }
                       setUploads((prev) => prev.filter((_, idx) => idx !== i));
                       setSelectedUploadIdx((prev) => Math.max(0, Math.min(prev, uploads.length - 2)));
                     }}
