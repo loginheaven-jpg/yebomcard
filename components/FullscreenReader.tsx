@@ -8,7 +8,8 @@ export interface FullscreenVerseItem {
   sub?: string;
 }
 
-type BibleVersion = "nkrv" | "rnksv";
+import { type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { getVersionLabel } from "@/lib/versions";
 
 interface JumpRef {
   book_abbr: string;
@@ -19,8 +20,10 @@ interface JumpRef {
 
 interface Props {
   verses: FullscreenVerseItem[];
-  version: BibleVersion;
-  onVersionChange: (v: BibleVersion) => void;
+  version: KoreanVersion;
+  enVersion?: EnglishVersion;
+  onVersionChange: (v: KoreanVersion) => void;
+  onEnVersionChange?: (v: EnglishVersion) => void;
   parallel: boolean;
   onParallelToggle: () => void;
   onOverscrollNext?: () => void;
@@ -36,7 +39,9 @@ interface Props {
 export default function FullscreenReader({
   verses,
   version,
+  enVersion,
   onVersionChange,
+  onEnVersionChange,
   parallel,
   onParallelToggle,
   onOverscrollNext,
@@ -47,7 +52,7 @@ export default function FullscreenReader({
   hideVersionButtons = false,
   onAddVerses,
 }: Props) {
-  const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
+  const subVersionLabel = enVersion ? getVersionLabel(enVersion) : "";
   const [idx, setIdx] = useState(0);
 
   // ─── 레퍼런스 필 바 (jumpMode) ───
@@ -140,7 +145,7 @@ export default function FullscreenReader({
   ] as const;
   type FontKey = typeof FONTS[number]["key"];
 
-  const defaultFontFor = (v: BibleVersion) => v === "nkrv" ? "noto-serif" as FontKey : "gowun-dodum" as FontKey;
+  const defaultFontFor = (v: KoreanVersion) => v === "nkrv" ? "noto-serif" as FontKey : "gowun-dodum" as FontKey;
   const [fontKey, setFontKey] = useState<FontKey>(() => {
     if (typeof window === "undefined") return defaultFontFor(version);
     return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFontFor(version);
@@ -805,12 +810,25 @@ export default function FullscreenReader({
               alignItems: "center",
             }}>
               <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7, marginRight: 4 }} />
-              <VersionPill vars={vars} active={version === "nkrv"} onClick={() => onVersionChange("nkrv")}>
-                개역개정
-              </VersionPill>
-              <VersionPill vars={vars} active={version === "rnksv"} onClick={() => onVersionChange("rnksv")}>
-                새번역
-              </VersionPill>
+              <select
+                value={version}
+                onChange={(e) => onVersionChange(e.target.value as KoreanVersion)}
+                style={{ background: "transparent", border: `1px solid ${vars.ctrlBorder}`, color: vars.muted, borderRadius: 999, padding: "4px 8px", fontSize: 12, outline: "none" }}
+              >
+                {(["nkrv", "rnksv", "easy"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
+              </select>
+              {onEnVersionChange && (
+                <select
+                  value={enVersion}
+                  onChange={(e) => {
+                    onEnVersionChange(e.target.value as EnglishVersion);
+                    if (!parallel) onParallelToggle();
+                  }}
+                  style={{ background: "transparent", border: `1px solid ${vars.ctrlBorder}`, color: vars.muted, borderRadius: 999, padding: "4px 8px", fontSize: 12, outline: "none" }}
+                >
+                  {(["kjv", "nirv", "gnt"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
+                </select>
+              )}
               <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
                 병기
               </VersionPill>

@@ -11,6 +11,7 @@ import {
 } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
 import type { BibleVerse } from "@/lib/types";
+import { getVersionLabel } from "@/lib/versions";
 
 interface ScrapListProps {
   onBack: () => void;
@@ -62,8 +63,7 @@ export default function ScrapList({
     onScrapCountChange(myScraps.length - 1);
   }
 
-  const versionLabel = (v: string) =>
-    v === "nkrv" ? "개역개정" : v === "rnksv" ? "새번역" : v;
+  const versionLabel = (v: string) => getVersionLabel(v as any);
 
   const tabClass = (t: ScrapTab) =>
     `flex-1 py-1.5 text-xs font-medium text-center rounded-lg transition-colors ${
@@ -138,7 +138,13 @@ export default function ScrapList({
                     </svg>
                   </button>
                 </div>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{scrap.preview}</p>
+                {scrap.image_url ? (
+                  <div className="mt-2 relative w-full h-32 rounded-lg overflow-hidden bg-gray-100">
+                    <img src={scrap.image_url} alt="카드" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{scrap.preview}</p>
+                )}
                 <p className="text-xs text-gray-400 mt-2">
                   {versionLabel(scrap.version)} · {formatScrapTime(scrap.created_at)}
                 </p>
@@ -172,7 +178,13 @@ export default function ScrapList({
                     {scrap.scrap_count}명
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1 line-clamp-2">{scrap.preview}</p>
+                {scrap.image_url ? (
+                  <div className="mt-2 relative w-full h-32 rounded-lg overflow-hidden bg-gray-100">
+                    <img src={scrap.image_url} alt="카드" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-1 line-clamp-2">{scrap.preview}</p>
+                )}
                 <p className="text-xs text-gray-400 mt-2">
                   {versionLabel(scrap.version)} · {formatScrapTime(scrap.latest_at)}
                 </p>

@@ -10,12 +10,14 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
 import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
-import type { BibleVerse, ViewMode } from "@/lib/types";
+import type { BibleVerse, ViewMode, KoreanVersion, EnglishVersion } from "@/lib/types";
 
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
+  const [version, setVersion] = useState<KoreanVersion>("rnksv");
+  const [enVersion, setEnVersion] = useState<EnglishVersion>("kjv");
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [scrapCount, setScrapCount] = useState(0);
   const [showScrap, setShowScrap] = useState(false);
@@ -93,13 +95,13 @@ export default function Home() {
   const handleCreateCard = useCallback(async () => {
     if (!requireAuth()) return;
     if (selectedVerses.length > 0) {
-      await addScrapToServer(selectedVerses, selectedVerses[0].version as "nkrv" | "rnksv");
+      await addScrapToServer(selectedVerses, version);
       const scraps = await fetchMyScraps();
       setScrapCount(scraps.length);
       showToast("스크랩에 저장되었습니다");
     }
     setView("card");
-  }, [selectedVerses, showToast, requireAuth]);
+  }, [selectedVerses, version, showToast, requireAuth]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
@@ -141,11 +143,15 @@ export default function Home() {
       {view === "card" ? (
         <CardPreview
           verses={selectedVerses}
+          version={version}
+          enVersion={enVersion}
           onBack={handleBackToDisplay}
         />
       ) : view === "display" ? (
         <VerseDisplay
           verses={selectedVerses}
+          version={version}
+          enVersion={enVersion}
           onBack={handleBack}
           onAddMore={handleAddMore}
           onRemoveVerse={handleRemoveVerse}
@@ -156,6 +162,10 @@ export default function Home() {
       ) : (
         <SearchPanel
           selectedVerses={selectedVerses}
+          version={version}
+          enVersion={enVersion}
+          onVersionChange={setVersion}
+          onEnVersionChange={setEnVersion}
           onToggleVerse={handleToggleVerse}
           onConfirm={handleConfirm}
           isAddingMore={isAddingMore}

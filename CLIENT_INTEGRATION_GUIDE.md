@@ -319,7 +319,110 @@ const imgSrc = `data:${data.media_type};base64,${data.data}`;
 
 ---
 
-## 5. STT API — 음성 → 텍스트
+## 5. Image Edit API — 이미지 텍스트 제거
+
+이미지에서 텍스트/워터마크/간판 등을 자동 탐지하여 제거하고 주변 배경으로 채웁니다.
+
+### 엔드포인트
+
+```
+POST {AI_GATEWAY_URL}/api/ai/image/edit
+Content-Type: application/json
+```
+
+### 사용 가능한 provider 별칭
+
+| 별칭 | 엔진 | 특징 |
+|------|------|------|
+| `imagen` | Imagen 3 (Vertex AI) | 고품질, 원본 크기 유지 **(기본값)** |
+| `dall-e` | DALL-E 2 (OpenAI) | 1024x1024 정사각형 출력 |
+
+### 기본 호출 (provider 미지정 → 기본값 imagen)
+
+```typescript
+const imageBase64 = await fileToBase64(photoFile);
+
+const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image/edit`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    image: imageBase64,
+    media_type: 'image/jpeg',
+    edit_type: 'remove_text',
+    caller: 'yebom-card:upload'
+  })
+});
+
+const data = await res.json();
+// data.data = 편집된 이미지 (base64)
+// data.regions_found = 탐지된 텍스트 영역 수 (0이면 글자 없음 → 원본 반환)
+// data.provider = 실제 사용된 provider ("imagen" 또는 "dall-e")
+```
+
+### 특정 provider 지정
+
+```typescript
+// DALL-E 사용
+body: JSON.stringify({
+  image: imageBase64,
+  media_type: 'image/jpeg',
+  edit_type: 'remove_text',
+  provider: 'dall-e'    // ← provider 지정
+})
+
+// Imagen 사용 (기본값이므로 생략 가능)
+body: JSON.stringify({
+  image: imageBase64,
+  media_type: 'image/jpeg',
+  edit_type: 'remove_text',
+  provider: 'imagen'
+})
+```
+
+### 전체 파라미터
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+|------|------|------|--------|------|
+| `image` | string | **O** | - | 원본 이미지 (base64) |
+| `media_type` | string | **O** | - | `image/jpeg` 또는 `image/png` |
+| `edit_type` | string | X | `remove_text` | 편집 유형 (현재 `remove_text`만) |
+| `provider` | string | X | 기본값 | `imagen` 또는 `dall-e` |
+| `mask` | string | X | - | 수동 마스크 (base64 PNG). 제공 시 자동 탐지 건너뜀 |
+| `caller` | string | X | - | 호출자 식별 |
+
+### 응답
+
+```json
+{
+  "data": "iVBORw0KGgoAAAA...",
+  "media_type": "image/png",
+  "edit_type": "remove_text",
+  "regions_found": 3,
+  "provider": "imagen",
+  "model": "imagen-3.0-capability-001",
+  "elapsed_ms": 8500
+}
+```
+
+> `regions_found: 0`이면 텍스트가 없어 원본이 그대로 반환됩니다.
+
+### 내부 파이프라인
+1. **Gemini Vision** → 텍스트 영역 bounding box 좌표 탐지
+2. **PIL** → 마스크 이미지 생성
+3. **Imagen 3 또는 DALL-E 2** → 마스크 기반 inpainting (텍스트 제거)
+
+### provider 비교
+
+| | Imagen 3 | DALL-E 2 |
+|--|----------|----------|
+| 품질 | 높음 | 보통 |
+| 출력 크기 | 원본 유지 | 1024x1024 고정 |
+| 비용 | ~$0.04/장 | ~$0.04/장 |
+| 인프라 | Vertex AI (서비스 계정) | API Key |
+
+---
+
+## 6. STT API — 음성 → 텍스트
 
 ### 엔드포인트
 
@@ -399,7 +502,7 @@ const res = await fetch(`${AI_GATEWAY_URL}/api/ai/stt`, {
 
 ---
 
-## 6. 재사용 유틸 함수 (TypeScript)
+## 7. 재사용 유틸 함수 (TypeScript)
 
 서비스 코드에 복사하여 사용하세요.
 
@@ -530,7 +633,7 @@ const { text } = await callSTT(audioBlob, {
 
 ---
 
-## 7. Python 연동
+## 8. Python 연동
 
 ```python
 import requests
@@ -587,7 +690,7 @@ print(result["text"])
 
 ---
 
-## 8. cURL 예시
+## 9. cURL 예시
 
 ### Chat
 
@@ -619,7 +722,7 @@ curl -X POST https://ai-gateway20251125.up.railway.app/api/ai/stt \
 
 ---
 
-## 9. 에러 처리
+## 10. 에러 처리
 
 ### Chat 에러
 
@@ -642,7 +745,7 @@ curl -X POST https://ai-gateway20251125.up.railway.app/api/ai/stt \
 
 ---
 
-## 10. 요약
+## 11. 요약
 
 | 기능 | 엔드포인트 | provider 미지정 시 |
 |------|-----------|-------------------|
@@ -650,6 +753,7 @@ curl -X POST https://ai-gateway20251125.up.railway.app/api/ai/stt \
 | 스트리밍 | `POST /api/ai/chat/stream` | 기본 Chat 엔진 |
 | 음성인식 | `POST /api/ai/stt` | 기본 STT 엔진 (whisper) |
 | 이미지 생성 | `POST /api/ai/image` | 기본 Image 엔진 (dall-e) |
+| 이미지 편집 | `POST /api/ai/image/edit` | Gemini 탐지 + DALL-E inpainting |
 
 **원칙: provider를 지정하지 않으면 Gateway 기본값이 적용됩니다.**
 기본값은 Admin 대시보드에서 언제든 변경할 수 있으며, 클라이언트 코드 수정은 불필요합니다.

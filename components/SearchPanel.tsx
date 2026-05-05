@@ -4,11 +4,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
-import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
+import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
+import { getVersionLabel } from "@/lib/versions";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
+  version: KoreanVersion;
+  enVersion: EnglishVersion;
+  onVersionChange: (v: KoreanVersion) => void;
+  onEnVersionChange: (v: EnglishVersion) => void;
   onToggleVerse: (verse: BibleVerse) => void;
   onConfirm: () => void;
   isAddingMore: boolean;
@@ -26,12 +31,15 @@ function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
 
 export default function SearchPanel({
   selectedVerses,
+  version,
+  enVersion,
+  onVersionChange: setVersion,
+  onEnVersionChange: setEnVersion,
   onToggleVerse,
   onConfirm,
   isAddingMore,
 }: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>("search");
-  const [version, setVersion] = useState<BibleVersion>("rnksv");
   const [parallel, setParallel] = useState(false);
 
   // Scroll position preservation
@@ -141,8 +149,8 @@ export default function SearchPanel({
       }
     }
 
-    // 병기 ON: 부 버전 일괄 조회
-    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    // 병기 ON: 영문 버전 조회
+    const altVersion = enVersion;
     let altMap = new Map<string, string>();
     if (parallel) {
       try {
@@ -174,7 +182,7 @@ export default function SearchPanel({
           .map((v) => altMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) || "")
           .filter(Boolean)
           .join(" ");
-        if (altText) out += `\n${altText} (${VERSION_LABEL[altVersion]})`;
+        if (altText) out += `\n${altText} (${getVersionLabel(altVersion)})`;
       }
       return out;
     });
@@ -420,7 +428,7 @@ export default function SearchPanel({
   // 병기 모드: 부 버전 로드
   useEffect(() => {
     if (!parallel || !chapter) { setBrowseVersesAlt([]); return; }
-    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    const altVersion = enVersion;
     supabase
       .from("bible_verses")
       .select("*")
@@ -506,7 +514,7 @@ export default function SearchPanel({
       setTopicResultsAlt([]);
       return;
     }
-    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    const altVersion = enVersion;
 
     // 검색 결과 부 버전
     if (searchResults.length > 0) {
@@ -689,9 +697,8 @@ export default function SearchPanel({
     return [];
   }, [mode, browseStep, searchResultsAlt, browseVersesAlt, topicResultsAlt]);
 
-  const VERSION_NAME: Record<string, string> = { nkrv: "개역개정", rnksv: "새번역", kjv: "KJV" };
-  const mainVersionLabel = VERSION_NAME[version] || version;
-  const subVersionLabel = version === "nkrv" ? "새번역" : "개역개정";
+  const mainVersionLabel = getVersionLabel(version);
+  const subVersionLabel = getVersionLabel(enVersion);
 
   const fullscreenVerses: FullscreenVerseItem[] = useMemo(() => {
     return visibleMain.map((v) => {
@@ -755,7 +762,9 @@ export default function SearchPanel({
         <FullscreenReader
           verses={fullscreenVerses}
           version={version}
+          enVersion={enVersion}
           onVersionChange={setVersion}
+          onEnVersionChange={setEnVersion}
           parallel={parallel}
           onParallelToggle={() => setParallel((p) => !p)}
           onOverscrollNext={
@@ -795,46 +804,36 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* Version Toggle */}
-      <div className="flex justify-center gap-1.5 mb-4">
-        {([["nkrv", "개역개정"], ["rnksv", "새번역"]] as const).map(([v, label]) => (
-          <button
-            key={v}
-            onClick={() => {
-              if (scrollRef.current) {
-                if (mode === "chapter") {
-                  const btns = scrollRef.current.querySelectorAll("button");
-                  const rect = scrollRef.current.getBoundingClientRect();
-                  for (const btn of btns) {
-                    if (btn.getBoundingClientRect().top >= rect.top) {
-                      const m = btn.textContent?.match(/(\d+)절/);
-                      if (m) setRememberedVerse(parseInt(m[1]));
-                      break;
-                    }
-                  }
-                }
-                savedScroll.current = scrollRef.current.scrollTop;
-              }
-              if (parallel) {
-                setVersion(v); // 병기 유지, 주/부 교체
-              } else {
-                setParallel(false);
-                setVersion(v);
-              }
-            }}
-            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              parallel
-                ? version === v
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-300 text-gray-600 hover:bg-gray-400"
-                : version === v
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      {/* Version Selectors */}
+      <div className="flex justify-center items-center gap-2 mb-4">
+        <select
+          value={version}
+          onChange={(e) => {
+            if (scrollRef.current) {
+              savedScroll.current = scrollRef.current.scrollTop;
+            }
+            setVersion(e.target.value as KoreanVersion);
+          }}
+          className="px-3.5 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+        >
+          {(["nkrv", "rnksv", "easy"] as const).map((v) => (
+            <option key={v} value={v}>{getVersionLabel(v)}</option>
+          ))}
+        </select>
+
+        <select
+          value={enVersion}
+          onChange={(e) => {
+            if (scrollRef.current) savedScroll.current = scrollRef.current.scrollTop;
+            setEnVersion(e.target.value as EnglishVersion);
+            if (!parallel) setParallel(true);
+          }}
+          className="px-3.5 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+        >
+          {(["kjv", "nirv", "gnt"] as const).map((v) => (
+            <option key={v} value={v}>{getVersionLabel(v)}</option>
+          ))}
+        </select>
         <button
           onClick={() => setParallel(!parallel)}
           className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${

@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse, type BilingualVerse } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BilingualVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
+  version: KoreanVersion;
+  enVersion: EnglishVersion;
   onBack: () => void;
   onAddMore: () => void;
   onRemoveVerse: (verse: BibleVerse) => void;
@@ -109,6 +111,8 @@ function formatVerseRange(verses: BibleVerse[]): string {
 
 export default function VerseDisplay({
   verses,
+  version,
+  enVersion,
   onBack,
   onAddMore,
   onRemoveVerse,
@@ -121,7 +125,8 @@ export default function VerseDisplay({
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [copiedType, setCopiedType] = useState<"link" | "text" | null>(null);
   const [showFullscreen, setShowFullscreen] = useState(false);
-  const [fsVersion, setFsVersion] = useState<"nkrv" | "rnksv">(verses[0]?.version as "nkrv" | "rnksv" || "nkrv");
+  const [fsVersion, setFsVersion] = useState<KoreanVersion>(version);
+  const [fsEnVersion, setFsEnVersion] = useState<EnglishVersion>(enVersion);
   const [fsParallel, setFsParallel] = useState(false);
 
   useEffect(() => {
@@ -154,7 +159,7 @@ export default function VerseDisplay({
         supabase
           .from("bible_verses")
           .select("*")
-          .eq("version", "kjv")
+          .eq("version", enVersion)
           .eq("book_code", ref.bookCode)
           .eq("chapter", ref.chapter)
           .in("verse", ref.verseNums)
@@ -310,7 +315,7 @@ export default function VerseDisplay({
           <button
             onClick={() => {
               if (requireAuth && !requireAuth()) return;
-              addScrapToServer(verses, verses[0].version as "nkrv" | "rnksv");
+              addScrapToServer(verses, version);
               onScrapSaved?.();
               setShowShareOptions(true);
             }}
@@ -328,7 +333,7 @@ export default function VerseDisplay({
                 const refsParam = verses
                   .map((v) => `${v.book_code}.${v.chapter}.${v.verse}`)
                   .join(",");
-                const url = `${window.location.origin}/share?v=${verses[0].version}&r=${refsParam}`;
+                const url = `${window.location.origin}/share?v=${version}&ev=${enVersion}&r=${refsParam}`;
                 navigator.clipboard.writeText(url);
                 setCopiedType("link");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
@@ -404,7 +409,7 @@ export default function VerseDisplay({
         <button
           onClick={async () => {
             if (requireAuth && !requireAuth()) return;
-            await addScrapToServer(verses, verses[0].version as "nkrv" | "rnksv");
+            await addScrapToServer(verses, version);
             onScrapSaved?.();
           }}
           className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center"
@@ -435,7 +440,6 @@ export default function VerseDisplay({
           return a.verse - b.verse;
         });
         const mainVersion = fsVersion;
-        const altVersion = mainVersion === "nkrv" ? "rnksv" : "nkrv";
         const fsVerses: FullscreenVerseItem[] = sorted.map((v) => {
           const mainText = stripNotes(v.version === mainVersion
             ? v.text
@@ -459,7 +463,9 @@ export default function VerseDisplay({
           <FullscreenReader
             verses={fsVerses}
             version={fsVersion}
+            enVersion={fsEnVersion}
             onVersionChange={setFsVersion}
+            onEnVersionChange={setFsEnVersion}
             parallel={fsParallel}
             onParallelToggle={() => setFsParallel(!fsParallel)}
             onClose={() => setShowFullscreen(false)}

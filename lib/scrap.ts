@@ -13,6 +13,7 @@ export interface ServerScrap {
   version: string;
   reference: string;
   preview: string;
+  image_url?: string;
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ export interface CommunityScrap {
   version: string;
   reference: string;
   preview: string;
+  image_url?: string;
   scrap_count: number;
   latest_at: string;
 }
@@ -52,7 +54,8 @@ export async function fetchCommunityScraps(): Promise<CommunityScrap[]> {
 
 export async function addScrapToServer(
   verses: BibleVerse[],
-  version: BibleVersion
+  version: BibleVersion,
+  imageUrl?: string
 ): Promise<boolean> {
   const base = verses[0];
   // 같은 책+장의 절만 필터 → 절 번호순 정렬
@@ -80,6 +83,7 @@ export async function addScrapToServer(
           .map((v) => stripNotes(v.text))
           .join(" ")
           .slice(0, 40),
+        image_url: imageUrl,
       }),
     });
     return res.ok;

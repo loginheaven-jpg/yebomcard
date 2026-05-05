@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { parseReference, type ParsedReference } from "@/lib/parseReference";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse, type BibleVersion } from "@/lib/types";
+import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { getVersionLabel } from "@/lib/versions";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
 interface WorshipBibleProps {
@@ -63,7 +64,8 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [version, setVersion] = useState<BibleVersion>("rnksv");
+  const [version, setVersion] = useState<KoreanVersion>("rnksv");
+  const [enVersion, setEnVersion] = useState<EnglishVersion>("kjv");
   const [parallel, setParallel] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [altVerseMap, setAltVerseMap] = useState<Map<string, string>>(new Map());
@@ -82,7 +84,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     { key: "gowun-dodum", label: "돋움" }, { key: "gothic-a1", label: "Gothic" },
     { key: "ibm-plex", label: "Plex" },
   ];
-  const defaultFont = (v: BibleVersion): FontKey => v === "nkrv" ? "noto-serif" : "gowun-dodum";
+  const defaultFont = (v: KoreanVersion): FontKey => v === "nkrv" ? "noto-serif" : "gowun-dodum";
   const [pFontKey, setPFontKey] = useState<FontKey>(() => {
     if (typeof window === "undefined") return defaultFont(version);
     return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFont(version);
@@ -100,7 +102,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   // 병기: parallel 토글 시 alt 버전 fetch
   useEffect(() => {
     if (!parallel || parsedItems.length === 0) { setAltVerseMap(new Map()); return; }
-    const altVersion = version === "nkrv" ? "rnksv" : "nkrv";
+    const altVersion = enVersion;
     (async () => {
       const map = new Map<string, string>();
       for (const item of parsedItems) {
@@ -205,7 +207,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   }
 
   // ─── 버전 변경 시 re-fetch ───
-  async function refetchAllItems(newVersion: BibleVersion) {
+  async function refetchAllItems(newVersion: KoreanVersion) {
     setVersion(newVersion);
     if (parsedItems.length === 0) return;
     const updated: ParsedItem[] = [];
@@ -285,7 +287,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       sub: par ? aMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
       fontKey: fk, fontCss: font.css, fontWeight: font.weight,
       fontSize: fs, theme: th, parallel: par,
-      subVersionLabel: version === "nkrv" ? "새번역" : "개역개정",
+      subVersionLabel: getVersionLabel(enVersion),
     });
   }
 
@@ -608,55 +610,97 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                 </div>
 
                 {/* 번역본 + 병기 */}
-                <div className="flex gap-1 justify-center">
-                  {(["nkrv", "rnksv"] as const).map((bv) => (
-                    <button
-                      key={bv}
-                      onClick={async () => {
-                        setVersion(bv);
-                        setPFontKey(defaultFont(bv));
-                        // 즉석 re-fetch 후 전송
-                        const updated: ParsedItem[] = [];
-                        for (const item of parsedItems) {
-                          let q = supabase.from("bible_verses").select("*")
-                            .eq("version", bv).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
-                          if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
-                          const { data } = await q.order("verse");
-                          if (data && data.length > 0) updated.push({ ...item, verses: data as BibleVerse[] });
+                <div className="flex gap-2 justify-center items-center">
+                  <select
+                    value={version}
+                    onChange={async (e) => {
+                      const bv = e.target.value as KoreanVersion;
+                      setVersion(bv);
+                      setPFontKey(defaultFont(bv));
+                      // 즉석 re-fetch 후 전송
+                      const updated: ParsedItem[] = [];
+                      for (const item of parsedItems) {
+                        let q = supabase.from("bible_verses").select("*")
+                          .eq("version", bv).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                        if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+                        const { data } = await q.order("verse");
+                        if (data && data.length > 0) updated.push({ ...item, verses: data as BibleVerse[] });
+                      }
+                      setParsedItems(updated);
+                      // 새 데이터로 즉시 전송
+                      const newAll = updated.flatMap((it) => it.verses);
+                      const idx = Math.min(presentIdx, newAll.length - 1);
+                      const nv = newAll[idx];
+                      if (nv && presentChannel.current) {
+                        const fk = defaultFont(bv);
+                        const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
+                        presentChannel.current.postMessage({
+                          type: "verse",
+                          ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
+                          main: stripNotes(nv.text),
+                          sub: parallel ? altVerseMap.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`) : undefined,
+                          fontKey: fk, fontCss: font.css, fontWeight: font.weight,
+                          fontSize: pFontSize, theme: pTheme, parallel,
+                          subVersionLabel: getVersionLabel(enVersion),
+                        });
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    {(["nkrv", "rnksv", "easy"] as const).map((v) => (
+                      <option key={v} value={v}>{getVersionLabel(v)}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={enVersion}
+                    onChange={async (e) => {
+                      const ev = e.target.value as EnglishVersion;
+                      setEnVersion(ev);
+                      
+                      // 즉석 re-fetch for English version
+                      const map = new Map<string, string>();
+                      for (const item of parsedItems) {
+                        let q = supabase.from("bible_verses").select("*")
+                          .eq("version", ev).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                        if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+                        const { data } = await q.order("verse");
+                        if (data) {
+                          for (const v of data) map.set(`${v.book_code}-${v.chapter}-${v.verse}`, v.text);
                         }
-                        setParsedItems(updated);
-                        // 새 데이터로 즉시 전송
-                        const newAll = updated.flatMap((it) => it.verses);
-                        const idx = Math.min(presentIdx, newAll.length - 1);
-                        const nv = newAll[idx];
-                        if (nv && presentChannel.current) {
-                          const fk = defaultFont(bv);
-                          const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
-                          presentChannel.current.postMessage({
-                            type: "verse",
-                            ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
-                            main: stripNotes(nv.text),
-                            sub: parallel ? altVerseMap.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`) : undefined,
-                            fontKey: fk, fontCss: font.css, fontWeight: font.weight,
-                            fontSize: pFontSize, theme: pTheme, parallel,
-                            subVersionLabel: bv === "nkrv" ? "새번역" : "개역개정",
-                          });
-                        }
-                      }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                        version === bv ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
-                      }`}
-                    >
-                      {bv === "nkrv" ? "개역개정" : "새번역"}
-                    </button>
-                  ))}
+                      }
+                      setAltVerseMap(map);
+                      
+                      const newParallel = true;
+                      setParallel(newParallel);
+
+                      const nv = allVerses[presentIdx];
+                      if (nv && presentChannel.current) {
+                        const font = FONTS_MAP[pFontKey] || FONTS_MAP["noto-serif"];
+                        presentChannel.current.postMessage({
+                          type: "verse",
+                          ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
+                          main: stripNotes(nv.text),
+                          sub: map.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`),
+                          fontKey: pFontKey, fontCss: font.css, fontWeight: font.weight,
+                          fontSize: pFontSize, theme: pTheme, parallel: newParallel,
+                          subVersionLabel: getVersionLabel(ev),
+                        });
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    {(["kjv", "nirv", "gnt"] as const).map((v) => (
+                      <option key={v} value={v}>{getVersionLabel(v)}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={async () => {
                       const newParallel = !parallel;
                       setParallel(newParallel);
                       if (newParallel && altVerseMap.size === 0) {
                         // 즉석 fetch
-                        const altV = version === "nkrv" ? "rnksv" : "nkrv";
+                        const altV = enVersion;
                         const map = new Map<string, string>();
                         for (const item of parsedItems) {
                           let q = supabase.from("bible_verses").select("*")
@@ -746,7 +790,9 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
         <FullscreenReader
           verses={fsVerses}
           version={version}
+          enVersion={enVersion}
           onVersionChange={refetchAllItems}
+          onEnVersionChange={setEnVersion}
           parallel={parallel}
           onParallelToggle={() => setParallel(!parallel)}
           onClose={() => setShowFullscreen(false)}

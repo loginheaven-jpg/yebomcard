@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { findGradients, type GradientPreset } from "@/lib/gradients";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse } from "@/lib/types";
+import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { addScrapToServer } from "@/lib/scrap";
 
 /**
  * 슬라이더 값(0~100) → 흰→주조색→검 그라데이션 상의 색상
@@ -92,6 +93,8 @@ interface AiBackground {
 
 interface CardPreviewProps {
   verses: BibleVerse[];
+  version: KoreanVersion;
+  enVersion: EnglishVersion;
   onBack: () => void;
 }
 
@@ -105,7 +108,7 @@ const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
   { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum)" },
 ];
 
-export default function CardPreview({ verses, onBack }: CardPreviewProps) {
+export default function CardPreview({ verses, version, enVersion, onBack }: CardPreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
   const [selectedFont, setSelectedFont] = useState<FontChoice>("gowun-dodum");
@@ -241,7 +244,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
         supabase
           .from("bible_verses")
           .select("text")
-          .eq("version", "kjv")
+          .eq("version", enVersion)
           .eq("book_code", v.book_code)
           .eq("chapter", v.chapter)
           .eq("verse", v.verse)
@@ -256,7 +259,7 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       );
     }
     loadEnglish();
-  }, [verses]);
+  }, [verses, enVersion]);
 
   // 1. Gradients — 5개
   useEffect(() => {
@@ -542,6 +545,53 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       setDownloading(false);
     }
   };
+
+  // PNG 저장 및 스크랩 연동
+  const handleScrapAndDownload = async () => {
+    if (!cardRef.current) return;
+    setDownloading(true);
+    try {
+      await document.fonts.ready;
+      const el = cardRef.current;
+      const ratio = 1080 / el.offsetWidth;
+      const dataUrl = await toPng(el, {
+        pixelRatio: ratio,
+        cacheBust: true,
+      });
+      
+      // 1. DataURL을 Blob으로 변환
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      
+      // 2. Storage 업로드
+      const form = new FormData();
+      form.append("file", blob, `card.png`);
+      const uploadRes = await fetch("/api/scrap/image", { method: "POST", body: form });
+      
+      let imageUrl = undefined;
+      if (uploadRes.ok) {
+        const data = await uploadRes.json();
+        imageUrl = data.url;
+      }
+      
+      // 3. 서버 스크랩 저장 (이미지 URL 포함)
+      await addScrapToServer(verses, version, imageUrl);
+      
+      // 4. 로컬 다운로드도 병행 실행
+      const link = document.createElement("a");
+      link.download = `yebom-card-${firstVerse.book_code}${firstVerse.chapter}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      alert("카드가 갤러리에 저장되고 앱 스크랩에도 추가되었습니다!");
+    } catch (err) {
+      console.error("Scrap & Download failed:", err);
+      alert("저장 중 오류가 발생했습니다.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
 
   const tabClass = (type: CardType) =>
     `flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
@@ -977,13 +1027,20 @@ export default function CardPreview({ verses, onBack }: CardPreviewProps) {
       </div>
 
       {/* Download */}
-      <div className="mt-5">
+      <div className="mt-5 flex gap-2">
+        <button
+          onClick={handleScrapAndDownload}
+          disabled={isLoading || downloading}
+          className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] disabled:opacity-50 transition-colors"
+        >
+          {downloading ? "처리 중..." : "저장 및 앱 스크랩"}
+        </button>
         <button
           onClick={handleDownload}
           disabled={isLoading || downloading}
-          className="w-full py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] disabled:opacity-50 transition-colors"
+          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
         >
-          {downloading ? "다운로드 중..." : "PNG 다운로드"}
+          {downloading ? "처리 중..." : "그냥 다운로드만"}
         </button>
       </div>
     </div>

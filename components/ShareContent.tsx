@@ -13,6 +13,7 @@ export default function ShareContent() {
   const [loading, setLoading] = useState(true);
 
   const version = searchParams.get("v") || "nkrv";
+  const enVersion = searchParams.get("ev") || "kjv";
   const refs = searchParams.get("r") || "";
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function ShareContent() {
         supabase
           .from("bible_verses")
           .select("*")
-          .eq("version", "kjv")
+          .eq("version", enVersion)
           .eq("book_code", p.bookCode)
           .eq("chapter", p.chapter)
           .eq("verse", p.verse)
@@ -62,7 +63,7 @@ export default function ShareContent() {
       setLoading(false);
     }
     load();
-  }, [refs, version]);
+  }, [refs, version, enVersion]);
 
   if (loading) {
     return (

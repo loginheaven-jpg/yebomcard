@@ -177,6 +177,77 @@ export const config = {
 }
 ```
 
+### 5.2.1 기능별 로그인 미들웨어 (비차단형)
+
+예봄라디오, 예봄성경처럼 **시작 시 로그인 불필요 + 특정 기능에서만 로그인**하는 서비스는
+위 미들웨어를 그대로 사용하면 **모든 페이지가 차단**되어 비로그인 사용자가 접근할 수 없다.
+
+이 경우 미들웨어는 **유효하지 않은 쿠키 정리만** 수행하고, 로그인 리다이렉트는 하지 않는다.
+로그인 필요 시점은 클라이언트의 `useSession().requireAuth()`가 처리한다.
+
+```typescript
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { unsealData } from 'iron-session'
+
+const COOKIE_NAME = 'saint_record_session'
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // 정적 파일, API 무시
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.includes('.') ||
+    pathname.startsWith('/api/')
+  ) {
+    return NextResponse.next()
+  }
+
+  // SSO 쿠키가 있으면 유효성만 검증 (유효하지 않으면 삭제)
+  // 쿠키가 없어도 페이지 접근은 허용 (비로그인 사용 가능)
+  const sessionCookie = request.cookies.get(COOKIE_NAME)
+  if (sessionCookie) {
+    try {
+      const session = await unsealData(sessionCookie.value, {
+        password: process.env.SESSION_SECRET!,
+      }) as { isLoggedIn?: boolean }
+      if (session?.isLoggedIn) {
+        return NextResponse.next() // 유효한 세션 → 통과
+      }
+    } catch {
+      // 복호화 실패
+    }
+    // 유효하지 않은 쿠키 정리 (페이지는 차단하지 않음)
+    const response = NextResponse.next()
+    response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/' })
+    const domain = process.env.COOKIE_DOMAIN
+    if (domain) response.cookies.set(COOKIE_NAME, '', { maxAge: 0, path: '/', domain })
+    return response
+  }
+
+  // 쿠키 없음 → 그래도 페이지 접근 허용 (비로그인 기능 사용 가능)
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}
+```
+
+**이 패턴에서 로그인 흐름:**
+```
+사용자 → 비로그인으로 검색/브라우징 (자유)
+  ↓
+카드 생성 버튼 클릭
+  ↓
+useSession().requireAuth() 호출
+  ├─ 로그인 상태 → true 반환 → 기능 실행
+  └─ 비로그인 → saint.yebom.org/login?from=bible 리다이렉트
+                → 로그인 후 돌아옴 → 기능 실행
+```
+
 ---
 
 ### 5.3 세션 API (`app/api/auth/session/route.ts`)
