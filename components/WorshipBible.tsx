@@ -98,6 +98,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     return (localStorage.getItem("fullscreenTheme") as "light" | "dark") || "light";
   });
   const [showPFontPicker, setShowPFontPicker] = useState(false);
+  const [pendingPresentJump, setPendingPresentJump] = useState<number | null>(null);
 
   // 병기: parallel 토글 시 alt 버전 fetch
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       }
       setAltVerseMap(map);
     })();
-  }, [parallel, mainVersion, parsedItems]);
+  }, [parallel, mainVersion, subVersion, parsedItems]);
 
   // 슬롯 관리
   const [slots, setSlots] = useState<WorshipSlot[]>(() => {
@@ -204,6 +205,14 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     setParsedItems(items);
     setParseErrors(errors);
     setLoading(false);
+
+    if (presentActive && items.length > 0) {
+      let targetIdx = 0;
+      if (items.length > 1) {
+        targetIdx = items.slice(0, items.length - 1).reduce((acc, item) => acc + item.verses.length, 0);
+      }
+      setPendingPresentJump(targetIdx);
+    }
   }
 
   // ─── 버전 변경 시 re-fetch ───
@@ -306,14 +315,14 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
         presentWindow.current = window.open(
           "/present",
           "yebom-present",
-          `left=${secondary.left},top=${secondary.top},width=${secondary.width},height=${secondary.height}`
+          `popup=1,left=${secondary.left},top=${secondary.top},width=${secondary.width},height=${secondary.height}`
         );
       } catch {
         // 권한 거부 또는 에러 → 기본 window.open
-        presentWindow.current = window.open("/present", "yebom-present", "width=1024,height=768");
+        presentWindow.current = window.open("/present", "yebom-present", "popup=1,width=1024,height=768");
       }
     } else {
-      presentWindow.current = window.open("/present", "yebom-present", "width=1024,height=768");
+      presentWindow.current = window.open("/present", "yebom-present", "popup=1,width=1024,height=768");
     }
 
     if (presentWindow.current) {
@@ -342,6 +351,17 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     sendToPresent(idx);
   }
 
+  // 추가/변경 후 자동 점프
+  useEffect(() => {
+    if (pendingPresentJump !== null && allVerses.length > 0) {
+      const idx = Math.min(pendingPresentJump, allVerses.length - 1);
+      presentJump(idx);
+      setPendingPresentJump(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsedItems, pendingPresentJump]);
+
+
   // 프레젠테이션 종료
   function closePresentation() {
     presentChannel.current?.postMessage({ type: "close" });
@@ -353,6 +373,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   useEffect(() => {
     if (!presentActive) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); presentGo(-1); }
       else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); presentGo(1); }
       else if (e.key === "Escape") closePresentation();
@@ -673,7 +694,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                     }}
                     className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border-none"
                   >
-                    <option value="none">없음</option>
+                    <option value="none">대역</option>
                     {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
                 </div>

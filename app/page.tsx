@@ -43,15 +43,17 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.history.state?.isAppRoot) {
-      window.history.replaceState({ isAppRoot: true }, "");
-      window.history.pushState({ isHome: true }, "");
+      const currentState = window.history.state || {};
+      window.history.replaceState({ ...currentState, isAppRoot: true }, "", window.location.href);
+      window.history.pushState({ ...currentState, isAppRoot: true, isHome: true }, "", window.location.href);
     }
 
     const handlePop = (e: PopStateEvent) => {
-      if (e.state && e.state.isAppRoot) {
+      if (e.state && e.state.isAppRoot && !e.state.isHome) {
         setShowExitConfirm(true);
         // 즉시 홈 상태를 복구하여 앱 종료를 막음
-        window.history.pushState({ isHome: true }, "");
+        const currentState = window.history.state || {};
+        window.history.pushState({ ...currentState, isAppRoot: true, isHome: true }, "", window.location.href);
       }
     };
     window.addEventListener("popstate", handlePop);

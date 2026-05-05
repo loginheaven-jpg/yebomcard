@@ -16,7 +16,8 @@ export function useHardwareBack(isActive: boolean, onBack: () => void) {
 
     // 현재 활성화된 레이어를 추적하기 위해 고유 ID를 부여하여 히스토리에 푸시
     const stateId = Math.random().toString(36).substring(2, 9);
-    window.history.pushState({ modalId: stateId }, "");
+    const currentState = window.history.state || {};
+    window.history.pushState({ ...currentState, modalId: stateId }, "", window.location.href);
 
     const handlePopState = (e: PopStateEvent) => {
       // 뒤로가기 이벤트가 발생하면 콜백을 실행하여 모달/뷰를 닫음

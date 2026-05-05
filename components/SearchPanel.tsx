@@ -441,7 +441,7 @@ export default function SearchPanel({
       .then(({ data }) => {
         if (data) setBrowseVersesAlt(data as BibleVerse[]);
       });
-  }, [parallel, bookCode, chapter, mainVersion]);
+  }, [parallel, bookCode, chapter, mainVersion, subVersion]);
 
   // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
   useEffect(() => {
@@ -557,7 +557,7 @@ export default function SearchPanel({
         );
       })();
     }
-  }, [parallel, searchResults, topicResults, mainVersion]);
+  }, [parallel, searchResults, topicResults, mainVersion, subVersion]);
 
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
@@ -823,7 +823,7 @@ export default function SearchPanel({
           onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
           className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
         >
-          <option value="none">없음</option>
+          <option value="none">대역</option>
           {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
             <option key={v} value={v}>{getVersionLabel(v)}</option>
           ))}
@@ -1099,8 +1099,8 @@ export default function SearchPanel({
                     <>
                       {/* PC: 좌우 2단 헤더 */}
                       <div className="hidden lg:grid lg:grid-cols-2 lg:gap-0 border-b border-gray-200 bg-gray-50 text-xs text-gray-500 font-medium">
-                        <div className="px-4 py-2">{mainVersion === "nkrv" ? "개역개정" : "새번역"}</div>
-                        <div className="px-4 py-2 border-l border-gray-200">{mainVersion === "nkrv" ? "새번역" : "개역개정"}</div>
+                        <div className="px-4 py-2">{mainVersionLabel}</div>
+                        <div className="px-4 py-2 border-l border-gray-200">{subVersionLabel}</div>
                       </div>
 
                       {browseVerses.map((v) => {
