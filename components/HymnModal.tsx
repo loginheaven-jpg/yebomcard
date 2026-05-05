@@ -26,6 +26,8 @@ const FONTS = [
 
 type FontKey = typeof FONTS[number]["key"];
 
+let cachedHymns: Hymn[] | null = null;
+
 export default function HymnModal({ onClose }: Props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [results, setResults] = useState<Hymn[]>([]);
@@ -60,6 +62,17 @@ export default function HymnModal({ onClose }: Props) {
   }, [fontKey]);
 
   useEffect(() => {
+    async function fetchAll() {
+      if (cachedHymns) return;
+      setLoading(true);
+      const { data } = await supabase.from("hymns").select("*").order("number");
+      if (data) cachedHymns = data;
+      setLoading(false);
+    }
+    fetchAll();
+  }, []);
+
+  useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     
     if (!searchTerm.trim()) {
@@ -67,26 +80,22 @@ export default function HymnModal({ onClose }: Props) {
       return;
     }
 
-    searchDebounceRef.current = setTimeout(async () => {
-      setLoading(true);
-      let query = supabase.from("hymns").select("*");
-      
+    searchDebounceRef.current = setTimeout(() => {
+      if (!cachedHymns) return;
       const term = searchTerm.trim();
       const isNumber = /^\d+$/.test(term);
-      
-      if (isNumber) {
-        query = query.eq("number", parseInt(term, 10));
-      } else {
-        const fuzzyTerm = term.replace(/\s+/g, "").split("").join("*");
-        query = query.or(`korean_title.ilike.*${fuzzyTerm}*,korean_lyrics.ilike.*${fuzzyTerm}*`);
-      }
-      
-      const { data, error } = await query.order("number").limit(50);
-      if (data && !error) {
-        setResults(data);
-      }
-      setLoading(false);
-    }, 300);
+      const cleanTerm = term.replace(/\s+/g, "").toLowerCase();
+
+      const filtered = cachedHymns.filter((h) => {
+        if (isNumber) return h.number === parseInt(term, 10);
+        
+        const cleanTitle = h.korean_title.replace(/\s+/g, "").toLowerCase();
+        const cleanLyrics = h.korean_lyrics.replace(/\s+/g, "").toLowerCase();
+        return cleanTitle.includes(cleanTerm) || cleanLyrics.includes(cleanTerm);
+      });
+
+      setResults(filtered.slice(0, 50));
+    }, 150);
 
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
