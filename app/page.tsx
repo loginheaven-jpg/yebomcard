@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
 import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
+import HymnModal from "@/components/HymnModal";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 
@@ -26,10 +27,12 @@ export default function Home() {
   const [showToolMenu, setShowToolMenu] = useState(false);
   const [showWorship, setShowWorship] = useState(false);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
+  const [showHymn, setShowHymn] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // --- 하드웨어 뒤로가기 제어 ---
   useHardwareBack(showScrap, () => setShowScrap(false));
+  useHardwareBack(showHymn, () => setShowHymn(false));
   useHardwareBack(showWorship, () => setShowWorship(false));
   useHardwareBack(showCardBuilder, () => setShowCardBuilder(false));
   useHardwareBack(view === "card", () => setView("display"));
@@ -254,8 +257,17 @@ export default function Home() {
         {showToolMenu && (
           <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden min-w-[160px]">
             <button
-              onClick={() => { setShowToolMenu(false); setShowWorship(true); }}
+              onClick={() => { setShowToolMenu(false); setShowHymn(true); }}
               className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+              </svg>
+              찬송가
+            </button>
+            <button
+              onClick={() => { setShowToolMenu(false); setShowWorship(true); }}
+              className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 border-t border-gray-100"
             >
               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -278,6 +290,11 @@ export default function Home() {
       {/* 예배성경 패널 */}
       {showWorship && (
         <WorshipBible onClose={() => setShowWorship(false)} />
+      )}
+
+      {/* 찬송가 모달 */}
+      {showHymn && (
+        <HymnModal onClose={() => setShowHymn(false)} />
       )}
 
       {/* 성경카드 빌더 */}

@@ -11,7 +11,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.1",
+    "@supabase/supabase-js": "^2.105.3",
+    "dotenv": "^17.4.2",
     "html-to-image": "^1.11.13",
     "iron-session": "^8.0.4",
     "next": "16.2.2",
