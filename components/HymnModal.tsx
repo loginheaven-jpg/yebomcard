@@ -41,8 +41,8 @@ export default function HymnModal({ onClose }: Props) {
     return (localStorage.getItem("hymnTheme") as "light" | "dark") || "light";
   });
   const [fontSize, setFontSize] = useState(() => {
-    if (typeof window === "undefined") return 24;
-    return parseInt(localStorage.getItem("hymnFontSize") || "24");
+    if (typeof window === "undefined") return 20;
+    return parseInt(localStorage.getItem("hymnFontSize") || "20");
   });
   const [fontKey, setFontKey] = useState<FontKey>(() => {
     if (typeof window === "undefined") return "noto-serif";
@@ -270,7 +270,7 @@ export default function HymnModal({ onClose }: Props) {
             </div>
             
             <div 
-              className="flex-1 leading-[2.2] md:leading-[2.4] px-2 whitespace-pre-wrap break-keep pb-20"
+              className="flex-1 leading-[1.6] md:leading-[1.7] px-2 whitespace-pre-wrap break-keep pb-20"
               style={{ 
                 fontFamily: currentFont.css, 
                 fontWeight: currentFont.weight,
