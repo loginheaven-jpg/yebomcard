@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { findGradients, type GradientPreset } from "@/lib/gradients";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BibleVersion } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
 
 /**
@@ -93,8 +93,8 @@ interface AiBackground {
 
 interface CardPreviewProps {
   verses: BibleVerse[];
-  version: KoreanVersion;
-  enVersion: EnglishVersion;
+  mainVersion: BibleVersion;
+  subVersion: BibleVersion | "none";
   onBack: () => void;
 }
 
@@ -108,7 +108,7 @@ const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
   { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum)" },
 ];
 
-export default function CardPreview({ verses, version, enVersion, onBack }: CardPreviewProps) {
+export default function CardPreview({ verses, mainVersion, subVersion, onBack }: CardPreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
   const [selectedFont, setSelectedFont] = useState<FontChoice>("gowun-dodum");
@@ -244,7 +244,7 @@ export default function CardPreview({ verses, version, enVersion, onBack }: Card
         supabase
           .from("bible_verses")
           .select("text")
-          .eq("version", enVersion)
+          .eq("version", subVersion)
           .eq("book_code", v.book_code)
           .eq("chapter", v.chapter)
           .eq("verse", v.verse)
@@ -259,7 +259,7 @@ export default function CardPreview({ verses, version, enVersion, onBack }: Card
       );
     }
     loadEnglish();
-  }, [verses, enVersion]);
+  }, [verses, subVersion]);
 
   // 1. Gradients — 5개
   useEffect(() => {
@@ -575,7 +575,7 @@ export default function CardPreview({ verses, version, enVersion, onBack }: Card
       }
       
       // 3. 서버 스크랩 저장 (이미지 URL 포함)
-      await addScrapToServer(verses, version, imageUrl);
+      await addScrapToServer(verses, mainVersion, imageUrl);
       
       // 4. 로컬 다운로드도 병행 실행
       const link = document.createElement("a");

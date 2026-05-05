@@ -4,16 +4,17 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
-import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
+import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
-  version: KoreanVersion;
-  enVersion: EnglishVersion;
-  onVersionChange: (v: KoreanVersion) => void;
-  onEnVersionChange: (v: EnglishVersion) => void;
+  mainVersion: BibleVersion;
+  subVersion: BibleVersion | "none";
+  onMainVersionChange: (v: BibleVersion) => void;
+  onSubVersionChange: (v: BibleVersion | "none") => void;
   onToggleVerse: (verse: BibleVerse) => void;
   onConfirm: () => void;
   isAddingMore: boolean;
@@ -31,16 +32,17 @@ function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
 
 export default function SearchPanel({
   selectedVerses,
-  version,
-  enVersion,
-  onVersionChange: setVersion,
-  onEnVersionChange: setEnVersion,
+  mainVersion,
+  subVersion,
+  onMainVersionChange: setMainVersion,
+  onSubVersionChange: setSubVersion,
   onToggleVerse,
   onConfirm,
   isAddingMore,
 }: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>("search");
-  const [parallel, setParallel] = useState(false);
+  const parallel = subVersion !== "none";
+  
 
   // Scroll position preservation
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -150,7 +152,7 @@ export default function SearchPanel({
     }
 
     // 병기 ON: 영문 버전 조회
-    const altVersion = enVersion;
+    const altVersion = subVersion;
     let altMap = new Map<string, string>();
     if (parallel) {
       try {
@@ -220,7 +222,7 @@ export default function SearchPanel({
         let query = supabase
           .from("bible_verses")
           .select("*")
-          .eq("version", version)
+          .eq("version", mainVersion)
           .eq("book_code", parsed.bookCode)
           .eq("chapter", parsed.chapter);
 
@@ -283,7 +285,7 @@ export default function SearchPanel({
             supabase
               .from("bible_verses")
               .select("*")
-              .eq("version", version)
+              .eq("version", mainVersion)
               .ilike("text", `%${w}%`)
               .order("book_order")
               .order("chapter")
@@ -312,7 +314,7 @@ export default function SearchPanel({
           let query = supabase
             .from("bible_verses")
             .select("*")
-            .eq("version", version);
+            .eq("version", mainVersion);
 
           for (const w of words) {
             query = query.ilike("text", `%${w}%`);
@@ -345,7 +347,7 @@ export default function SearchPanel({
         setSearchLoading(false);
       }
     }
-  }, [searchInput, version]);
+  }, [searchInput, mainVersion]);
 
   // ─── 다음 50건 불러오기 (AND 검색 전용) ───
   const loadMore = useCallback(async () => {
@@ -361,7 +363,7 @@ export default function SearchPanel({
       let query = supabase
         .from("bible_verses")
         .select("*")
-        .eq("version", version);
+        .eq("version", mainVersion);
 
       for (const w of words) {
         query = query.ilike("text", `%${w}%`);
@@ -383,14 +385,14 @@ export default function SearchPanel({
     } finally {
       setLoadingMore(false);
     }
-  }, [searchInput, searchOffset, version]);
+  }, [searchInput, searchOffset, mainVersion]);
 
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
     async function loadChapters() {
       // RPC로 DISTINCT chapter 조회 (Supabase 1000행 제한 우회)
       const { data, error } = await supabase.rpc("get_chapters", {
-        p_version: version,
+        p_version: mainVersion,
         p_book_code: bookCode,
       });
 
@@ -403,7 +405,7 @@ export default function SearchPanel({
       }
     }
     loadChapters();
-  }, [bookCode, version]);
+  }, [bookCode, mainVersion]);
 
   useEffect(() => {
     async function loadVerses() {
@@ -412,7 +414,7 @@ export default function SearchPanel({
       const { data, error } = await supabase
         .from("bible_verses")
         .select("*")
-        .eq("version", version)
+        .eq("version", mainVersion)
         .eq("book_code", bookCode)
         .eq("chapter", chapter)
         .order("verse");
@@ -423,12 +425,12 @@ export default function SearchPanel({
       setLoadingBrowse(false);
     }
     loadVerses();
-  }, [bookCode, chapter, version]);
+  }, [bookCode, chapter, mainVersion]);
 
   // 병기 모드: 부 버전 로드
   useEffect(() => {
     if (!parallel || !chapter) { setBrowseVersesAlt([]); return; }
-    const altVersion = enVersion;
+    const altVersion = subVersion;
     supabase
       .from("bible_verses")
       .select("*")
@@ -439,7 +441,7 @@ export default function SearchPanel({
       .then(({ data }) => {
         if (data) setBrowseVersesAlt(data as BibleVerse[]);
       });
-  }, [parallel, bookCode, chapter, version]);
+  }, [parallel, bookCode, chapter, mainVersion]);
 
   // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
   useEffect(() => {
@@ -470,10 +472,10 @@ export default function SearchPanel({
   }, [browseVerses, rememberedVerse]);
 
   // ─── 버전 전환 시 말씀 검색 결과 재조회 ───
-  const prevVersion = useRef(version);
+  const prevVersion = useRef(mainVersion);
   useEffect(() => {
-    if (prevVersion.current !== version) {
-      prevVersion.current = version;
+    if (prevVersion.current !== mainVersion) {
+      prevVersion.current = mainVersion;
       // 말씀 검색 결과가 있으면 재실행
       if (searchResults.length > 0 && searchInput.trim()) {
         savedScroll.current = scrollRef.current?.scrollTop ?? 0;
@@ -487,7 +489,7 @@ export default function SearchPanel({
             supabase
               .from("bible_verses")
               .select("*")
-              .eq("version", version)
+              .eq("version", mainVersion)
               .eq("book_name", rec.book)
               .eq("chapter", rec.chapter)
               .eq("verse", rec.verse)
@@ -505,7 +507,7 @@ export default function SearchPanel({
         })();
       }
     }
-  }, [version]);
+  }, [mainVersion]);
 
   // ─── 병기: 검색 결과 + 주제 추천 부 버전 조회 ───
   useEffect(() => {
@@ -514,7 +516,7 @@ export default function SearchPanel({
       setTopicResultsAlt([]);
       return;
     }
-    const altVersion = enVersion;
+    const altVersion = subVersion;
 
     // 검색 결과 부 버전
     if (searchResults.length > 0) {
@@ -555,7 +557,7 @@ export default function SearchPanel({
         );
       })();
     }
-  }, [parallel, searchResults, topicResults, version]);
+  }, [parallel, searchResults, topicResults, mainVersion]);
 
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
@@ -574,7 +576,7 @@ export default function SearchPanel({
       const aiRes = await fetch("/api/ai/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: trimmed, version }),
+        body: JSON.stringify({ topic: trimmed, version: mainVersion }),
       });
 
       if (!aiRes.ok) {
@@ -593,7 +595,7 @@ export default function SearchPanel({
         supabase
           .from("bible_verses")
           .select("*")
-          .eq("version", version)
+          .eq("version", mainVersion)
           .eq("book_name", rec.book)
           .eq("chapter", rec.chapter)
           .eq("verse", rec.verse)
@@ -617,7 +619,7 @@ export default function SearchPanel({
     } finally {
       setTopicLoading(false);
     }
-  }, [topicInput, version]);
+  }, [topicInput, mainVersion]);
 
   // ─── Verse toggle with scroll preservation ───
   function handleToggle(verse: BibleVerse) {
@@ -697,8 +699,8 @@ export default function SearchPanel({
     return [];
   }, [mode, browseStep, searchResultsAlt, browseVersesAlt, topicResultsAlt]);
 
-  const mainVersionLabel = getVersionLabel(version);
-  const subVersionLabel = getVersionLabel(enVersion);
+  const mainVersionLabel = getVersionLabel(mainVersion);
+  const subVersionLabel = getVersionLabel(subVersion);
 
   const fullscreenVerses: FullscreenVerseItem[] = useMemo(() => {
     return visibleMain.map((v) => {
@@ -761,12 +763,12 @@ export default function SearchPanel({
       {showFullscreen && (
         <FullscreenReader
           verses={fullscreenVerses}
-          version={version}
-          enVersion={enVersion}
-          onVersionChange={setVersion}
-          onEnVersionChange={setEnVersion}
-          parallel={parallel}
-          onParallelToggle={() => setParallel((p) => !p)}
+          mainVersion={mainVersion}
+          subVersion={subVersion}
+          onMainVersionChange={setMainVersion}
+          onSubVersionChange={setSubVersion}
+          
+          
           onOverscrollNext={
             mode === "chapter" && browseStep === "verse" && canNextChapter
               ? () => setChapter(chapters[chapterIdx + 1])
@@ -807,43 +809,25 @@ export default function SearchPanel({
       {/* Version Selectors */}
       <div className="flex justify-center items-center gap-2 mb-4">
         <select
-          value={version}
-          onChange={(e) => {
-            if (scrollRef.current) {
-              savedScroll.current = scrollRef.current.scrollTop;
-            }
-            setVersion(e.target.value as KoreanVersion);
-          }}
-          className="px-3.5 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+          value={mainVersion}
+          onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
+          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
         >
-          {(["nkrv", "rnksv", "easy"] as const).map((v) => (
+          {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
             <option key={v} value={v}>{getVersionLabel(v)}</option>
           ))}
         </select>
-
+        
         <select
-          value={enVersion}
-          onChange={(e) => {
-            if (scrollRef.current) savedScroll.current = scrollRef.current.scrollTop;
-            setEnVersion(e.target.value as EnglishVersion);
-            if (!parallel) setParallel(true);
-          }}
-          className="px-3.5 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+          value={subVersion}
+          onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
+          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
         >
-          {(["kjv", "nirv", "gnt"] as const).map((v) => (
+          <option value="none">없음</option>
+          {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
             <option key={v} value={v}>{getVersionLabel(v)}</option>
           ))}
         </select>
-        <button
-          onClick={() => setParallel(!parallel)}
-          className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${
-            parallel
-              ? "bg-gray-900 text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-          }`}
-        >
-          병기
-        </button>
       </div>
 
       {/* 3 Tabs */}
@@ -1115,8 +1099,8 @@ export default function SearchPanel({
                     <>
                       {/* PC: 좌우 2단 헤더 */}
                       <div className="hidden lg:grid lg:grid-cols-2 lg:gap-0 border-b border-gray-200 bg-gray-50 text-xs text-gray-500 font-medium">
-                        <div className="px-4 py-2">{version === "nkrv" ? "개역개정" : "새번역"}</div>
-                        <div className="px-4 py-2 border-l border-gray-200">{version === "nkrv" ? "새번역" : "개역개정"}</div>
+                        <div className="px-4 py-2">{mainVersion === "nkrv" ? "개역개정" : "새번역"}</div>
+                        <div className="px-4 py-2 border-l border-gray-200">{mainVersion === "nkrv" ? "새번역" : "개역개정"}</div>
                       </div>
 
                       {browseVerses.map((v) => {

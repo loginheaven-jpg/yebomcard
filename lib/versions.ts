@@ -1,6 +1,7 @@
-import { BibleVersion, EnglishVersion } from "./types";
+import { BibleVersion } from "./types";
 
-export function getVersionLabel(v: BibleVersion | EnglishVersion): string {
+export function getVersionLabel(v: BibleVersion | "none"): string {
+  if (v === "none") return "없음";
   switch (v) {
     case "nkrv": return "개역개정";
     case "rnksv": return "새번역";

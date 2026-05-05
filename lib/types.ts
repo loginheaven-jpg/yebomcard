@@ -1,6 +1,6 @@
 export interface BibleVerse {
   id: number;
-  version: KoreanVersion | EnglishVersion;
+  version: BibleVersion;
   book_code: string;
   book_name: string;
   book_abbr: string;
@@ -20,7 +20,7 @@ export type SearchMode = "search" | "chapter" | "topic";
 
 export type KoreanVersion = "nkrv" | "rnksv" | "easy";
 export type EnglishVersion = "kjv" | "nirv" | "gnt";
-export type BibleVersion = KoreanVersion;
+export type BibleVersion = KoreanVersion | EnglishVersion;
 
 export type ViewMode = "search" | "display" | "card" | "scrap";
 

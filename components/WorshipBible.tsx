@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { parseReference, type ParsedReference } from "@/lib/parseReference";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BibleVersion } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 
@@ -64,9 +64,9 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [version, setVersion] = useState<KoreanVersion>("rnksv");
-  const [enVersion, setEnVersion] = useState<EnglishVersion>("kjv");
-  const [parallel, setParallel] = useState(false);
+  const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
+  const [subVersion, setSubVersion] = useState<BibleVersion | "none">("none");
+  const parallel = subVersion !== "none";
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [altVerseMap, setAltVerseMap] = useState<Map<string, string>>(new Map());
 
@@ -84,10 +84,10 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     { key: "gowun-dodum", label: "돋움" }, { key: "gothic-a1", label: "Gothic" },
     { key: "ibm-plex", label: "Plex" },
   ];
-  const defaultFont = (v: KoreanVersion): FontKey => v === "nkrv" ? "noto-serif" : "gowun-dodum";
+  const defaultFont = (v: BibleVersion): FontKey => v === "nkrv" ? "noto-serif" : "gowun-dodum";
   const [pFontKey, setPFontKey] = useState<FontKey>(() => {
-    if (typeof window === "undefined") return defaultFont(version);
-    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFont(version);
+    if (typeof window === "undefined") return defaultFont(mainVersion);
+    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFont(mainVersion);
   });
   const [pFontSize, setPFontSize] = useState(() => {
     if (typeof window === "undefined") return 74;
@@ -102,7 +102,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   // 병기: parallel 토글 시 alt 버전 fetch
   useEffect(() => {
     if (!parallel || parsedItems.length === 0) { setAltVerseMap(new Map()); return; }
-    const altVersion = enVersion;
+    const altVersion = subVersion;
     (async () => {
       const map = new Map<string, string>();
       for (const item of parsedItems) {
@@ -118,7 +118,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       }
       setAltVerseMap(map);
     })();
-  }, [parallel, version, parsedItems]);
+  }, [parallel, mainVersion, parsedItems]);
 
   // 슬롯 관리
   const [slots, setSlots] = useState<WorshipSlot[]>(() => {
@@ -179,7 +179,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       let query = supabase
         .from("bible_verses")
         .select("*")
-        .eq("version", version)
+        .eq("version", mainVersion)
         .eq("book_code", parsed.bookCode)
         .eq("chapter", parsed.chapter);
 
@@ -207,8 +207,8 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   }
 
   // ─── 버전 변경 시 re-fetch ───
-  async function refetchAllItems(newVersion: KoreanVersion) {
-    setVersion(newVersion);
+  async function refetchAllItems(newVersion: BibleVersion) {
+    setMainVersion(newVersion);
     if (parsedItems.length === 0) return;
     const updated: ParsedItem[] = [];
     for (const item of parsedItems) {
@@ -239,7 +239,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       let query = supabase
         .from("bible_verses")
         .select("*")
-        .eq("version", version)
+        .eq("version", mainVersion)
         .eq("book_code", parsed.bookCode)
         .eq("chapter", parsed.chapter);
       if (parsed.verses.length > 0) query = query.in("verse", parsed.verses);
@@ -287,7 +287,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       sub: par ? aMap.get(`${v.book_code}-${v.chapter}-${v.verse}`) : undefined,
       fontKey: fk, fontCss: font.css, fontWeight: font.weight,
       fontSize: fs, theme: th, parallel: par,
-      subVersionLabel: getVersionLabel(enVersion),
+      subVersionLabel: getVersionLabel(subVersion),
     });
   }
 
@@ -612,22 +612,19 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                 {/* 번역본 + 병기 */}
                 <div className="flex gap-2 justify-center items-center">
                   <select
-                    value={version}
+                    value={mainVersion}
                     onChange={async (e) => {
-                      const bv = e.target.value as KoreanVersion;
-                      setVersion(bv);
+                      const bv = e.target.value as BibleVersion;
+                      setMainVersion(bv);
                       setPFontKey(defaultFont(bv));
-                      // 즉석 re-fetch 후 전송
-                      const updated: ParsedItem[] = [];
+                      const updated = [];
                       for (const item of parsedItems) {
-                        let q = supabase.from("bible_verses").select("*")
-                          .eq("version", bv).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                        let q = supabase.from("bible_verses").select("*").eq("version", bv).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
                         if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
                         const { data } = await q.order("verse");
                         if (data && data.length > 0) updated.push({ ...item, verses: data as BibleVerse[] });
                       }
                       setParsedItems(updated);
-                      // 새 데이터로 즉시 전송
                       const newAll = updated.flatMap((it) => it.verses);
                       const idx = Math.min(presentIdx, newAll.length - 1);
                       const nv = newAll[idx];
@@ -635,92 +632,50 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                         const fk = defaultFont(bv);
                         const font = FONTS_MAP[fk] || FONTS_MAP["noto-serif"];
                         presentChannel.current.postMessage({
-                          type: "verse",
-                          ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
-                          main: stripNotes(nv.text),
-                          sub: parallel ? altVerseMap.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`) : undefined,
+                          type: "verse", ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
+                          main: stripNotes(nv.text), sub: parallel ? altVerseMap.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`) : undefined,
                           fontKey: fk, fontCss: font.css, fontWeight: font.weight,
-                          fontSize: pFontSize, theme: pTheme, parallel,
-                          subVersionLabel: getVersionLabel(enVersion),
+                          fontSize: pFontSize, theme: pTheme, parallel, subVersionLabel: getVersionLabel(subVersion)
                         });
                       }
                     }}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border-none"
                   >
-                    {(["nkrv", "rnksv", "easy"] as const).map((v) => (
-                      <option key={v} value={v}>{getVersionLabel(v)}</option>
-                    ))}
+                    {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
 
                   <select
-                    value={enVersion}
+                    value={subVersion}
                     onChange={async (e) => {
-                      const ev = e.target.value as EnglishVersion;
-                      setEnVersion(ev);
-                      
-                      // 즉석 re-fetch for English version
+                      const ev = e.target.value as BibleVersion | "none";
+                      setSubVersion(ev);
                       const map = new Map<string, string>();
-                      for (const item of parsedItems) {
-                        let q = supabase.from("bible_verses").select("*")
-                          .eq("version", ev).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
-                        if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
-                        const { data } = await q.order("verse");
-                        if (data) {
-                          for (const v of data) map.set(`${v.book_code}-${v.chapter}-${v.verse}`, v.text);
+                      if (ev !== "none") {
+                        for (const item of parsedItems) {
+                          let q = supabase.from("bible_verses").select("*").eq("version", ev).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
+                          if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
+                          const { data } = await q.order("verse");
+                          if (data) for (const v of data) map.set(`${v.book_code}-${v.chapter}-${v.verse}`, v.text);
                         }
                       }
                       setAltVerseMap(map);
-                      
-                      const newParallel = true;
-                      setParallel(newParallel);
-
+                      const newParallel = ev !== "none";
                       const nv = allVerses[presentIdx];
                       if (nv && presentChannel.current) {
                         const font = FONTS_MAP[pFontKey] || FONTS_MAP["noto-serif"];
                         presentChannel.current.postMessage({
-                          type: "verse",
-                          ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
-                          main: stripNotes(nv.text),
-                          sub: map.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`),
+                          type: "verse", ref: `${nv.book_name} ${nv.chapter}장 ${nv.verse}절`,
+                          main: stripNotes(nv.text), sub: map.get(`${nv.book_code}-${nv.chapter}-${nv.verse}`),
                           fontKey: pFontKey, fontCss: font.css, fontWeight: font.weight,
-                          fontSize: pFontSize, theme: pTheme, parallel: newParallel,
-                          subVersionLabel: getVersionLabel(ev),
+                          fontSize: pFontSize, theme: pTheme, parallel: newParallel, subVersionLabel: getVersionLabel(ev)
                         });
                       }
                     }}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300"
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border-none"
                   >
-                    {(["kjv", "nirv", "gnt"] as const).map((v) => (
-                      <option key={v} value={v}>{getVersionLabel(v)}</option>
-                    ))}
+                    <option value="none">없음</option>
+                    {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
-                  <button
-                    onClick={async () => {
-                      const newParallel = !parallel;
-                      setParallel(newParallel);
-                      if (newParallel && altVerseMap.size === 0) {
-                        // 즉석 fetch
-                        const altV = enVersion;
-                        const map = new Map<string, string>();
-                        for (const item of parsedItems) {
-                          let q = supabase.from("bible_verses").select("*")
-                            .eq("version", altV).eq("book_code", item.ref.bookCode).eq("chapter", item.ref.chapter);
-                          if (item.ref.verses.length > 0) q = q.in("verse", item.ref.verses);
-                          const { data } = await q.order("verse");
-                          if (data) for (const row of data as BibleVerse[]) map.set(`${row.book_code}-${row.chapter}-${row.verse}`, stripNotes(row.text));
-                        }
-                        setAltVerseMap(map);
-                        sendToPresent(presentIdx, { parallel: true, altMap: map });
-                      } else {
-                        sendToPresent(presentIdx, { parallel: newParallel });
-                      }
-                    }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                      parallel ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
-                    }`}
-                  >
-                    병기
-                  </button>
                 </div>
 
                 {/* 폰트 + 크기 + 다크모드 */}
@@ -789,12 +744,12 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
       {showFullscreen && fsVerses.length > 0 && (
         <FullscreenReader
           verses={fsVerses}
-          version={version}
-          enVersion={enVersion}
-          onVersionChange={refetchAllItems}
-          onEnVersionChange={setEnVersion}
-          parallel={parallel}
-          onParallelToggle={() => setParallel(!parallel)}
+          mainVersion={mainVersion}
+          subVersion={subVersion}
+          onMainVersionChange={refetchAllItems}
+          onSubVersionChange={setSubVersion}
+          
+          
           onClose={() => setShowFullscreen(false)}
           jumpMode
           jumpRefs={jumpRefs}

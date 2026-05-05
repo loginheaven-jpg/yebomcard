@@ -8,7 +8,7 @@ export interface FullscreenVerseItem {
   sub?: string;
 }
 
-import { type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { type BibleVersion } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 
 interface JumpRef {
@@ -20,12 +20,12 @@ interface JumpRef {
 
 interface Props {
   verses: FullscreenVerseItem[];
-  version: KoreanVersion;
-  enVersion?: EnglishVersion;
-  onVersionChange: (v: KoreanVersion) => void;
-  onEnVersionChange?: (v: EnglishVersion) => void;
-  parallel: boolean;
-  onParallelToggle: () => void;
+  mainVersion: BibleVersion;
+  subVersion?: BibleVersion | "none";
+  onMainVersionChange: (v: BibleVersion) => void;
+  onSubVersionChange?: (v: BibleVersion | "none") => void;
+  
+  
   onOverscrollNext?: () => void;
   onOverscrollPrev?: () => void;
   onClose: () => void;
@@ -38,12 +38,12 @@ interface Props {
 
 export default function FullscreenReader({
   verses,
-  version,
-  enVersion,
-  onVersionChange,
-  onEnVersionChange,
-  parallel,
-  onParallelToggle,
+  mainVersion,
+  subVersion,
+  onMainVersionChange,
+  onSubVersionChange,
+  
+  
   onOverscrollNext,
   onOverscrollPrev,
   onClose,
@@ -52,7 +52,8 @@ export default function FullscreenReader({
   hideVersionButtons = false,
   onAddVerses,
 }: Props) {
-  const subVersionLabel = enVersion ? getVersionLabel(enVersion) : "";
+  const parallel = subVersion && subVersion !== "none";
+  const subVersionLabel = subVersion ? getVersionLabel(subVersion) : "";
   const [idx, setIdx] = useState(0);
 
   // ─── 레퍼런스 필 바 (jumpMode) ───
@@ -145,16 +146,16 @@ export default function FullscreenReader({
   ] as const;
   type FontKey = typeof FONTS[number]["key"];
 
-  const defaultFontFor = (v: KoreanVersion) => v === "nkrv" ? "noto-serif" as FontKey : "gowun-dodum" as FontKey;
+  const defaultFontFor = (v: BibleVersion) => v === "nkrv" ? "noto-serif" as FontKey : "gowun-dodum" as FontKey;
   const [fontKey, setFontKey] = useState<FontKey>(() => {
-    if (typeof window === "undefined") return defaultFontFor(version);
-    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFontFor(version);
+    if (typeof window === "undefined") return defaultFontFor(mainVersion);
+    return (localStorage.getItem("fullscreenFont") as FontKey) || defaultFontFor(mainVersion);
   });
   // 버전 전환 시 기본 폰트 자동 변경 (사용자가 수동 선택 안 했으면)
   const userPickedFont = useRef(false);
   useEffect(() => {
-    if (!userPickedFont.current) setFontKey(defaultFontFor(version));
-  }, [version]);
+    if (!userPickedFont.current) setFontKey(defaultFontFor(mainVersion));
+  }, [mainVersion]);
   const [showFontPicker, setShowFontPicker] = useState(false);
   const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
 
@@ -204,7 +205,7 @@ export default function FullscreenReader({
 
   useLayoutEffect(() => {
     setEffectiveFontSize(fontSize);
-  }, [fontSize, idx, parallel, verses]);
+  }, [fontSize, idx,  verses]);
 
   useLayoutEffect(() => {
     const el = cardRef.current;
@@ -214,7 +215,7 @@ export default function FullscreenReader({
     if (overflow && effectiveFontSize > MIN_FIT_SIZE) {
       setEffectiveFontSize((s) => Math.max(MIN_FIT_SIZE, s - 2));
     }
-  }, [effectiveFontSize, idx, parallel, verses]);
+  }, [effectiveFontSize, idx,  verses]);
 
   // 뷰포트 리사이즈 시 재측정
   useEffect(() => {
@@ -811,27 +812,23 @@ export default function FullscreenReader({
             }}>
               <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7, marginRight: 4 }} />
               <select
-                value={version}
-                onChange={(e) => onVersionChange(e.target.value as KoreanVersion)}
+                value={mainVersion}
+                onChange={(e) => onMainVersionChange(e.target.value as BibleVersion)}
                 style={{ background: "transparent", border: `1px solid ${vars.ctrlBorder}`, color: vars.muted, borderRadius: 999, padding: "4px 8px", fontSize: 12, outline: "none" }}
               >
                 {(["nkrv", "rnksv", "easy"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
               </select>
-              {onEnVersionChange && (
+              {onSubVersionChange && (
                 <select
-                  value={enVersion}
+                  value={subVersion}
                   onChange={(e) => {
-                    onEnVersionChange(e.target.value as EnglishVersion);
-                    if (!parallel) onParallelToggle();
-                  }}
+                    onSubVersionChange(e.target.value as BibleVersion);
+                    }}
                   style={{ background: "transparent", border: `1px solid ${vars.ctrlBorder}`, color: vars.muted, borderRadius: 999, padding: "4px 8px", fontSize: 12, outline: "none" }}
                 >
                   {(["kjv", "nirv", "gnt"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                 </select>
               )}
-              <VersionPill vars={vars} active={parallel} onClick={onParallelToggle}>
-                병기
-              </VersionPill>
             </div>
           )}
 

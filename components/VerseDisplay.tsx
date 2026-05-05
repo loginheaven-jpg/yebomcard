@@ -3,14 +3,15 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
-import { stripNotes, type BibleVerse, type BilingualVerse, type KoreanVersion, type EnglishVersion } from "@/lib/types";
+import { stripNotes, type BibleVerse, type BilingualVerse, type BibleVersion } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
+import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
-  version: KoreanVersion;
-  enVersion: EnglishVersion;
+  mainVersion: BibleVersion;
+  subVersion: BibleVersion | "none";
   onBack: () => void;
   onAddMore: () => void;
   onRemoveVerse: (verse: BibleVerse) => void;
@@ -111,8 +112,8 @@ function formatVerseRange(verses: BibleVerse[]): string {
 
 export default function VerseDisplay({
   verses,
-  version,
-  enVersion,
+  mainVersion,
+  subVersion,
   onBack,
   onAddMore,
   onRemoveVerse,
@@ -125,9 +126,11 @@ export default function VerseDisplay({
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [copiedType, setCopiedType] = useState<"link" | "text" | null>(null);
   const [showFullscreen, setShowFullscreen] = useState(false);
-  const [fsVersion, setFsVersion] = useState<KoreanVersion>(version);
-  const [fsEnVersion, setFsEnVersion] = useState<EnglishVersion>(enVersion);
-  const [fsParallel, setFsParallel] = useState(false);
+  const [fsMainVersion, setFsMainVersion] = useState<BibleVersion>(mainVersion);
+  const [fsSubVersion, setFsSubVersion] = useState<BibleVersion | "none">(subVersion);
+  const fsParallel = fsSubVersion !== "none";
+
+  useHardwareBack(showFullscreen, () => setShowFullscreen(false));
 
   useEffect(() => {
     async function loadEnglish() {
@@ -159,7 +162,7 @@ export default function VerseDisplay({
         supabase
           .from("bible_verses")
           .select("*")
-          .eq("version", enVersion)
+          .eq("version", subVersion)
           .eq("book_code", ref.bookCode)
           .eq("chapter", ref.chapter)
           .in("verse", ref.verseNums)
@@ -315,7 +318,7 @@ export default function VerseDisplay({
           <button
             onClick={() => {
               if (requireAuth && !requireAuth()) return;
-              addScrapToServer(verses, version);
+              addScrapToServer(verses, mainVersion);
               onScrapSaved?.();
               setShowShareOptions(true);
             }}
@@ -333,7 +336,7 @@ export default function VerseDisplay({
                 const refsParam = verses
                   .map((v) => `${v.book_code}.${v.chapter}.${v.verse}`)
                   .join(",");
-                const url = `${window.location.origin}/share?v=${version}&ev=${enVersion}&r=${refsParam}`;
+                const url = `${window.location.origin}/share?v=${mainVersion}&ev=${subVersion}&r=${refsParam}`;
                 navigator.clipboard.writeText(url);
                 setCopiedType("link");
                 setTimeout(() => { setCopiedType(null); setShowShareOptions(false); }, 2000);
@@ -409,7 +412,7 @@ export default function VerseDisplay({
         <button
           onClick={async () => {
             if (requireAuth && !requireAuth()) return;
-            await addScrapToServer(verses, version);
+            await addScrapToServer(verses, mainVersion);
             onScrapSaved?.();
           }}
           className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center"
@@ -439,7 +442,7 @@ export default function VerseDisplay({
           if (a.chapter !== b.chapter) return a.chapter - b.chapter;
           return a.verse - b.verse;
         });
-        const mainVersion = fsVersion;
+        const mainVersion = fsMainVersion;
         const fsVerses: FullscreenVerseItem[] = sorted.map((v) => {
           const mainText = stripNotes(v.version === mainVersion
             ? v.text
@@ -462,12 +465,12 @@ export default function VerseDisplay({
         return (
           <FullscreenReader
             verses={fsVerses}
-            version={fsVersion}
-            enVersion={fsEnVersion}
-            onVersionChange={setFsVersion}
-            onEnVersionChange={setFsEnVersion}
-            parallel={fsParallel}
-            onParallelToggle={() => setFsParallel(!fsParallel)}
+            mainVersion={fsMainVersion}
+            subVersion={fsSubVersion}
+            onMainVersionChange={setFsMainVersion}
+            onSubVersionChange={setFsSubVersion}
+            
+            
             onClose={() => setShowFullscreen(false)}
             jumpMode
             jumpRefs={jumpRefs}

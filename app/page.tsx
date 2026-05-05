@@ -10,14 +10,15 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
 import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
-import type { BibleVerse, ViewMode, KoreanVersion, EnglishVersion } from "@/lib/types";
+import { useHardwareBack } from "@/hooks/useHardwareBack";
+import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
-  const [version, setVersion] = useState<KoreanVersion>("rnksv");
-  const [enVersion, setEnVersion] = useState<EnglishVersion>("kjv");
+  const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
+  const [subVersion, setSubVersion] = useState<BibleVersion | "none">("none");
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [scrapCount, setScrapCount] = useState(0);
   const [showScrap, setShowScrap] = useState(false);
@@ -25,6 +26,37 @@ export default function Home() {
   const [showToolMenu, setShowToolMenu] = useState(false);
   const [showWorship, setShowWorship] = useState(false);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  // --- 하드웨어 뒤로가기 제어 ---
+  useHardwareBack(showScrap, () => setShowScrap(false));
+  useHardwareBack(showWorship, () => setShowWorship(false));
+  useHardwareBack(showCardBuilder, () => setShowCardBuilder(false));
+  useHardwareBack(view === "card", () => setView("display"));
+  useHardwareBack(view === "display", () => {
+    setSelectedVerses([]);
+    setView("search");
+  });
+  useHardwareBack(isAddingMore, () => setIsAddingMore(false));
+
+  // 루트 종료 방지
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.history.state?.isAppRoot) {
+      window.history.replaceState({ isAppRoot: true }, "");
+      window.history.pushState({ isHome: true }, "");
+    }
+
+    const handlePop = (e: PopStateEvent) => {
+      if (e.state && e.state.isAppRoot) {
+        setShowExitConfirm(true);
+        // 즉시 홈 상태를 복구하여 앱 종료를 막음
+        window.history.pushState({ isHome: true }, "");
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
 
   // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
   useEffect(() => {
@@ -95,13 +127,13 @@ export default function Home() {
   const handleCreateCard = useCallback(async () => {
     if (!requireAuth()) return;
     if (selectedVerses.length > 0) {
-      await addScrapToServer(selectedVerses, version);
+      await addScrapToServer(selectedVerses, mainVersion);
       const scraps = await fetchMyScraps();
       setScrapCount(scraps.length);
       showToast("스크랩에 저장되었습니다");
     }
     setView("card");
-  }, [selectedVerses, version, showToast, requireAuth]);
+  }, [selectedVerses, mainVersion, showToast, requireAuth]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
@@ -143,15 +175,15 @@ export default function Home() {
       {view === "card" ? (
         <CardPreview
           verses={selectedVerses}
-          version={version}
-          enVersion={enVersion}
+          mainVersion={mainVersion}
+          subVersion={subVersion}
           onBack={handleBackToDisplay}
         />
       ) : view === "display" ? (
         <VerseDisplay
           verses={selectedVerses}
-          version={version}
-          enVersion={enVersion}
+          mainVersion={mainVersion}
+          subVersion={subVersion}
           onBack={handleBack}
           onAddMore={handleAddMore}
           onRemoveVerse={handleRemoveVerse}
@@ -162,10 +194,10 @@ export default function Home() {
       ) : (
         <SearchPanel
           selectedVerses={selectedVerses}
-          version={version}
-          enVersion={enVersion}
-          onVersionChange={setVersion}
-          onEnVersionChange={setEnVersion}
+          mainVersion={mainVersion}
+          subVersion={subVersion}
+          onMainVersionChange={setMainVersion}
+          onSubVersionChange={setSubVersion}
           onToggleVerse={handleToggleVerse}
           onConfirm={handleConfirm}
           isAddingMore={isAddingMore}
@@ -262,6 +294,33 @@ export default function Home() {
       {toastMessage && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 px-4 py-2.5 bg-gray-900 text-white text-sm rounded-xl shadow-lg z-50 animate-[fadeInUp_0.2s_ease-out]">
           {toastMessage}
+        </div>
+      )}
+
+      {/* 앱 종료 확인 팝업 */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 w-72 shadow-xl animate-[scaleIn_0.2s_ease-out]">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">앱 종료</h3>
+            <p className="text-sm text-gray-600 mb-6">예봄성경을 종료하시겠습니까?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowExitConfirm(false)}
+                className="flex-1 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  window.history.back(); // 진짜로 종료
+                }}
+                className="flex-1 py-2.5 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-black"
+              >
+                종료
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
