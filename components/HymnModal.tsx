@@ -77,7 +77,8 @@ export default function HymnModal({ onClose }: Props) {
       if (isNumber) {
         query = query.eq("number", parseInt(term, 10));
       } else {
-        query = query.or(`korean_title.ilike.%${term}%,korean_lyrics.ilike.%${term}%`);
+        const fuzzyTerm = term.replace(/\s+/g, "").split("").join("%");
+        query = query.or(`korean_title.ilike.%${fuzzyTerm}%,korean_lyrics.ilike.%${fuzzyTerm}%`);
       }
       
       const { data, error } = await query.order("number").limit(50);
