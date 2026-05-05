@@ -105,11 +105,29 @@ export default function HymnModal({ onClose }: Props) {
   const currentFont = FONTS.find(f => f.key === fontKey) || FONTS[0];
 
   const formatLyrics = (lyrics: string) => {
-    return lyrics.split('\n').map((line, i) => (
-      <span key={i}>
-        {line}
-        <br />
-      </span>
+    const lines = lyrics.split('\n').map(l => l.trim());
+    const verses: string[][] = [];
+    let currentVerse: string[] = [];
+
+    lines.forEach((line) => {
+      if (/^\d+\./.test(line)) {
+        if (currentVerse.length > 0) verses.push(currentVerse);
+        currentVerse = [line];
+      } else {
+        currentVerse.push(line);
+      }
+    });
+    if (currentVerse.length > 0) verses.push(currentVerse);
+
+    return verses.map((verseLines, i) => (
+      <div key={i} className="mb-[1.5em] last:mb-0">
+        {verseLines.map((line, j) => (
+          <span key={j}>
+            {line}
+            {j < verseLines.length - 1 && <br />}
+          </span>
+        ))}
+      </div>
     ));
   };
 
