@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { useWakeLock } from "@/hooks/useWakeLock";
 
 interface Hymn {
   id: number;
@@ -33,6 +34,26 @@ export default function HymnModal({ onClose }: Props) {
   const [results, setResults] = useState<Hymn[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedHymn, setSelectedHymn] = useState<Hymn | null>(null);
+  
+  useWakeLock(!!selectedHymn);
+
+  // 검색 히스토리
+  const HISTORY_KEY = "yebom_hymn_history";
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  });
+  const [showHistory, setShowHistory] = useState(false);
+
+  function addToHistory(term: string) {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setSearchHistory((prev) => {
+      const next = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(0, 10);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   // 설정
   const [showSettings, setShowSettings] = useState(false);
@@ -94,7 +115,12 @@ export default function HymnModal({ onClose }: Props) {
         return cleanTitle.includes(cleanTerm) || cleanLyrics.includes(cleanTerm);
       });
 
-      setResults(filtered.slice(0, 50));
+      if (filtered.length === 1) {
+        setSelectedHymn(filtered[0]);
+        addToHistory(searchTerm);
+      } else {
+        setResults(filtered.slice(0, 50));
+      }
     }, 150);
 
     return () => {
@@ -216,11 +242,37 @@ export default function HymnModal({ onClose }: Props) {
                 placeholder="장번호, 제목 또는 가사 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => setShowHistory(true)}
+                onBlur={() => setTimeout(() => setShowHistory(false), 200)}
                 className={`w-full pl-12 pr-4 py-4 rounded-2xl text-lg outline-none border focus:border-[#B8860B] focus:ring-1 focus:ring-[#B8860B] transition-shadow ${inputClass}`}
               />
               <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
+
+              {showHistory && !searchTerm && searchHistory.length > 0 && (
+                <div className={`absolute z-10 w-full mt-2 rounded-xl shadow-lg border overflow-hidden ${theme === "dark" ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
+                  <div className="p-2">
+                    <div className="px-3 py-1 text-xs text-gray-400 font-medium">최근 검색어</div>
+                    {searchHistory.map((term, i) => (
+                      <div key={i} className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer ${theme === "dark" ? "hover:bg-gray-700" : "hover:bg-gray-50"}`}>
+                        <span className="flex-1 text-sm" onMouseDown={() => { setSearchTerm(term); setShowHistory(false); }}>{term}</span>
+                        <button 
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            const next = searchHistory.filter(h => h !== term);
+                            setSearchHistory(next);
+                            localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {loading ? (
@@ -230,7 +282,10 @@ export default function HymnModal({ onClose }: Props) {
                 {results.map((hymn) => (
                   <button
                     key={hymn.id}
-                    onClick={() => setSelectedHymn(hymn)}
+                    onClick={() => {
+                      setSelectedHymn(hymn);
+                      addToHistory(searchTerm);
+                    }}
                     className={`w-full text-left p-4 rounded-xl shadow-sm border transition-all active:scale-[0.98] ${cardClass} ${theme === "dark" ? "hover:border-gray-600" : "hover:border-gray-300"}`}
                   >
                     <div className="flex items-center gap-4">
@@ -258,14 +313,42 @@ export default function HymnModal({ onClose }: Props) {
           </div>
         ) : (
           // 상세 뷰
-          <div className="max-w-3xl mx-auto p-6 md:p-12 w-full h-full flex flex-col">
-            <div className="text-center mb-10 mt-4 md:mt-8">
-              <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold tracking-wider mb-4 ${theme === "dark" ? "bg-gray-800 text-gray-400" : "bg-gray-200 text-gray-600"}`}>
-                새찬송가 {selectedHymn.number}장
-              </span>
-              <h2 className="text-2xl md:text-4xl font-bold" style={{ fontFamily: currentFont.css, fontWeight: 700 }}>
-                {selectedHymn.korean_title}
-              </h2>
+          <div className="max-w-3xl mx-auto p-6 md:p-12 w-full h-full flex flex-col relative">
+            <div className="text-center mb-10 mt-4 md:mt-8 relative flex items-center justify-center">
+              <button 
+                onClick={() => {
+                   if (selectedHymn.number > 1 && cachedHymns) {
+                     const prev = cachedHymns.find(h => h.number === selectedHymn.number - 1);
+                     if (prev) setSelectedHymn(prev);
+                   }
+                }}
+                disabled={selectedHymn.number <= 1}
+                className="absolute left-0 p-2 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+
+              <div>
+                <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold tracking-wider mb-4 ${theme === "dark" ? "bg-gray-800 text-gray-400" : "bg-gray-200 text-gray-600"}`}>
+                  새찬송가 {selectedHymn.number}장
+                </span>
+                <h2 className="text-2xl md:text-4xl font-bold" style={{ fontFamily: currentFont.css, fontWeight: 700 }}>
+                  {selectedHymn.korean_title}
+                </h2>
+              </div>
+
+              <button 
+                onClick={() => {
+                   if (cachedHymns) {
+                     const next = cachedHymns.find(h => h.number === selectedHymn.number + 1);
+                     if (next) setSelectedHymn(next);
+                   }
+                }}
+                disabled={!cachedHymns || !cachedHymns.find(h => h.number === selectedHymn.number + 1)}
+                className="absolute right-0 p-2 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
             </div>
             
             <div 

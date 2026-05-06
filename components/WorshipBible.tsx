@@ -62,6 +62,23 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     return localStorage.getItem(CURRENT_KEY) || "";
   });
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
+
+  const HISTORY_KEY = "yebom_worship_history";
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  });
+  const [showHistory, setShowHistory] = useState(false);
+
+  function addToHistory(term: string) {
+    const trimmed = term.trim();
+    if (!trimmed) return;
+    setSearchHistory((prev) => {
+      const next = [trimmed, ...prev.filter((h) => h !== trimmed)].slice(0, 10);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
@@ -212,6 +229,9 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
         targetIdx = items.slice(0, items.length - 1).reduce((acc, item) => acc + item.verses.length, 0);
       }
       setPendingPresentJump(targetIdx);
+    }
+    if (items.length > 0) {
+      addToHistory(input);
     }
   }
 
@@ -477,14 +497,40 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
             {/* 입력 영역 */}
             <div className="flex gap-2 mb-2 items-stretch">
-              <textarea
+              <div className="flex-1 relative">
+                <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleParse(); } }}
                 placeholder="요2:1, 신12:10-12, 계10:10,17 요일2:1"
+                onFocus={() => setShowHistory(true)}
+                onBlur={() => setTimeout(() => setShowHistory(false), 200)}
                 rows={4}
                 className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
               />
+              {showHistory && !input && searchHistory.length > 0 && (
+                <div className="absolute z-10 w-full top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="px-3 py-2 text-xs text-gray-400 font-medium">최근 검색어</div>
+                  {searchHistory.map((h, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 cursor-pointer text-sm text-gray-700">
+                      <span className="flex-1 truncate" onMouseDown={() => { setInput(h); setShowHistory(false); }}>{h}</span>
+                      <button 
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const next = searchHistory.filter(term => term !== h);
+                          setSearchHistory(next);
+                          try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
               <div className="shrink-0 flex flex-col gap-2 w-24 relative">
                 <button
                   onClick={handleParse}

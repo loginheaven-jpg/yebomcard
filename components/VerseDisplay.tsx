@@ -7,6 +7,7 @@ import { stripNotes, type BibleVerse, type BilingualVerse, type BibleVersion } f
 import { addScrapToServer } from "@/lib/scrap";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useWakeLock } from "@/hooks/useWakeLock";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -131,6 +132,7 @@ export default function VerseDisplay({
   const fsParallel = fsSubVersion !== "none";
 
   useHardwareBack(showFullscreen, () => setShowFullscreen(false));
+  useWakeLock(true);
 
   useEffect(() => {
     async function loadEnglish() {

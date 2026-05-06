@@ -859,20 +859,28 @@ export default function SearchPanel({
                 placeholder="창1:1 또는 사랑, 평안"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
-              {showHistory && searchHistory.length > 0 && (
+              {showHistory && !searchInput && searchHistory.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="px-3 py-2 text-xs text-gray-400 font-medium">최근 검색어</div>
                   {searchHistory.map((h, i) => (
-                    <button
+                    <div
                       key={i}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => { setSearchInput(h); setShowHistory(false); inputRef.current?.focus(); }}
-                      className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between cursor-pointer"
                     >
-                      <svg className="w-3.5 h-3.5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {h}
-                    </button>
+                      <span className="flex-1" onMouseDown={() => { setSearchInput(h); setShowHistory(false); }}>{h}</span>
+                      <button 
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const next = searchHistory.filter(term => term !== h);
+                          setSearchHistory(next);
+                          try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

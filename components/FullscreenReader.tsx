@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
+import { useWakeLock } from "@/hooks/useWakeLock";
 
 export interface FullscreenVerseItem {
   ref: string;
@@ -55,6 +56,7 @@ export default function FullscreenReader({
   const parallel = subVersion && subVersion !== "none";
   const subVersionLabel = subVersion ? getVersionLabel(subVersion) : "";
   const [idx, setIdx] = useState(0);
+  useWakeLock(true);
 
   // ─── 레퍼런스 필 바 (jumpMode) ───
   const [pillsVisible, setPillsVisible] = useState(true);

@@ -37,7 +37,6 @@ export default function Home() {
   useHardwareBack(showCardBuilder, () => setShowCardBuilder(false));
   useHardwareBack(view === "card", () => setView("display"));
   useHardwareBack(view === "display", () => {
-    setSelectedVerses([]);
     setView("search");
   });
   useHardwareBack(isAddingMore, () => setIsAddingMore(false));
@@ -100,8 +99,6 @@ export default function Home() {
   }, []);
 
   const handleBack = useCallback(() => {
-    setSelectedVerses([]);
-    setIsAddingMore(false);
     setView("search");
   }, []);
 
@@ -177,14 +174,16 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 py-8 px-2 sm:px-4 overflow-x-hidden">
-      {view === "card" ? (
+      <div style={{ display: view === "card" ? "block" : "none" }}>
         <CardPreview
           verses={selectedVerses}
           mainVersion={mainVersion}
           subVersion={subVersion}
           onBack={handleBackToDisplay}
         />
-      ) : view === "display" ? (
+      </div>
+
+      <div style={{ display: view === "display" ? "block" : "none" }}>
         <VerseDisplay
           verses={selectedVerses}
           mainVersion={mainVersion}
@@ -196,7 +195,9 @@ export default function Home() {
           onScrapSaved={handleScrapSaved}
           requireAuth={requireAuth}
         />
-      ) : (
+      </div>
+
+      <div style={{ display: view === "search" ? "block" : "none" }}>
         <SearchPanel
           selectedVerses={selectedVerses}
           mainVersion={mainVersion}
@@ -207,7 +208,7 @@ export default function Home() {
           onConfirm={handleConfirm}
           isAddingMore={isAddingMore}
         />
-      )}
+      </div>
 
       {/* 스크랩 오버레이 팝업 */}
       {showScrap && (
