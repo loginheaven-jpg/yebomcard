@@ -248,7 +248,7 @@ export default function Home() {
         </button>
 
       {/* 도구함 및 폰트 아이콘 (우상단) */}
-      <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
+      <div className="fixed top-4 right-4 z-[150] flex items-center gap-2">
         <button
           onClick={() => setShowFontSettings(true)}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-lg hover:bg-gray-50 active:scale-95 transition-all font-serif font-bold text-gray-700 text-lg"
