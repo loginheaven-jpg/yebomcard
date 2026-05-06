@@ -7,10 +7,10 @@ interface Props {
 }
 
 export default function GlobalFontSettings({ onClose }: Props) {
-  const { fontSize, setFontSize, fontKey, setFontKey } = useFont();
+  const { fontSize, setFontSize, fontKey, setFontKey, theme, setTheme } = useFont();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/30 animate-[fadeIn_0.2s_ease-out]" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/30 animate-[fadeIn_0.2s_ease-out]" onClick={onClose}>
       <div 
         className="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl overflow-hidden p-6 animate-[slideUp_0.2s_ease-out]"
         onClick={(e) => e.stopPropagation()}
@@ -25,6 +25,24 @@ export default function GlobalFontSettings({ onClose }: Props) {
         </div>
 
         <div className="space-y-6">
+          <div>
+            <div className="text-sm font-semibold text-gray-700 mb-3">화면 테마</div>
+            <div className="flex bg-gray-100 rounded-xl p-1.5">
+              <button 
+                onClick={() => setTheme("light")} 
+                className={`flex-1 py-2 text-sm rounded-lg transition-all font-medium ${theme === "light" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:bg-gray-50"}`}
+              >
+                밝게
+              </button>
+              <button 
+                onClick={() => setTheme("dark")} 
+                className={`flex-1 py-2 text-sm rounded-lg transition-all font-medium ${theme === "dark" ? "bg-gray-800 text-white shadow-sm" : "text-gray-500 hover:bg-gray-50"}`}
+              >
+                어둡게
+              </button>
+            </div>
+          </div>
+
           <div>
             <div className="text-sm font-semibold text-gray-700 mb-3">글자 크기</div>
             <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-xl">

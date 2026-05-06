@@ -14,6 +14,7 @@ import HymnModal from "@/components/HymnModal";
 import GlobalFontSettings from "@/components/GlobalFontSettings";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
+import { useFont } from "@/contexts/FontContext";
 
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
@@ -30,7 +31,7 @@ export default function Home() {
   const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showHymn, setShowHymn] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [showFontSettings, setShowFontSettings] = useState(false);
+  const { showFontSettings, setShowFontSettings } = useFont();
 
   // --- 하드웨어 뒤로가기 제어 ---
   useHardwareBack(showScrap, () => setShowScrap(false));
@@ -247,7 +248,7 @@ export default function Home() {
         </button>
 
       {/* 도구함 및 폰트 아이콘 (우상단) */}
-      <div className="fixed top-4 right-4 z-40 flex items-center gap-2">
+      <div className="fixed top-4 right-4 z-[60] flex items-center gap-2">
         <button
           onClick={() => setShowFontSettings(true)}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-gray-200 shadow-lg hover:bg-gray-50 active:scale-95 transition-all font-serif font-bold text-gray-700 text-lg"

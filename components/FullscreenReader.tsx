@@ -363,7 +363,7 @@ export default function FullscreenReader({
         {/* 페이지 표시 — 카드 위 우측 정렬 */}
         <div
           style={{
-            width: "min(1400px, 94%)",
+            width: "min(1200px, 88%)",
             margin: "0 auto",
             paddingBottom: "clamp(6px, 0.8vw, 12px)",
             display: "flex",
@@ -403,11 +403,11 @@ export default function FullscreenReader({
             background: vars.card,
             borderRadius: "clamp(14px, 1.4vw, 22px)",
             boxShadow: vars.shadow,
-            width: "min(1400px, 94%)",
+            width: "min(1200px, 88%)",
             height: "100%",
             maxHeight: "100%",
             margin: "0 auto",
-            padding: "clamp(18px, 2.5vw, 44px) clamp(16px, 3vw, 60px)",
+            padding: "clamp(18px, 2.5vw, 44px) clamp(16px, 4vw, 60px)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -530,7 +530,7 @@ export default function FullscreenReader({
             <div
               ref={pillsScrollRef}
               style={{
-                width: "min(1400px, 94%)",
+                width: "min(1200px, 88%)",
                 margin: "0 auto",
                 display: "flex",
                 gap: 10,
@@ -592,7 +592,7 @@ export default function FullscreenReader({
             {showAddInput && onAddVerses && (
               <div
                 style={{
-                  width: "min(1400px, 94%)",
+                  width: "min(1200px, 88%)",
                   margin: "0 auto",
                   display: "flex",
                   gap: 8,
@@ -644,7 +644,7 @@ export default function FullscreenReader({
 
         <div
           style={{
-            width: "min(1400px, 94%)",
+            width: "min(1200px, 88%)",
             margin: "0 auto",
             display: "flex",
             alignItems: "center",
@@ -654,6 +654,7 @@ export default function FullscreenReader({
             position: "relative",
             opacity: pillsVisible ? 1 : 0.12,
             transition: "opacity 0.6s ease",
+            flexWrap: "wrap",
           }}
         >
           {/* 좌측: 다크/라이트 토글 */}
@@ -783,10 +784,10 @@ export default function FullscreenReader({
               gap: 12,
             }}
           >
-            <button onClick={() => setFontSize(Math.max(40, fontSize - 6))} style={{ fontSize: 11, opacity: 0.6, color: vars.muted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>가</button>
+            <button onClick={() => setFontSize(Math.max(20, fontSize - 6))} style={{ fontSize: 11, opacity: 0.6, color: vars.muted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>가</button>
             <input
               type="range"
-              min={40}
+              min={20}
               max={120}
               value={fontSize}
               onChange={(e) => setFontSize(Number(e.target.value))}

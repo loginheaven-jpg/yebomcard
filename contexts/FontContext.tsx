@@ -17,6 +17,10 @@ interface FontContextType {
   setFontSize: (size: number) => void;
   fontKey: FontKey;
   setFontKey: (key: FontKey) => void;
+  theme: "light" | "dark";
+  setTheme: (theme: "light" | "dark") => void;
+  showFontSettings: boolean;
+  setShowFontSettings: (show: boolean) => void;
 }
 
 const FontContext = createContext<FontContextType | undefined>(undefined);
@@ -24,24 +28,29 @@ const FontContext = createContext<FontContextType | undefined>(undefined);
 export function FontProvider({ children }: { children: ReactNode }) {
   const [fontSize, setFontSize] = useState(20);
   const [fontKey, setFontKey] = useState<FontKey>("noto-serif");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [showFontSettings, setShowFontSettings] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     const storedSize = localStorage.getItem("globalFontSize");
     const storedKey = localStorage.getItem("globalFontKey") as FontKey;
+    const storedTheme = localStorage.getItem("globalTheme") as "light" | "dark";
     if (storedSize) setFontSize(parseInt(storedSize, 10));
     if (storedKey) setFontKey(storedKey);
+    if (storedTheme) setTheme(storedTheme);
   }, []);
 
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem("globalFontSize", String(fontSize));
     localStorage.setItem("globalFontKey", fontKey);
-  }, [fontSize, fontKey, mounted]);
+    localStorage.setItem("globalTheme", theme);
+  }, [fontSize, fontKey, theme, mounted]);
 
   return (
-    <FontContext.Provider value={{ fontSize, setFontSize, fontKey, setFontKey }}>
+    <FontContext.Provider value={{ fontSize, setFontSize, fontKey, setFontKey, theme, setTheme, showFontSettings, setShowFontSettings }}>
       {children}
     </FontContext.Provider>
   );
