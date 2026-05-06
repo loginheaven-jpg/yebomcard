@@ -52,12 +52,22 @@ export default function SearchPanel({
   onConfirm,
   isAddingMore,
 }: SearchPanelProps) {
-  const { isLoggedIn } = useSession();
+  const { isLoggedIn, loading: sessionLoading } = useSession();
+  // 통독은 로그인 확정 시에만 표시 (loading 중에도 제외해 hydration mismatch 방지)
   const versionOptions = (
-    isLoggedIn
+    !sessionLoading && isLoggedIn
       ? (["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const)
       : (["nkrv", "rnksv", "kjv", "nirv", "gnt"] as const)
   );
+  // 로그아웃 상태에서 mainVersion이 "easy"이면 안전하게 nkrv로 변경
+  useEffect(() => {
+    if (!sessionLoading && !isLoggedIn && mainVersion === "easy") {
+      setMainVersion("nkrv");
+    }
+    if (!sessionLoading && !isLoggedIn && subVersion === "easy") {
+      setSubVersion("none");
+    }
+  }, [sessionLoading, isLoggedIn, mainVersion, subVersion, setMainVersion, setSubVersion]);
   const [mode, setMode] = useState<SearchMode>("search");
   const parallel = subVersion !== "none";
   

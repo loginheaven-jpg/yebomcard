@@ -272,10 +272,7 @@ export default function Home() {
             {isLoggedIn ? (
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs text-gray-400">로그인</div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{session?.name ?? "사용자"}</div>
-                  </div>
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{session?.name ?? "사용자"}</div>
                   <button
                     onClick={async () => { setShowToolMenu(false); await logout(); }}
                     className="text-[10px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 shrink-0"
