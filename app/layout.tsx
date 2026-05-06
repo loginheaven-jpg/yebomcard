@@ -71,6 +71,8 @@ export const viewport: Viewport = {
   themeColor: "#1A2B3C",
 };
 
+import { FontProvider } from "@/contexts/FontContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -82,9 +84,11 @@ export default function RootLayout({
       className={`${notoSansKr.variable} ${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${ibmPlexSansKr.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
-        {children}
-        <VersionCheck />
-        <PwaInstall />
+        <FontProvider>
+          {children}
+          <VersionCheck />
+          <PwaInstall />
+        </FontProvider>
       </body>
     </html>
   );

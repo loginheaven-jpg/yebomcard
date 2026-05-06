@@ -469,7 +469,7 @@ export default function FullscreenReader({
           </div>
           <div
             style={{
-              fontSize: `${effectiveFontSize}px`,
+              fontSize: `min(${effectiveFontSize}px, 8vw)`,
               fontWeight: currentFont.weight,
               lineHeight: 1.5,
               wordBreak: "keep-all",
@@ -486,7 +486,7 @@ export default function FullscreenReader({
             <div
               style={{
                 marginTop: "clamp(14px, 1.5vw, 24px)",
-                fontSize: `${Math.round(effectiveFontSize * 0.52)}px`,
+                fontSize: `min(${Math.round(effectiveFontSize * 0.52)}px, 4.5vw)`,
                 fontWeight: 400,
                 lineHeight: 1.55,
                 color: vars.subText,

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useWakeLock } from "@/hooks/useWakeLock";
 
+import { useFont, FONTS } from "@/contexts/FontContext";
+
 interface Hymn {
   id: number;
   number: number;
@@ -16,16 +18,6 @@ interface Hymn {
 interface Props {
   onClose: () => void;
 }
-
-const FONTS = [
-  { key: "noto-serif", label: "명조", css: "var(--font-noto-serif-kr), 'Noto Serif KR', serif", weight: 600 },
-  { key: "noto-sans", label: "고딕", css: "var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif", weight: 700 },
-  { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum), 'Gowun Dodum', sans-serif", weight: 400 },
-  { key: "gothic-a1", label: "Gothic", css: "var(--font-gothic-a1), 'Gothic A1', sans-serif", weight: 600 },
-  { key: "ibm-plex", label: "Plex", css: "var(--font-ibm-plex), 'IBM Plex Sans KR', sans-serif", weight: 600 },
-] as const;
-
-type FontKey = typeof FONTS[number]["key"];
 
 let cachedHymns: Hymn[] | null = null;
 
@@ -61,26 +53,14 @@ export default function HymnModal({ onClose }: Props) {
     if (typeof window === "undefined") return "light";
     return (localStorage.getItem("hymnTheme") as "light" | "dark") || "light";
   });
-  const [fontSize, setFontSize] = useState(() => {
-    if (typeof window === "undefined") return 20;
-    return parseInt(localStorage.getItem("hymnFontSize") || "20");
-  });
-  const [fontKey, setFontKey] = useState<FontKey>(() => {
-    if (typeof window === "undefined") return "noto-serif";
-    return (localStorage.getItem("hymnFont") as FontKey) || "noto-serif";
-  });
+  
+  const { fontSize, fontKey } = useFont();
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     localStorage.setItem("hymnTheme", theme);
   }, [theme]);
-  useEffect(() => {
-    localStorage.setItem("hymnFontSize", String(fontSize));
-  }, [fontSize]);
-  useEffect(() => {
-    localStorage.setItem("hymnFont", fontKey);
-  }, [fontKey]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -200,25 +180,6 @@ export default function HymnModal({ onClose }: Props) {
                   <div className="flex bg-gray-100 dark:bg-gray-900 rounded-lg p-1">
                     <button onClick={() => setTheme("light")} className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${theme === "light" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>밝게</button>
                     <button onClick={() => setTheme("dark")} className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${theme === "dark" ? "bg-gray-800 text-white shadow-sm" : "text-gray-500"}`}>어둡게</button>
-                  </div>
-                  {/* 폰트 크기 */}
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setFontSize(Math.max(16, fontSize - 2))} className={`w-8 h-8 rounded-full border flex items-center justify-center ${theme === "dark" ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"}`}>A-</button>
-                    <div className="flex-1 text-center text-sm">{fontSize}px</div>
-                    <button onClick={() => setFontSize(Math.min(60, fontSize + 2))} className={`w-8 h-8 rounded-full border flex items-center justify-center ${theme === "dark" ? "border-gray-600 hover:bg-gray-700" : "border-gray-200 hover:bg-gray-50"}`}>A+</button>
-                  </div>
-                  {/* 폰트 선택 */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {FONTS.map(f => (
-                      <button
-                        key={f.key}
-                        onClick={() => setFontKey(f.key)}
-                        className={`py-2 text-sm rounded-lg border transition-colors ${fontKey === f.key ? (theme === "dark" ? "bg-gray-700 border-gray-500 text-white" : "bg-gray-900 text-white border-gray-900") : (theme === "dark" ? "border-gray-700 text-gray-400 hover:bg-gray-750" : "border-gray-200 text-gray-600 hover:bg-gray-50")}`}
-                        style={{ fontFamily: f.css, fontWeight: f.weight }}
-                      >
-                        {f.label}
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>

@@ -8,6 +8,7 @@ import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type A
 import { getVersionLabel } from "@/lib/versions";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useFont, FONTS } from "@/contexts/FontContext";
 
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
@@ -48,16 +49,8 @@ export default function SearchPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScroll = useRef(0);
 
-  // 성경 본문 읽기 폰트 크기 (localStorage 유지)
-  const [readingFontSize, setReadingFontSize] = useState(() => {
-    if (typeof window !== "undefined") {
-      return parseInt(localStorage.getItem("readingFontSize") || "16");
-    }
-    return 16;
-  });
-  useEffect(() => {
-    localStorage.setItem("readingFontSize", String(readingFontSize));
-  }, [readingFontSize]);
+  const { fontSize, fontKey } = useFont();
+  const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
 
   // 풀스크린 모드
   const [showFullscreen, setShowFullscreen] = useState(false);
@@ -203,7 +196,7 @@ export default function SearchPanel({
   const executeSearch = useCallback(async () => {
     const trimmed = searchInput.trim();
     if (!trimmed) {
-      setSearchError("창1:1-3 또는 사랑, 평안");
+      setSearchError("창1:1-3 또는 두려워 말라, 사랑은 언제나");
       return;
     }
     setShowHistory(false);
@@ -664,11 +657,11 @@ export default function SearchPanel({
             {verse.verse}
           </span>
         )}
-        <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
+        <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
           {verse.text}
         </span>
         {altText && (
-          <div className="mt-1 text-gray-400 leading-relaxed" style={{ fontSize: `${readingFontSize - 2}px` }}>
+          <div className="mt-1 text-gray-400 leading-relaxed" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
             {altText}
           </div>
         )}
@@ -717,36 +710,19 @@ export default function SearchPanel({
 
   const canFullscreen = visibleMain.length > 0;
 
-  // 공용 글자크기 슬라이더 + 풀스크린 버튼 (말씀검색 / 주제추천 탭용)
+  // 풀스크린 버튼 (말씀검색 / 주제추천 탭용)
   const fontSlider = (
     <div className="flex items-center justify-end mb-2 gap-2">
-      <div className="flex items-center">
-        <button onClick={() => setReadingFontSize(Math.max(14, readingFontSize - 1))} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
-        <input
-          type="range"
-          min={14}
-          max={24}
-          value={readingFontSize}
-          onChange={(e) => setReadingFontSize(Number(e.target.value))}
-          className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
-          title={`글자 크기 ${readingFontSize}px`}
-        />
-        <button onClick={() => setReadingFontSize(Math.min(24, readingFontSize + 1))} className="text-base text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
-      </div>
+
       <button
         type="button"
         onClick={() => setShowFullscreen(true)}
         disabled={!canFullscreen}
         title="풀스크린 (빔프로젝터 읽기 모드)"
-        aria-label="풀스크린"
-        className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        aria-label="전체화면"
+        className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 9V5a1 1 0 011-1h4" />
-          <path d="M20 9V5a1 1 0 00-1-1h-4" />
-          <path d="M4 15v4a1 1 0 001 1h4" />
-          <path d="M20 15v4a1 1 0 01-1 1h-4" />
-        </svg>
+        전체화면
       </button>
     </div>
   );
@@ -856,7 +832,7 @@ export default function SearchPanel({
                 onFocus={() => { if (searchHistory.length > 0 && !searchInput) setShowHistory(true); }}
                 onKeyDown={(e) => { if (e.key === "Enter") executeSearch(); if (e.key === "Escape") setShowHistory(false); }}
                 onBlur={() => setTimeout(() => setShowHistory(false), 150)}
-                placeholder="창1:1 또는 사랑, 평안"
+                placeholder="창1:1 또는 두려워 말라, 사랑은 언제나"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
               {showHistory && !searchInput && searchHistory.length > 0 && (
@@ -1065,35 +1041,18 @@ export default function SearchPanel({
                   </button>
                 </div>
 
-                {/* 우: 글자크기 슬라이더 + 풀스크린 버튼 */}
+                {/* 우: 풀스크린 버튼 */}
                 <div className="flex items-center shrink-0 gap-1.5">
-                  <div className="flex items-center">
-                    <button onClick={() => setReadingFontSize(Math.max(14, readingFontSize - 1))} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
-                    <input
-                      type="range"
-                      min={14}
-                      max={24}
-                      value={readingFontSize}
-                      onChange={(e) => setReadingFontSize(Number(e.target.value))}
-                      className="w-12 h-1.5 bg-gray-300 rounded-full appearance-none cursor-pointer mx-0.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-600 [&::-webkit-slider-thumb]:rounded-full"
-                      title={`글자 크기 ${readingFontSize}px`}
-                    />
-                    <button onClick={() => setReadingFontSize(Math.min(24, readingFontSize + 1))} className="text-base text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
-                  </div>
+
                   <button
                     type="button"
                     onClick={() => setShowFullscreen(true)}
                     disabled={!canFullscreen}
                     title="풀스크린 (빔프로젝터 읽기 모드)"
-                    aria-label="풀스크린"
-                    className="p-1 text-gray-500 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="전체화면"
+                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 9V5a1 1 0 011-1h4" />
-                      <path d="M20 9V5a1 1 0 00-1-1h-4" />
-                      <path d="M4 15v4a1 1 0 001 1h4" />
-                      <path d="M20 15v4a1 1 0 01-1 1h-4" />
-                    </svg>
+                    전체화면
                   </button>
                 </div>
               </div>
@@ -1128,12 +1087,12 @@ export default function SearchPanel({
                                 <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800" : "text-gray-500"}`}>
                                   {v.verse}
                                 </span>
-                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
+                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {v.text}
                                 </span>
                               </div>
                               {alt && (
-                                <div className="mt-1 ml-7 text-gray-400 leading-relaxed" style={{ fontSize: `${readingFontSize - 2}px` }}>
+                                <div className="mt-1 ml-7 text-gray-400 leading-relaxed" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {alt.text}
                                 </div>
                               )}
@@ -1145,11 +1104,11 @@ export default function SearchPanel({
                                 <span className={`font-semibold text-sm mr-1.5 ${selected ? "text-gray-800" : "text-gray-500"}`}>
                                   {v.verse}
                                 </span>
-                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${readingFontSize}px` }}>
+                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {v.text}
                                 </span>
                               </div>
-                              <div className="text-gray-500 border-l border-gray-100 pl-4" style={{ fontSize: `${readingFontSize - 2}px` }}>
+                              <div className="text-gray-500 border-l border-gray-100 pl-4" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                 <span className="text-gray-400 mr-1.5">{v.verse}</span>
                                 {alt?.text || ""}
                               </div>

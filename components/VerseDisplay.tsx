@@ -8,6 +8,7 @@ import { addScrapToServer } from "@/lib/scrap";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { useFont, FONTS } from "@/contexts/FontContext";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -130,6 +131,9 @@ export default function VerseDisplay({
   const [fsMainVersion, setFsMainVersion] = useState<BibleVersion>(mainVersion);
   const [fsSubVersion, setFsSubVersion] = useState<BibleVersion | "none">(subVersion);
   const fsParallel = fsSubVersion !== "none";
+
+  const { fontSize, fontKey } = useFont();
+  const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
 
   useHardwareBack(showFullscreen, () => setShowFullscreen(false));
   useWakeLock(true);
@@ -262,7 +266,15 @@ export default function VerseDisplay({
             className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-4"
           >
             {/* Korean text */}
-            <blockquote className="text-xl leading-relaxed text-gray-900 font-[family-name:var(--font-gowun-dodum)] font-bold mb-3">
+            <blockquote 
+              className="leading-relaxed text-gray-900 mb-3"
+              style={{
+                fontSize: `${fontSize}px`,
+                fontFamily: currentFont.css,
+                fontWeight: currentFont.weight,
+                lineHeight: 1.6
+              }}
+            >
               {group.verses.map((v, vi) => (
                 <span key={v.id}>
                   {vi > 0 && " "}
