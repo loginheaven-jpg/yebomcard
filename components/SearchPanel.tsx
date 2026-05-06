@@ -778,7 +778,7 @@ export default function SearchPanel({
       )}
       {/* Header — 통합 1줄 (브랜드 + 버전 셀렉터) */}
       {!isAddingMore && (
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 pr-24">
           <div className="flex items-center gap-1.5 shrink-0">
             <div className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-gray-700 to-gray-900">
               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -831,7 +831,7 @@ export default function SearchPanel({
                 onKeyDown={(e) => { if (e.key === "Enter") { setMode("search"); executeSearch(); } if (e.key === "Escape") setShowHistory(false); }}
                 onBlur={() => setTimeout(() => setShowHistory(false), 150)}
                 placeholder="본문: 창1:1, 두려워 말라 · 주제: 감사, 위로, 새해…"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
               {showHistory && !searchInput && searchHistory.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none max-h-48 overflow-y-auto">
