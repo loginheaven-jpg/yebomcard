@@ -1,38 +1,64 @@
 import { useEffect, useRef } from "react";
 
+// 글로벌 스택: 여러 개의 useHardwareBack이 동시에 활성화될 때,
+// 가장 마지막에(최상단에) 열린 뷰만 뒤로가기 이벤트를 처리하도록 합니다.
+const modalStack: { id: string; onBack: () => void }[] = [];
+let skipPopstateCount = 0;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", (e: PopStateEvent) => {
+    if (skipPopstateCount > 0) {
+      skipPopstateCount--;
+      return;
+    }
+    
+    // 가장 위에 있는(최근에 추가된) 핸들러만 실행
+    if (modalStack.length > 0) {
+      const topModal = modalStack[modalStack.length - 1];
+      topModal.onBack();
+    }
+  });
+}
+
 /**
  * 하드웨어(또는 브라우저) 뒤로가기 버튼을 제어하기 위한 훅입니다.
  * 
  * @param isActive 현재 UI 레이어(모달, 풀스크린, 서브 뷰 등)가 활성화되어 있는지 여부
- * @param onBack 뒤로가기 버튼이 눌렸을 때 실행할 콜백 (일반적으로 isActive를 false로 만드는 함수)
+ * @param onBack 뒤로가기 버튼이 눌렸을 때 실행할 콜백
  */
 export function useHardwareBack(isActive: boolean, onBack: () => void) {
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   const isBackingOut = useRef(false);
+  const stateIdRef = useRef<string>("");
 
   useEffect(() => {
     if (!isActive) return;
 
-    // 현재 활성화된 레이어를 추적하기 위해 고유 ID를 부여하여 히스토리에 푸시
+    // 고유 ID 생성 및 히스토리 푸시
     const stateId = Math.random().toString(36).substring(2, 9);
+    stateIdRef.current = stateId;
     const currentState = window.history.state || {};
     window.history.pushState({ ...currentState, modalId: stateId }, "", window.location.href);
 
-    const handlePopState = (e: PopStateEvent) => {
-      // 뒤로가기 이벤트가 발생하면 콜백을 실행하여 모달/뷰를 닫음
+    // 스택에 등록할 핸들러
+    const handler = () => {
       isBackingOut.current = true;
       onBackRef.current();
     };
 
-    window.addEventListener("popstate", handlePopState);
+    modalStack.push({ id: stateId, onBack: handler });
 
     return () => {
-      window.removeEventListener("popstate", handlePopState);
+      // 컴포넌트 언마운트 또는 isActive false 시 스택에서 제거
+      const index = modalStack.findIndex((m) => m.id === stateIdRef.current);
+      if (index !== -1) {
+        modalStack.splice(index, 1);
+      }
       
-      // 만약 뒤로가기 버튼이 아니라 UI상의 "X" 버튼 등을 눌러서 닫힌 경우(isActive가 false가 됨),
-      // 브라우저 히스토리 스택에 남아있는 더미 상태를 수동으로 제거해야 합니다.
+      // UI 버튼("X" 등)으로 닫힌 경우, 브라우저 히스토리에서 해당 상태를 빼주어야 함
       if (!isBackingOut.current) {
+        skipPopstateCount++;
         window.history.back();
       }
       isBackingOut.current = false;
