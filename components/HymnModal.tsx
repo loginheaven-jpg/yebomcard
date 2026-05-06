@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { useSession } from "@/hooks/useSession";
+import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 import { useFont, FONTS } from "@/contexts/FontContext";
 
@@ -26,7 +28,14 @@ export default function HymnModal({ onClose }: Props) {
   const [results, setResults] = useState<Hymn[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedHymn, setSelectedHymn] = useState<Hymn | null>(null);
+  const [showHymnImage, setShowHymnImage] = useState(false);
+  const [showLoginConfirm, setShowLoginConfirm] = useState(false);
   
+  const { session } = useSession();
+  
+  useHardwareBack(showHymnImage, () => setShowHymnImage(false));
+  useHardwareBack(showLoginConfirm, () => setShowLoginConfirm(false));
+
   useWakeLock(!!selectedHymn);
 
   // 검색 히스토리
@@ -274,9 +283,18 @@ export default function HymnModal({ onClose }: Props) {
               </button>
 
               <div>
-                <span className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold tracking-wider mb-4 ${theme === "dark" ? "bg-gray-800 text-gray-400" : "bg-gray-200 text-gray-600"}`}>
+                <button 
+                  onClick={() => {
+                    if (session?.isLoggedIn) {
+                      setShowHymnImage(true);
+                    } else {
+                      setShowLoginConfirm(true);
+                    }
+                  }}
+                  className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold tracking-wider mb-4 transition-colors ${theme === "dark" ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
+                >
                   새찬송가 {selectedHymn.number}장
-                </span>
+                </button>
                 <h2 className="text-2xl md:text-4xl font-bold" style={{ fontFamily: currentFont.css, fontWeight: 700 }}>
                   {selectedHymn.korean_title}
                 </h2>
@@ -309,6 +327,57 @@ export default function HymnModal({ onClose }: Props) {
           </div>
         )}
       </div>
+      {/* Hymn Image Modal */}
+      {showHymnImage && selectedHymn && (
+        <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center animate-[fadeInUp_0.2s_ease-out]">
+          <button
+            onClick={() => setShowHymnImage(false)}
+            className="absolute top-4 right-4 z-[160] p-3 text-white/70 hover:text-white bg-black/20 hover:bg-black/50 rounded-full transition-colors"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <div className="w-full h-full relative p-2 flex items-center justify-center">
+            <img 
+              src={`https://iityjmjgnjtvqujpivjg.supabase.co/storage/v1/object/public/hymns/${String(selectedHymn.number).padStart(3, '0')}.JPG`} 
+              alt={`새찬송가 ${selectedHymn.number}장 이미지`}
+              className="w-full h-full object-contain pointer-events-none"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                alert('악보 이미지를 불러올 수 없습니다.');
+                setShowHymnImage(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Login Confirm Modal */}
+      {showLoginConfirm && (
+        <div className="fixed inset-0 z-[160] bg-black/60 flex items-center justify-center animate-[fadeInUp_0.2s_ease-out]">
+          <div className={`w-[90%] max-w-sm rounded-2xl p-6 shadow-xl ${theme === "dark" ? "bg-gray-800 text-gray-100" : "bg-white text-gray-900"}`}>
+            <h3 className="text-lg font-bold mb-3 text-center">로그인 필요</h3>
+            <p className={`text-center mb-6 leading-relaxed ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+              악보 보기 기능은 로그인 후<br />이용하실 수 있습니다.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowLoginConfirm(false)}
+                className={`flex-1 py-3 rounded-xl font-bold transition-colors ${theme === "dark" ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+              >
+                취소
+              </button>
+              <button 
+                onClick={() => {
+                  window.location.href = "https://saint.yebom.org/login?from=bible";
+                }}
+                className="flex-1 py-3 bg-[#B8860B] hover:bg-[#9B7300] text-white rounded-xl font-bold transition-colors shadow-sm"
+              >
+                로그인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
