@@ -267,7 +267,34 @@ export default function Home() {
           </svg>
         </button>
         {showToolMenu && (
-          <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden min-w-[160px]">
+          <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden min-w-[180px]">
+            {/* 사용자 영역 */}
+            {isLoggedIn ? (
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs text-gray-400">로그인</div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{session?.name ?? "사용자"}</div>
+                  </div>
+                  <button
+                    onClick={async () => { setShowToolMenu(false); await logout(); }}
+                    className="text-[10px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 shrink-0"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setShowToolMenu(false); window.location.href = "https://saint.yebom.org/login?from=bible"; }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-900 flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800"
+              >
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                로그인
+              </button>
+            )}
             <button
               onClick={() => { setShowToolMenu(false); setShowHymn(true); }}
               className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center gap-2.5"

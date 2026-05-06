@@ -18,6 +18,7 @@ import {
 } from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useSession } from "@/hooks/useSession";
 import { useFont, FONTS } from "@/contexts/FontContext";
 
 interface SearchPanelProps {
@@ -51,6 +52,12 @@ export default function SearchPanel({
   onConfirm,
   isAddingMore,
 }: SearchPanelProps) {
+  const { isLoggedIn } = useSession();
+  const versionOptions = (
+    isLoggedIn
+      ? (["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const)
+      : (["nkrv", "rnksv", "kjv", "nirv", "gnt"] as const)
+  );
   const [mode, setMode] = useState<SearchMode>("search");
   const parallel = subVersion !== "none";
   
@@ -821,10 +828,10 @@ export default function SearchPanel({
           onClose={() => setShowFullscreen(false)}
         />
       )}
-      {/* Header — 통합 1줄 (브랜드 + 버전 셀렉터) */}
+      {/* Header — 통합 1줄 (브랜드 좌, 버전 셀렉터 중앙) */}
       {!isAddingMore && (
-        <div className="flex items-center gap-2 mb-2 pr-24">
-          <div className="flex items-center gap-1.5 shrink-0">
+        <div className="grid items-center gap-2 mb-2 pr-24" style={{ gridTemplateColumns: "auto 1fr auto" }}>
+          <div className="flex items-center gap-1.5">
             <div className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-gray-700 to-gray-900">
               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -832,26 +839,29 @@ export default function SearchPanel({
             </div>
             <h1 className="text-sm font-bold text-gray-900 dark:text-gray-100 font-[family-name:var(--font-noto-serif-kr)]">예봄성경</h1>
           </div>
-          <select
-            value={mainVersion}
-            onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white border-none outline-none focus:ring-2 focus:ring-gray-400 cursor-pointer"
-          >
-            {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
-              <option key={v} value={v}>{getVersionLabel(v)}</option>
-            ))}
-          </select>
-          <span className="text-gray-400 text-xs">⇄</span>
-          <select
-            value={subVersion}
-            onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
-          >
-            <option value="none">대역</option>
-            {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
-              <option key={v} value={v}>{getVersionLabel(v)}</option>
-            ))}
-          </select>
+          <div className="flex items-center justify-center gap-1">
+            <select
+              value={mainVersion}
+              onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
+              className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-900 text-white border-none outline-none focus:ring-2 focus:ring-gray-400 cursor-pointer"
+            >
+              {versionOptions.map((v) => (
+                <option key={v} value={v}>{getVersionLabel(v)}</option>
+              ))}
+            </select>
+            <span className="text-gray-400 text-[10px]">⇄</span>
+            <select
+              value={subVersion}
+              onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
+              className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
+            >
+              <option value="none">대역</option>
+              {versionOptions.map((v) => (
+                <option key={v} value={v}>{getVersionLabel(v)}</option>
+              ))}
+            </select>
+          </div>
+          <div />
         </div>
       )}
 
@@ -1393,7 +1403,7 @@ export default function SearchPanel({
             className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[#B8860B] rounded-full shadow-xl hover:bg-[#9A7009] active:scale-95 transition-all flex items-center gap-2"
           >
             선택 완료
-            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs bg-white dark:bg-gray-800/25 rounded-full">
+            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs font-semibold bg-white/25 text-white rounded-full">
               {selectedVerses.length}
             </span>
           </button>

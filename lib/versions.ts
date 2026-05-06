@@ -5,7 +5,7 @@ export function getVersionLabel(v: BibleVersion | "none"): string {
   switch (v) {
     case "nkrv": return "개역";
     case "rnksv": return "새번역";
-    case "easy": return "통독성경";
+    case "easy": return "통독";
     case "kjv": return "KJV";
     case "nirv": return "NIrV";
     case "gnt": return "GNT";
