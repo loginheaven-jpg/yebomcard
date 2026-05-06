@@ -115,12 +115,7 @@ export default function HymnModal({ onClose }: Props) {
         return cleanTitle.includes(cleanTerm) || cleanLyrics.includes(cleanTerm);
       });
 
-      if (filtered.length === 1) {
-        setSelectedHymn(filtered[0]);
-        addToHistory(searchTerm);
-      } else {
-        setResults(filtered.slice(0, 50));
-      }
+      setResults(filtered.slice(0, 50));
     }, 150);
 
     return () => {
@@ -244,6 +239,29 @@ export default function HymnModal({ onClose }: Props) {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onFocus={() => setShowHistory(true)}
                 onBlur={() => setTimeout(() => setShowHistory(false), 200)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (!cachedHymns || !searchTerm.trim()) return;
+                    
+                    const term = searchTerm.trim();
+                    const isNumber = /^\d+$/.test(term);
+                    const cleanTerm = term.replace(/\s+/g, "").toLowerCase();
+              
+                    const filtered = cachedHymns.filter((h) => {
+                      if (isNumber) return h.number === parseInt(term, 10);
+                      const cleanTitle = h.korean_title.replace(/\s+/g, "").toLowerCase();
+                      const cleanLyrics = h.korean_lyrics.replace(/\s+/g, "").toLowerCase();
+                      return cleanTitle.includes(cleanTerm) || cleanLyrics.includes(cleanTerm);
+                    });
+
+                    if (filtered.length === 1) {
+                      setSelectedHymn(filtered[0]);
+                      addToHistory(term);
+                      setShowHistory(false);
+                    }
+                  }
+                }}
                 className={`w-full pl-12 pr-4 py-4 rounded-2xl text-lg outline-none border focus:border-[#B8860B] focus:ring-1 focus:ring-[#B8860B] transition-shadow ${inputClass}`}
               />
               <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
