@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import SearchPanel from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
@@ -46,6 +46,7 @@ export default function Home() {
   useHardwareBack(isAddingMore, () => setIsAddingMore(false));
 
   // 루트 종료 방지
+  const exitingRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.history.state?.isAppRoot) {
@@ -55,6 +56,8 @@ export default function Home() {
     }
 
     const handlePop = (e: PopStateEvent) => {
+      // 종료 진행 중이면 핸들러 우회 (무한 재차단 방지)
+      if (exitingRef.current) return;
       if (e.state && e.state.isAppRoot && !e.state.isHome) {
         setShowExitConfirm(true);
         // 즉시 홈 상태를 복구하여 앱 종료를 막음
@@ -368,7 +371,14 @@ export default function Home() {
               <button
                 onClick={() => {
                   setShowExitConfirm(false);
-                  window.history.back(); // 진짜로 종료
+                  exitingRef.current = true;
+                  // 우리가 푸시한 isHome + isAppRoot 두 단계를 한 번에 통과
+                  // (TWA/PWA에서 history 끝에 도달하면 OS가 앱 종료)
+                  window.history.go(-2);
+                  // PWA standalone에서는 window.close() 시도 (대부분 차단되지만 일부 환경에서 동작)
+                  setTimeout(() => {
+                    try { window.close(); } catch {}
+                  }, 100);
                 }}
                 className="flex-1 py-2.5 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-black"
               >

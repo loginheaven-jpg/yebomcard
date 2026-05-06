@@ -54,20 +54,42 @@ export default function SearchPanel({
 }: SearchPanelProps) {
   const { isLoggedIn, loading: sessionLoading } = useSession();
   // 통독은 로그인 확정 시에만 표시 (loading 중에도 제외해 hydration mismatch 방지)
-  const versionOptions = (
+  const versionOptions: readonly BibleVersion[] = (
     !sessionLoading && isLoggedIn
       ? (["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const)
       : (["nkrv", "rnksv", "kjv", "nirv", "gnt"] as const)
   );
-  // 로그아웃 상태에서 mainVersion이 "easy"이면 안전하게 nkrv로 변경
+  // 부 옵션 = 전체 옵션 - 주 버전 (동일 선택 방지)
+  const subVersionOptions = versionOptions.filter((v) => v !== mainVersion);
+
+  // 주 변경 시 부 자동 동기화: 부가 새 주와 같으면 이전 주 값으로 swap
+  // 로그아웃 가드 (easy → nkrv/none)
+  const prevMainRef = useRef(mainVersion);
   useEffect(() => {
     if (!sessionLoading && !isLoggedIn && mainVersion === "easy") {
       setMainVersion("nkrv");
+      return;
     }
     if (!sessionLoading && !isLoggedIn && subVersion === "easy") {
       setSubVersion("none");
+      return;
+    }
+    // 주 변경 시 부가 새 주와 동일 → 이전 주 값으로 swap
+    if (prevMainRef.current !== mainVersion) {
+      if (subVersion === mainVersion) {
+        setSubVersion(prevMainRef.current);
+      }
+      prevMainRef.current = mainVersion;
     }
   }, [sessionLoading, isLoggedIn, mainVersion, subVersion, setMainVersion, setSubVersion]);
+
+  // ⇄ 클릭: 주/부 교환 (부가 "none"이 아닐 때만)
+  function handleSwapVersions() {
+    if (subVersion === "none") return;
+    const oldMain = mainVersion;
+    setMainVersion(subVersion as BibleVersion);
+    setSubVersion(oldMain);
+  }
   const [mode, setMode] = useState<SearchMode>("search");
   const parallel = subVersion !== "none";
   
@@ -859,14 +881,23 @@ export default function SearchPanel({
                 <option key={v} value={v}>{getVersionLabel(v)}</option>
               ))}
             </select>
-            <span className="text-gray-400 text-[10px]">⇄</span>
+            <button
+              type="button"
+              onClick={handleSwapVersions}
+              disabled={subVersion === "none"}
+              title="주/부 버전 교환"
+              aria-label="주/부 버전 교환"
+              className="text-gray-400 text-[10px] px-1 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              ⇄
+            </button>
             <select
               value={subVersion}
               onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
               className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
             >
               <option value="none">대역</option>
-              {versionOptions.map((v) => (
+              {subVersionOptions.map((v) => (
                 <option key={v} value={v}>{getVersionLabel(v)}</option>
               ))}
             </select>
