@@ -639,25 +639,25 @@ export default function SearchPanel({
     return (
       <button
         onClick={() => handleToggle(verse)}
-        className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
+        className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
           selected
-            ? "bg-gray-100 border-l-4 border-l-gray-400"
-            : "hover:bg-gray-50"
+            ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400"
+            : "hover:bg-gray-50 dark:bg-gray-900"
         }`}
       >
         {showBookInfo && (
-          <div className="text-gray-700 font-semibold text-xs mb-1">
+          <div className="text-gray-700 dark:text-gray-300 font-semibold text-xs mb-1">
             {verse.book_name} {verse.chapter}:{verse.verse}
           </div>
         )}
         {!showBookInfo && (
           <span
-            className={`font-semibold text-sm mr-2 ${selected ? "text-gray-800" : "text-gray-500"}`}
+            className={`font-semibold text-sm mr-2 ${selected ? "text-gray-800 dark:text-gray-200" : "text-gray-500 dark:text-gray-400"}`}
           >
             {verse.verse}
           </span>
         )}
-        <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+        <span className={`${selected ? "text-gray-900 dark:text-gray-100" : "text-gray-700 dark:text-gray-300"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
           {verse.text}
         </span>
         {altText && (
@@ -666,7 +666,7 @@ export default function SearchPanel({
           </div>
         )}
         {selected && (
-          <span className="float-right text-gray-700 text-sm">&#10003;</span>
+          <span className="float-right text-gray-700 dark:text-gray-300 text-sm">&#10003;</span>
         )}
       </button>
     );
@@ -720,7 +720,7 @@ export default function SearchPanel({
         disabled={!canFullscreen}
         title="풀스크린 (빔프로젝터 읽기 모드)"
         aria-label="전체화면"
-        className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 hover:text-gray-800 dark:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
         전체화면
       </button>
@@ -730,8 +730,8 @@ export default function SearchPanel({
   const tabClass = (tab: SearchMode) =>
     `flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
       mode === tab
-        ? "border-b-2 border-gray-900 text-gray-700"
-        : "text-gray-500 hover:text-gray-700"
+        ? "border-b-2 border-gray-900 text-gray-700 dark:text-gray-300"
+        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300"
     }`;
 
   return (
@@ -766,7 +766,7 @@ export default function SearchPanel({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 font-[family-name:var(--font-noto-serif-kr)]">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 font-[family-name:var(--font-noto-serif-kr)]">
             예봄성경
           </h1>
           <p className="text-xs text-gray-400 mt-1 font-[family-name:var(--font-playfair)] italic tracking-wider">
@@ -777,7 +777,7 @@ export default function SearchPanel({
 
       {/* Adding more indicator */}
       {isAddingMore && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm text-gray-800 text-center">
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm text-gray-800 dark:text-gray-200 text-center">
           현재 {selectedVerses.length}절 선택됨 — 추가할 구절을 선택하세요
         </div>
       )}
@@ -787,7 +787,7 @@ export default function SearchPanel({
         <select
           value={mainVersion}
           onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
+          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:bg-gray-700 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
         >
           {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
             <option key={v} value={v}>{getVersionLabel(v)}</option>
@@ -797,7 +797,7 @@ export default function SearchPanel({
         <select
           value={subVersion}
           onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
+          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:bg-gray-700 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
         >
           <option value="none">대역</option>
           {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
@@ -807,7 +807,7 @@ export default function SearchPanel({
       </div>
 
       {/* 3 Tabs */}
-      <div className="flex border-b border-gray-200 mb-4">
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
         <button onClick={() => setMode("search")} className={tabClass("search")}>
           말씀 검색
         </button>
@@ -833,15 +833,15 @@ export default function SearchPanel({
                 onKeyDown={(e) => { if (e.key === "Enter") executeSearch(); if (e.key === "Escape") setShowHistory(false); }}
                 onBlur={() => setTimeout(() => setShowHistory(false), 150)}
                 placeholder="창1:1 또는 두려워 말라, 사랑은 언제나"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
               {showHistory && !searchInput && searchHistory.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none max-h-48 overflow-y-auto">
                   <div className="px-3 py-2 text-xs text-gray-400 font-medium">최근 검색어</div>
                   {searchHistory.map((h, i) => (
                     <div
                       key={i}
-                      className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between cursor-pointer"
+                      className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center justify-between cursor-pointer"
                     >
                       <span className="flex-1" onMouseDown={() => { setSearchInput(h); setShowHistory(false); }}>{h}</span>
                       <button 
@@ -852,7 +852,7 @@ export default function SearchPanel({
                           setSearchHistory(next);
                           try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                        className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-400 rounded"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
@@ -880,7 +880,7 @@ export default function SearchPanel({
           {searchResults.length > 0 && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
                 {searchResults.map((v) => {
                   const alt = parallel ? searchResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
@@ -892,7 +892,7 @@ export default function SearchPanel({
                 <button
                   onClick={loadMore}
                   disabled={loadingMore}
-                  className="w-full py-2.5 mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                  className="w-full py-2.5 mt-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:bg-gray-800 disabled:opacity-50 transition-colors"
                 >
                   {loadingMore ? "불러오는 중..." : "다음 50건 불러오기"}
                 </button>
@@ -915,11 +915,11 @@ export default function SearchPanel({
           {browseStep === "book" && (
             <div>
               {/* 구약/신약 토글 */}
-              <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-xl">
+              <div className="flex gap-1 mb-3 bg-gray-50 dark:bg-gray-900 p-1 rounded-xl">
                 <button
                   onClick={() => setBookTestament("old")}
                   className={`flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
-                    bookTestament === "old" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                    bookTestament === "old" ? "bg-gray-900 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800"
                   }`}
                 >
                   구약
@@ -927,7 +927,7 @@ export default function SearchPanel({
                 <button
                   onClick={() => setBookTestament("new")}
                   className={`flex-1 py-2 text-xs font-medium text-center rounded-lg transition-colors ${
-                    bookTestament === "new" ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                    bookTestament === "new" ? "bg-gray-900 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800"
                   }`}
                 >
                   신약
@@ -946,7 +946,7 @@ export default function SearchPanel({
                     className={`py-3 rounded-lg text-center transition-colors ${
                       bookCode === b.code
                         ? "bg-gray-900 text-white"
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                        : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 active:bg-gray-100 dark:bg-gray-800"
                     }`}
                   >
                     <span className="text-sm font-medium">{b.abbr}</span>
@@ -963,14 +963,14 @@ export default function SearchPanel({
               <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={() => setBrowseStep("book")}
-                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
+                  className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 transition-colors shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   목차로
                 </button>
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                   {getBookByCode(bookCode)?.nameKr || "책 선택"}
                 </span>
                 <span className="w-14" />
@@ -988,7 +988,7 @@ export default function SearchPanel({
                     className={`py-3 rounded-lg text-center transition-colors ${
                       chapter === ch
                         ? "bg-gray-900 text-white"
-                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                        : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 active:bg-gray-100 dark:bg-gray-800"
                     }`}
                   >
                     <span className="text-sm">{ch}</span>
@@ -1006,7 +1006,7 @@ export default function SearchPanel({
                 {/* 좌: 목차로 */}
                 <button
                   onClick={() => setBrowseStep("chapter")}
-                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0"
+                  className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 transition-colors shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -1025,9 +1025,9 @@ export default function SearchPanel({
                       <path d="M15 4 L4 14 L15 24 Z" />
                     </svg>
                   </button>
-                  <span className="text-sm text-gray-600 mx-1">
+                  <span className="text-sm text-gray-600 dark:text-gray-400 mx-1">
                     {getBookByCode(bookCode)?.nameKr}{" "}
-                    <span className="text-lg font-bold text-gray-900">{chapter}</span>
+                    <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{chapter}</span>
                     <span className="text-gray-400">/{chapters.length}장</span>
                   </span>
                   <button
@@ -1050,7 +1050,7 @@ export default function SearchPanel({
                     disabled={!canFullscreen}
                     title="풀스크린 (빔프로젝터 읽기 모드)"
                     aria-label="전체화면"
-                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 hover:text-gray-800 dark:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                   >
                     전체화면
                   </button>
@@ -1059,15 +1059,15 @@ export default function SearchPanel({
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 */
-                <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : (
                     <>
                       {/* PC: 좌우 2단 헤더 */}
-                      <div className="hidden lg:grid lg:grid-cols-2 lg:gap-0 border-b border-gray-200 bg-gray-50 text-xs text-gray-500 font-medium">
+                      <div className="hidden lg:grid lg:grid-cols-2 lg:gap-0 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-xs text-gray-500 dark:text-gray-400 font-medium">
                         <div className="px-4 py-2">{mainVersionLabel}</div>
-                        <div className="px-4 py-2 border-l border-gray-200">{subVersionLabel}</div>
+                        <div className="px-4 py-2 border-l border-gray-200 dark:border-gray-700">{subVersionLabel}</div>
                       </div>
 
                       {browseVerses.map((v) => {
@@ -1077,17 +1077,17 @@ export default function SearchPanel({
                           <button
                             key={v.id}
                             onClick={() => handleToggle(v)}
-                            className={`w-full text-left px-4 py-3 border-b border-gray-100 last:border-b-0 transition-colors ${
-                              selected ? "bg-gray-100 border-l-4 border-l-gray-400" : "hover:bg-gray-50"
+                            className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
+                              selected ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400" : "hover:bg-gray-50 dark:bg-gray-900"
                             }`}
                           >
                             {/* 모바일: 교차 (세로) */}
                             <div className="lg:hidden">
                               <div className="flex items-start gap-1.5">
-                                <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800" : "text-gray-500"}`}>
+                                <span className={`font-semibold text-sm shrink-0 ${selected ? "text-gray-800 dark:text-gray-200" : "text-gray-500 dark:text-gray-400"}`}>
                                   {v.verse}
                                 </span>
-                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+                                <span className={`${selected ? "text-gray-900 dark:text-gray-100" : "text-gray-700 dark:text-gray-300"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {v.text}
                                 </span>
                               </div>
@@ -1101,21 +1101,21 @@ export default function SearchPanel({
                             {/* PC: 좌우 2단 */}
                             <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
                               <div>
-                                <span className={`font-semibold text-sm mr-1.5 ${selected ? "text-gray-800" : "text-gray-500"}`}>
+                                <span className={`font-semibold text-sm mr-1.5 ${selected ? "text-gray-800 dark:text-gray-200" : "text-gray-500 dark:text-gray-400"}`}>
                                   {v.verse}
                                 </span>
-                                <span className={`${selected ? "text-gray-900" : "text-gray-700"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+                                <span className={`${selected ? "text-gray-900 dark:text-gray-100" : "text-gray-700 dark:text-gray-300"}`} style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {v.text}
                                 </span>
                               </div>
-                              <div className="text-gray-500 border-l border-gray-100 pl-4" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+                              <div className="text-gray-500 dark:text-gray-400 border-l border-gray-100 dark:border-gray-800 pl-4" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                 <span className="text-gray-400 mr-1.5">{v.verse}</span>
                                 {alt?.text || ""}
                               </div>
                             </div>
 
                             {selected && (
-                              <span className="float-right text-gray-700 text-sm">&#10003;</span>
+                              <span className="float-right text-gray-700 dark:text-gray-300 text-sm">&#10003;</span>
                             )}
                           </button>
                         );
@@ -1125,7 +1125,7 @@ export default function SearchPanel({
                 </div>
               ) : (
                 /* 단일 버전 모드 */
-                <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : browseVerses.length === 0 ? (
@@ -1152,7 +1152,7 @@ export default function SearchPanel({
               onChange={(e) => setTopicInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && searchTopic()}
               placeholder="감사, 위로, 결혼, 장례, 새해 ..."
-              className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+              className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
             <button
               onClick={searchTopic}
@@ -1184,7 +1184,7 @@ export default function SearchPanel({
 
           {topicLoading && (
             <div className="p-8 text-center">
-              <div className="inline-flex items-center gap-2 text-gray-600 text-sm">
+              <div className="inline-flex items-center gap-2 text-gray-600 dark:text-gray-400 text-sm">
                 <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -1197,7 +1197,7 @@ export default function SearchPanel({
           {topicResults.length > 0 && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 rounded-lg max-h-[60vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
                 {topicResults.map((v) => {
                   const alt = parallel ? topicResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
@@ -1237,14 +1237,14 @@ export default function SearchPanel({
                 setBrowseStep("verse");
                 setMode("chapter");
               }}
-              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-full shadow-md hover:bg-gray-50 active:scale-95 transition-all"
+              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
             >
               본문으로 가기
             </button>
           )}
           <button
             onClick={handleCopyToClipboard}
-            className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-full shadow-md hover:bg-gray-50 active:scale-95 transition-all"
+            className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
           >
             {copied ? "✓ 복사됨" : "클립보드 복사"}
           </button>
@@ -1253,7 +1253,7 @@ export default function SearchPanel({
             className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[#B8860B] rounded-full shadow-xl hover:bg-[#9A7009] active:scale-95 transition-all flex items-center gap-2"
           >
             선택 완료
-            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs bg-white/25 rounded-full">
+            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs bg-white dark:bg-gray-800/25 rounded-full">
               {selectedVerses.length}
             </span>
           </button>

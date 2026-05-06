@@ -83,7 +83,7 @@ export default function RootLayout({
       lang="ko"
       className={`${notoSansKr.variable} ${notoSerifKr.variable} ${gothicA1.variable} ${gowunDodum.variable} ${ibmPlexSansKr.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)]">
+      <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <FontProvider>
           {children}
           <VersionCheck />

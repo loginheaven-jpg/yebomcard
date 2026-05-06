@@ -212,7 +212,7 @@ export default function VerseDisplay({
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -232,7 +232,7 @@ export default function VerseDisplay({
 
         <button
           onClick={onAddMore}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:bg-gray-800 transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -263,11 +263,11 @@ export default function VerseDisplay({
         return (
           <div
             key={`${group.bookCode}-${group.chapter}-${gi}`}
-            className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-8 mb-4"
+            className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-sm dark:shadow-none border border-gray-100 dark:border-gray-800 p-8 mb-4"
           >
             {/* Korean text */}
             <blockquote 
-              className="leading-relaxed text-gray-900 mb-3"
+              className="leading-relaxed text-gray-900 dark:text-gray-100 mb-3"
               style={{
                 fontSize: `${fontSize}px`,
                 fontFamily: currentFont.css,
@@ -285,14 +285,14 @@ export default function VerseDisplay({
                 </span>
               ))}
             </blockquote>
-            <p className="text-sm text-gray-500 font-medium mb-6">
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium mb-6">
               {koreanRef}
             </p>
 
             {/* English text */}
             {group.englishVerses.length > 0 && (
-              <div className="border-t border-gray-100 pt-5">
-                <blockquote className="text-base leading-relaxed text-gray-600 font-[family-name:var(--font-playfair)] italic">
+              <div className="border-t border-gray-100 dark:border-gray-800 pt-5">
+                <blockquote className="text-base leading-relaxed text-gray-600 dark:text-gray-400 font-[family-name:var(--font-playfair)] italic">
                   {group.englishVerses.map((ev, evi) => (
                     <span key={ev.id}>
                       {evi > 0 && " "}
@@ -314,7 +314,7 @@ export default function VerseDisplay({
             {/* Remove card button */}
             <button
               onClick={() => group.verses.forEach((v) => onRemoveVerse(v))}
-              className="absolute bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+              className="absolute bottom-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 transition-colors"
               title="이 카드 제외"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -336,7 +336,7 @@ export default function VerseDisplay({
               onScrapSaved?.();
               setShowShareOptions(true);
             }}
-            className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+            className="w-full py-2.5 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:bg-gray-900 transition-colors flex items-center justify-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
@@ -358,7 +358,7 @@ export default function VerseDisplay({
               className={`flex-1 py-2.5 text-sm rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
                 copiedType === "link"
                   ? "bg-gray-900 text-white border-gray-900"
-                  : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+                  : "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-900"
               }`}
             >
               {copiedType === "link" ? (
@@ -397,7 +397,7 @@ export default function VerseDisplay({
               className={`flex-1 py-2.5 text-sm rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
                 copiedType === "text"
                   ? "bg-gray-900 text-white border-gray-900"
-                  : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+                  : "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:bg-gray-900"
               }`}
             >
               {copiedType === "text" ? (
@@ -417,7 +417,7 @@ export default function VerseDisplay({
         {/* 카드 만들기 */}
         <button
           onClick={onCreateCard}
-          className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
+          className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors"
         >
           이 말씀으로 카드 만들기 ({verses.length}절)
         </button>
@@ -429,10 +429,10 @@ export default function VerseDisplay({
             await addScrapToServer(verses, mainVersion);
             onScrapSaved?.();
           }}
-          className="w-full py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-center"
+          className="w-full py-2.5 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:bg-gray-900 transition-colors text-center"
         >
           스크랩만 하기
-          <span className="block text-xs text-gray-500 mt-0.5">
+          <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             링크복사나 카드만들기하시면 자동스크랩
           </span>
         </button>
@@ -440,7 +440,7 @@ export default function VerseDisplay({
         {/* 풀스크린으로 보기 */}
         <button
           onClick={() => setShowFullscreen(true)}
-          className="w-full py-3 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+          className="w-full py-3 text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:bg-gray-900 transition-colors flex items-center justify-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />

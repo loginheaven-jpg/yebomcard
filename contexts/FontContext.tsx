@@ -39,7 +39,12 @@ export function FontProvider({ children }: { children: ReactNode }) {
     const storedTheme = localStorage.getItem("globalTheme") as "light" | "dark";
     if (storedSize) setFontSize(parseInt(storedSize, 10));
     if (storedKey) setFontKey(storedKey);
-    if (storedTheme) setTheme(storedTheme);
+    if (storedTheme) {
+      setTheme(storedTheme);
+      if (storedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -47,6 +52,12 @@ export function FontProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("globalFontSize", String(fontSize));
     localStorage.setItem("globalFontKey", fontKey);
     localStorage.setItem("globalTheme", theme);
+    
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
   }, [fontSize, fontKey, theme, mounted]);
 
   return (

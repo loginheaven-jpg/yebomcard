@@ -439,7 +439,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
     <>
       <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose}>
         <div
-          className="absolute inset-x-0 bottom-0 max-h-[90vh] bg-gray-50 rounded-t-2xl overflow-y-auto"
+          className="absolute inset-x-0 bottom-0 max-h-[90vh] bg-gray-50 dark:bg-gray-900 rounded-t-2xl overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="p-4 pt-2 max-w-[800px] mx-auto">
@@ -448,10 +448,10 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
             {/* 헤더 */}
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-gray-900">예배성경</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">예배성경</h2>
               <button
                 onClick={onClose}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300"
               >
                 닫기
               </button>
@@ -462,7 +462,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
               <div className="relative">
                 <button
                   onClick={() => setShowSlotMenu(!showSlotMenu)}
-                  className="w-full py-2 px-3 text-left text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 flex items-center justify-between"
+                  className="w-full py-2 px-3 text-left text-sm text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:bg-gray-900 flex items-center justify-between"
                 >
                   <span>{slots.length > 0 ? "저장된 목록 불러오기" : "저장된 목록 없음"}</span>
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -470,19 +470,19 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                   </svg>
                 </button>
                 {showSlotMenu && slots.length > 0 && (
-                  <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  <div className="absolute z-10 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none overflow-hidden">
                     {slots.map((slot) => (
-                      <div key={slot.name} className="flex items-center hover:bg-gray-50">
+                      <div key={slot.name} className="flex items-center hover:bg-gray-50 dark:bg-gray-900">
                         <button
                           onClick={() => loadSlot(slot)}
-                          className="flex-1 px-3 py-2.5 text-left text-sm text-gray-700"
+                          className="flex-1 px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300"
                         >
                           <span className="font-medium">{slot.name}</span>
                           <span className="block text-xs text-gray-400 mt-0.5 truncate">{slot.input}</span>
                         </button>
                         <button
                           onClick={() => deleteSlot(slot.name)}
-                          className="px-3 text-gray-300 hover:text-gray-500"
+                          className="px-3 text-gray-300 hover:text-gray-500 dark:text-gray-400"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -506,13 +506,13 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                 onFocus={() => setShowHistory(true)}
                 onBlur={() => setTimeout(() => setShowHistory(false), 200)}
                 rows={4}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
+                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
               />
               {showHistory && !input && searchHistory.length > 0 && (
-                <div className="absolute z-10 w-full top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-10 w-full top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none max-h-48 overflow-y-auto">
                   <div className="px-3 py-2 text-xs text-gray-400 font-medium">최근 검색어</div>
                   {searchHistory.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 cursor-pointer text-sm text-gray-700">
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 dark:bg-gray-900 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
                       <span className="flex-1 truncate" onMouseDown={() => { setInput(h); setShowHistory(false); }}>{h}</span>
                       <button 
                         onMouseDown={(e) => {
@@ -522,7 +522,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                           setSearchHistory(next);
                           try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
                         }}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                        className="p-1 text-gray-400 hover:text-gray-600 dark:text-gray-400 rounded"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
@@ -542,12 +542,12 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                 <button
                   onClick={() => setShowSaveInput(true)}
                   disabled={!input.trim()}
-                  className="flex-1 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="flex-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 dark:bg-gray-900 disabled:opacity-50 transition-colors"
                 >
                   저장
                 </button>
                 {showSaveInput && (
-                  <div className="absolute z-20 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 flex gap-1 w-[220px]">
+                  <div className="absolute z-20 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none p-2 flex gap-1 w-[220px]">
                     <input
                       type="text"
                       value={saveName}
@@ -557,7 +557,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                         else if (e.key === "Escape") { setShowSaveInput(false); setSaveName(""); }
                       }}
                       placeholder="이름 (예: 주일예배)"
-                      className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400"
+                      className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400"
                       autoFocus
                     />
                     <button onClick={saveSlot} className="shrink-0 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg">
@@ -582,19 +582,19 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
             {/* 파싱 결과 리스트 */}
             {parsedItems.length > 0 && (
-              <div className="border border-gray-200 rounded-lg mb-3 divide-y divide-gray-100">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 divide-y divide-gray-100">
                 {parsedItems.map((item, i) => (
-                  <div key={i} className="flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50">
+                  <div key={i} className="flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50 dark:bg-gray-900">
                     <span className="text-green-500 mt-0.5 shrink-0 text-sm">✓</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800">{item.label}</p>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.label}</p>
                       <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
                         {item.verses.map((v) => stripNotes(v.text)).join(" ").slice(0, 60)}...
                       </p>
                     </div>
                     <button
                       onClick={() => removeItem(i)}
-                      className="text-gray-300 hover:text-gray-500 shrink-0 mt-0.5"
+                      className="text-gray-300 hover:text-gray-500 dark:text-gray-400 shrink-0 mt-0.5"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -610,7 +610,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowFullscreen(true)}
-                  className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />
@@ -619,7 +619,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                 </button>
                 <button
                   onClick={openPresentation}
-                  className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 20.25h12m-7.5-3v3m3-3v3m-10.125-3h17.25c.621 0 1.125-.504 1.125-1.125V4.875c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125z" />
@@ -631,23 +631,23 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
 
             {/* 프레젠테이션 컨트롤 패널 */}
             {presentActive && allVerses.length > 0 && (
-              <div className="space-y-3 bg-white border border-gray-200 rounded-xl p-4">
+              <div className="space-y-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 {/* 상단: 페이지 + 이전/다음 + 종료 */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => presentGo(-1)}
                     disabled={presentIdx === 0}
-                    className="flex-1 py-3 text-base font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                    className="flex-1 py-3 text-base font-medium text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:bg-gray-800 disabled:opacity-30 transition-colors"
                   >
                     ←
                   </button>
-                  <span className="shrink-0 text-center text-sm text-gray-500 min-w-[60px]">
-                    <b className="text-gray-900">{presentIdx + 1}</b> / {allVerses.length}
+                  <span className="shrink-0 text-center text-sm text-gray-500 dark:text-gray-400 min-w-[60px]">
+                    <b className="text-gray-900 dark:text-gray-100">{presentIdx + 1}</b> / {allVerses.length}
                   </span>
                   <button
                     onClick={() => presentGo(1)}
                     disabled={presentIdx >= allVerses.length - 1}
-                    className="flex-1 py-3 text-base font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+                    className="flex-1 py-3 text-base font-medium text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:bg-gray-800 disabled:opacity-30 transition-colors"
                   >
                     →
                   </button>
@@ -668,7 +668,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                       className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                         i === presentIdx
                           ? "bg-gray-900 text-white border-gray-900"
-                          : "text-gray-500 border-gray-200 hover:bg-gray-100"
+                          : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:bg-gray-800"
                       }`}
                     >
                       {v.book_abbr}{v.chapter}:{v.verse}
@@ -706,7 +706,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                         });
                       }
                     }}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border-none"
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-none"
                   >
                     {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
@@ -738,7 +738,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                         });
                       }
                     }}
-                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border-none"
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-none"
                   >
                     <option value="none">대역</option>
                     {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
@@ -750,29 +750,29 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                   {/* 다크/라이트 */}
                   <button
                     onClick={() => { const t = pTheme === "dark" ? "light" : "dark"; setPTheme(t); localStorage.setItem("fullscreenTheme", t); sendToPresent(presentIdx, { theme: t }); }}
-                    className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                    className="px-2.5 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800 rounded-full transition-colors"
                   >
                     {pTheme === "dark" ? "☀ Light" : "☾ Dark"}
                   </button>
 
-                  <span className="w-px h-3 bg-gray-200" />
+                  <span className="w-px h-3 bg-gray-200 dark:bg-gray-700" />
 
                   {/* 폰트 선택 */}
                   <div className="relative">
                     <button
                       onClick={() => setShowPFontPicker(!showPFontPicker)}
-                      className="px-2.5 py-1 text-xs text-gray-500 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors"
+                      className="px-2.5 py-1 text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-full hover:bg-gray-50 dark:bg-gray-900 transition-colors"
                     >
                       {FONT_LABELS.find((f) => f.key === pFontKey)?.label || "명조"}
                     </button>
                     {showPFontPicker && (
-                      <div className="absolute z-10 bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-lg shadow-lg p-1 min-w-[100px]">
+                      <div className="absolute z-10 bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none p-1 min-w-[100px]">
                         {FONT_LABELS.map((f) => (
                           <button
                             key={f.key}
                             onClick={() => { setPFontKey(f.key); setShowPFontPicker(false); localStorage.setItem("fullscreenFont", f.key); sendToPresent(presentIdx, { fontKey: f.key }); }}
                             className={`w-full px-3 py-1.5 text-xs text-left rounded-md transition-colors ${
-                              pFontKey === f.key ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                              pFontKey === f.key ? "bg-gray-900 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:bg-gray-900"
                             }`}
                           >
                             {f.label}
@@ -782,17 +782,17 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                     )}
                   </div>
 
-                  <span className="w-px h-3 bg-gray-200" />
+                  <span className="w-px h-3 bg-gray-200 dark:bg-gray-700" />
 
                   {/* 폰트 크기 */}
                   <div className="flex items-center gap-2">
-                    <button onClick={() => { const s = Math.max(40, pFontSize - 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
+                    <button onClick={() => { const s = Math.max(40, pFontSize - 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-[10px] text-gray-400 hover:text-gray-600 dark:text-gray-400 cursor-pointer">가</button>
                     <input
                       type="range" min={40} max={120} value={pFontSize}
                       onChange={(e) => { const s = Number(e.target.value); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }}
-                      className="w-24 h-1 bg-gray-200 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
+                      className="w-24 h-1 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-gray-700 [&::-webkit-slider-thumb]:rounded-full"
                     />
-                    <button onClick={() => { const s = Math.min(120, pFontSize + 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-sm text-gray-400 hover:text-gray-600 cursor-pointer">가</button>
+                    <button onClick={() => { const s = Math.min(120, pFontSize + 6); setPFontSize(s); localStorage.setItem("fullscreenFontSize", String(s)); sendToPresent(presentIdx, { fontSize: s }); }} className="text-sm text-gray-400 hover:text-gray-600 dark:text-gray-400 cursor-pointer">가</button>
                   </div>
                 </div>
               </div>

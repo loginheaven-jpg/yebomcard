@@ -113,15 +113,15 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
   return (
     <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose}>
       <div
-        className="absolute inset-x-0 bottom-0 max-h-[90vh] bg-gray-50 rounded-t-2xl overflow-y-auto"
+        className="absolute inset-x-0 bottom-0 max-h-[90vh] bg-gray-50 dark:bg-gray-900 rounded-t-2xl overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 pt-2 max-w-[800px] mx-auto">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
 
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900">성경카드</h2>
-            <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700">닫기</button>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">성경카드</h2>
+            <button onClick={onClose} className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300">닫기</button>
           </div>
 
           {/* 입력 영역 */}
@@ -132,7 +132,7 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleParse(); } }}
               placeholder="요3:16, 시23:1-6"
               rows={2}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
+              className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
             />
             <button
               onClick={handleParse}
@@ -153,7 +153,7 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
                 key={v}
                 onClick={() => setVersion(v)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                  version === v ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                  version === v ? "bg-gray-900 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800"
                 }`}
               >
                 {v === "nkrv" ? "개역개정" : "새번역"}
@@ -172,19 +172,19 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
 
           {/* 파싱 결과 */}
           {parsedItems.length > 0 && (
-            <div className="border border-gray-200 rounded-lg mb-3 divide-y divide-gray-100">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg mb-3 divide-y divide-gray-100">
               {parsedItems.map((item, i) => (
-                <div key={i} className="flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50">
+                <div key={i} className="flex items-start gap-2 px-3 py-2.5 hover:bg-gray-50 dark:bg-gray-900">
                   <span className="text-green-500 mt-0.5 shrink-0 text-sm">✓</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800">{item.label}</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.label}</p>
                     <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
                       {item.verses.map((v) => stripNotes(v.text)).join(" ").slice(0, 60)}...
                     </p>
                   </div>
                   <button
                     onClick={() => removeItem(i)}
-                    className="text-gray-300 hover:text-gray-500 shrink-0 mt-0.5"
+                    className="text-gray-300 hover:text-gray-500 dark:text-gray-400 shrink-0 mt-0.5"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -199,7 +199,7 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
           {totalVerses > 0 && (
             <button
               onClick={handleStart}
-              className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] transition-colors"
+              className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors"
             >
               카드 만들기 시작 ({totalVerses}절)
             </button>
