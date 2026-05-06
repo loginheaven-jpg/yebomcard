@@ -144,6 +144,12 @@ export default function VerseDisplay({
         setLoading(false);
         return;
       }
+      // 대역 미선택 시 부 버전 조회 생략
+      if (subVersion === "none") {
+        setEnglishVerses([]);
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
 

@@ -240,6 +240,10 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   // 0. English verse
   useEffect(() => {
     async function loadEnglish() {
+      if (subVersion === "none") {
+        setEnglishText("");
+        return;
+      }
       const promises = verses.map((v) =>
         supabase
           .from("bible_verses")
