@@ -6,6 +6,7 @@ import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
+import { readBookmark, saveBookmark, formatRelativeTime, type Bookmark } from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useFont, FONTS } from "@/contexts/FontContext";
@@ -105,11 +106,35 @@ export default function SearchPanel({
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState("");
 
+  // ─── 책갈피 (마지막 읽은 위치) ───
+  const [bookmark, setBookmark] = useState<Bookmark | null>(null);
+  useEffect(() => { setBookmark(readBookmark()); }, []);
+  // verse 단계 진입 후 3초 머물면 자동 저장
+  useEffect(() => {
+    if (mode !== "chapter" || browseStep !== "verse") return;
+    if (!bookCode || !chapter) return;
+    const t = setTimeout(() => {
+      const book = getBookByCode(bookCode);
+      if (!book) return;
+      const next: Bookmark = {
+        book_code: bookCode,
+        book_name: book.nameKr,
+        book_abbr: book.abbr,
+        chapter,
+        version: mainVersion,
+        savedAt: Date.now(),
+      };
+      saveBookmark(next);
+      setBookmark(next);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [mode, browseStep, bookCode, chapter, mainVersion]);
+
   // ─── 클립보드 복사 피드백 ───
   const [copied, setCopied] = useState(false);
 
   // ─── 선택구절 → 형식화된 텍스트 ───
-  const VERSION_LABEL: Record<string, string> = { nkrv: "개역개정", rnksv: "새번역", kjv: "KJV" };
+  const VERSION_LABEL: Record<string, string> = { nkrv: "개역", rnksv: "새번역", kjv: "KJV" };
 
   function formatVerseNums(nums: number[]): string {
     if (nums.length === 0) return "";
@@ -727,13 +752,6 @@ export default function SearchPanel({
     </div>
   );
 
-  const tabClass = (tab: SearchMode) =>
-    `flex-1 py-2.5 text-sm font-medium text-center transition-colors ${
-      mode === tab
-        ? "border-b-2 border-gray-900 text-gray-700 dark:text-gray-300"
-        : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300"
-    }`;
-
   return (
     <div className="w-full max-w-[1200px] mx-auto">
       {showFullscreen && (
@@ -758,71 +776,51 @@ export default function SearchPanel({
           onClose={() => setShowFullscreen(false)}
         />
       )}
-      {/* Header */}
+      {/* Header — 통합 1줄 (브랜드 + 버전 셀렉터) */}
       {!isAddingMore && (
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 mb-3">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-            </svg>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-gray-700 to-gray-900">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+            </div>
+            <h1 className="text-sm font-bold text-gray-900 dark:text-gray-100 font-[family-name:var(--font-noto-serif-kr)]">예봄성경</h1>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 font-[family-name:var(--font-noto-serif-kr)]">
-            예봄성경
-          </h1>
-          <p className="text-xs text-gray-400 mt-1 font-[family-name:var(--font-playfair)] italic tracking-wider">
-            Yebom Bible Card
-          </p>
+          <select
+            value={mainVersion}
+            onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
+            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white border-none outline-none focus:ring-2 focus:ring-gray-400 cursor-pointer"
+          >
+            {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
+              <option key={v} value={v}>{getVersionLabel(v)}</option>
+            ))}
+          </select>
+          <span className="text-gray-400 text-xs">⇄</span>
+          <select
+            value={subVersion}
+            onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
+            className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-gray-300 cursor-pointer"
+          >
+            <option value="none">대역</option>
+            {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
+              <option key={v} value={v}>{getVersionLabel(v)}</option>
+            ))}
+          </select>
         </div>
       )}
 
       {/* Adding more indicator */}
       {isAddingMore && (
-        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm text-gray-800 dark:text-gray-200 text-center">
+        <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-sm text-gray-800 dark:text-gray-200 text-center">
           현재 {selectedVerses.length}절 선택됨 — 추가할 구절을 선택하세요
         </div>
       )}
 
-      {/* Version Selectors */}
-      <div className="flex justify-center items-center gap-2 mb-4">
-        <select
-          value={mainVersion}
-          onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:bg-gray-700 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
-        >
-          {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
-            <option key={v} value={v}>{getVersionLabel(v)}</option>
-          ))}
-        </select>
-        
-        <select
-          value={subVersion}
-          onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-          className="px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:bg-gray-700 border-none outline-none focus:ring-2 focus:ring-gray-300 transition-colors cursor-pointer"
-        >
-          <option value="none">대역</option>
-          {(["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"] as const).map((v) => (
-            <option key={v} value={v}>{getVersionLabel(v)}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* 3 Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
-        <button onClick={() => setMode("search")} className={tabClass("search")}>
-          말씀 검색
-        </button>
-        <button onClick={() => { setMode("chapter"); setBrowseStep("book"); }} className={tabClass("chapter")}>
-          장절 선택
-        </button>
-        <button onClick={() => setMode("topic")} className={tabClass("topic")}>
-          주제 추천
-        </button>
-      </div>
-
-      {/* ─── Tab 1: 말씀 검색 (reference + word unified) ─── */}
-      {mode === "search" && (
-        <div>
-          <div className="flex gap-2 mb-2">
+      {/* 검색바 + 본문검색/주제추천 액션 버튼 */}
+      {!isAddingMore && (
+        <>
+          <div className="flex gap-1.5 mb-2">
             <div className="relative flex-1 min-w-0">
               <input
                 ref={inputRef}
@@ -830,10 +828,10 @@ export default function SearchPanel({
                 value={searchInput}
                 onChange={(e) => { setSearchInput(e.target.value); setShowHistory(false); }}
                 onFocus={() => { if (searchHistory.length > 0 && !searchInput) setShowHistory(true); }}
-                onKeyDown={(e) => { if (e.key === "Enter") executeSearch(); if (e.key === "Escape") setShowHistory(false); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { setMode("search"); executeSearch(); } if (e.key === "Escape") setShowHistory(false); }}
                 onBlur={() => setTimeout(() => setShowHistory(false), 150)}
-                placeholder="창1:1 또는 두려워 말라, 사랑은 언제나"
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                placeholder="본문: 창1:1, 두려워 말라 · 주제: 감사, 위로, 새해…"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
               />
               {showHistory && !searchInput && searchHistory.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-none max-h-48 overflow-y-auto">
@@ -844,7 +842,7 @@ export default function SearchPanel({
                       className="w-full px-3 py-2.5 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center justify-between cursor-pointer"
                     >
                       <span className="flex-1" onMouseDown={() => { setSearchInput(h); setShowHistory(false); }}>{h}</span>
-                      <button 
+                      <button
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -862,17 +860,74 @@ export default function SearchPanel({
               )}
             </div>
             <button
-              onClick={executeSearch}
+              onClick={() => { setMode("search"); executeSearch(); }}
               disabled={searchLoading}
-              className="shrink-0 px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="shrink-0 px-3 py-2 bg-gray-900 text-white rounded-lg text-xs font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
             >
-              {searchLoading ? "..." : "검색"}
+              {searchLoading && mode === "search" ? "..." : "본문검색"}
+            </button>
+            <button
+              onClick={() => {
+                setMode("topic");
+                setTopicInput(searchInput);
+                // searchTopic은 useCallback이라 다음 렌더에서 호출 — 일단 인라인 fetch
+                setTimeout(() => searchTopic(), 0);
+              }}
+              disabled={topicLoading}
+              className="shrink-0 px-3 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 dark:bg-gray-900 disabled:opacity-50 transition-colors"
+            >
+              {topicLoading && mode === "topic" ? "..." : "주제추천"}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">
-            장절(창1:1-3) 또는 단어(사랑 믿음) · 공백=AND · x=OR
-          </p>
 
+          {/* 성경목차 / 책갈피 */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <button
+              onClick={() => { setMode("chapter"); setBrowseStep("book"); }}
+              className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-left min-w-0"
+            >
+              <div className="w-7 h-7 rounded-md bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0 text-sm">📚</div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">성경목차</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                  {mode === "chapter" && bookCode
+                    ? `${getBookByCode(bookCode)?.nameKr ?? ""}${chapter ? ` ▸ ${chapter}장` : ""}`
+                    : "책 선택부터 시작"}
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                if (!bookmark) return;
+                setBookCode(bookmark.book_code);
+                setChapter(bookmark.chapter);
+                setMode("chapter");
+                setBrowseStep("verse");
+              }}
+              disabled={!bookmark}
+              className={`border rounded-lg px-3 py-2 flex items-center gap-2 transition-colors text-left min-w-0 ${
+                bookmark
+                  ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 hover:bg-amber-100 dark:hover:bg-amber-900"
+                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 opacity-60 cursor-not-allowed"
+              }`}
+            >
+              <div className="w-7 h-7 rounded-md bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 text-sm">🔖</div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">책갈피</div>
+                <div className={`text-[10px] truncate ${bookmark ? "text-amber-700 dark:text-amber-400" : "text-gray-400 italic"}`}>
+                  {bookmark
+                    ? `${bookmark.book_name} ${bookmark.chapter}장 · ${formatRelativeTime(bookmark.savedAt)}`
+                    : "아직 기록이 없어요"}
+                </div>
+              </div>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ─── Tab 1: 말씀 검색 결과 ─── */}
+      {mode === "search" && (
+        <div>
           {searchError && (
             <p className="text-sm text-red-500 mb-3 text-center">{searchError}</p>
           )}
@@ -1142,39 +1197,9 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* ─── Tab 3: 주제 추천 ─── */}
+      {/* ─── Tab 3: 주제 추천 결과 ─── */}
       {mode === "topic" && (
         <div>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={topicInput}
-              onChange={(e) => setTopicInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && searchTopic()}
-              placeholder="감사, 위로, 결혼, 장례, 새해 ..."
-              className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
-            />
-            <button
-              onClick={searchTopic}
-              disabled={topicLoading}
-              className="shrink-0 px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-            >
-              {topicLoading ? (
-                <span className="flex items-center gap-1.5">
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  ...
-                </span>
-              ) : (
-                "추천"
-              )}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mb-3">
-            주제에 맞는 성경 구절을 추천합니다
-          </p>
 
           {topicError && (
             <p className="text-sm text-red-500 mb-3 text-center">

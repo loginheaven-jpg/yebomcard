@@ -156,7 +156,7 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
                   version === v ? "bg-gray-900 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-gray-800"
                 }`}
               >
-                {v === "nkrv" ? "개역개정" : "새번역"}
+                {v === "nkrv" ? "개역" : "새번역"}
               </button>
             ))}
           </div>
