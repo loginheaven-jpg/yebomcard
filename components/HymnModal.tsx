@@ -329,14 +329,11 @@ export default function HymnModal({ onClose }: Props) {
       </div>
       {/* Hymn Image Modal */}
       {showHymnImage && selectedHymn && (
-        <div className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center animate-[fadeInUp_0.2s_ease-out]">
-          <button
-            onClick={() => setShowHymnImage(false)}
-            className="absolute top-4 right-4 z-[160] p-3 text-white/70 hover:text-white bg-black/20 hover:bg-black/50 rounded-full transition-colors"
-          >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <div className="w-full h-full relative p-2 flex items-center justify-center">
+        <div 
+          className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center animate-[fadeInUp_0.2s_ease-out] cursor-pointer"
+          onClick={() => setShowHymnImage(false)}
+        >
+          <div className="w-full h-full relative p-2 md:p-8 flex items-center justify-center">
             <img 
               src={`https://iityjmjgnjtvqujpivjg.supabase.co/storage/v1/object/public/hymns/${String(selectedHymn.number).padStart(3, '0')}.JPG`} 
               alt={`새찬송가 ${selectedHymn.number}장 이미지`}
@@ -347,6 +344,22 @@ export default function HymnModal({ onClose }: Props) {
                 setShowHymnImage(false);
               }}
             />
+          </div>
+          
+          {/* 하단 플로팅 닫기 버튼 */}
+          <div className="absolute bottom-8 md:bottom-12 left-1/2 -translate-x-1/2 z-[160]">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowHymnImage(false);
+              }}
+              className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-medium shadow-lg transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              닫기
+            </button>
           </div>
         </div>
       )}
