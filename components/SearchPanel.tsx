@@ -6,7 +6,16 @@ import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
-import { readBookmark, saveBookmark, formatRelativeTime, type Bookmark } from "@/lib/bookmark";
+import {
+  readRecent,
+  saveRecent,
+  readBookmarks,
+  addBookmark,
+  removeBookmark,
+  formatRelativeTime,
+  type BiblePosition,
+  type Bookmark,
+} from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useFont, FONTS } from "@/contexts/FontContext";
@@ -106,29 +115,65 @@ export default function SearchPanel({
   const [topicLoading, setTopicLoading] = useState(false);
   const [topicError, setTopicError] = useState("");
 
-  // ─── 책갈피 (마지막 읽은 위치) ───
-  const [bookmark, setBookmark] = useState<Bookmark | null>(null);
-  useEffect(() => { setBookmark(readBookmark()); }, []);
-  // verse 단계 진입 후 3초 머물면 자동 저장
+  // ─── 책갈피 시스템 (Recent 자동 + Bookmarks 수동) ───
+  const [recent, setRecent] = useState<BiblePosition | null>(null);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
+  useEffect(() => {
+    setRecent(readRecent());
+    setBookmarks(readBookmarks());
+  }, []);
+  // verse 단계 진입 후 3초 머물면 Recent 자동 갱신
   useEffect(() => {
     if (mode !== "chapter" || browseStep !== "verse") return;
     if (!bookCode || !chapter) return;
     const t = setTimeout(() => {
       const book = getBookByCode(bookCode);
       if (!book) return;
-      const next: Bookmark = {
+      const next: Omit<BiblePosition, "savedAt"> = {
         book_code: bookCode,
         book_name: book.nameKr,
         book_abbr: book.abbr,
         chapter,
         version: mainVersion,
-        savedAt: Date.now(),
       };
-      saveBookmark(next);
-      setBookmark(next);
+      saveRecent(next);
+      setRecent({ ...next, savedAt: Date.now() });
     }, 3000);
     return () => clearTimeout(t);
   }, [mode, browseStep, bookCode, chapter, mainVersion]);
+
+  // 위치로 점프
+  function jumpTo(pos: BiblePosition | Bookmark) {
+    setBookCode(pos.book_code);
+    setChapter(pos.chapter);
+    setMode("chapter");
+    setBrowseStep("verse");
+    setShowBookmarkMenu(false);
+  }
+  // 현재 위치를 책갈피로 추가
+  function addCurrentToBookmarks() {
+    if (mode !== "chapter" || browseStep !== "verse" || !bookCode || !chapter) return;
+    const book = getBookByCode(bookCode);
+    if (!book) return;
+    const updated = addBookmark({
+      book_code: bookCode,
+      book_name: book.nameKr,
+      book_abbr: book.abbr,
+      chapter,
+      version: mainVersion,
+    });
+    setBookmarks(updated);
+  }
+  function deleteBookmark(id: string) {
+    const updated = removeBookmark(id);
+    setBookmarks(updated);
+  }
+  const totalBookmarkCount = (recent ? 1 : 0) + bookmarks.length;
+  const canAddCurrent = mode === "chapter" && browseStep === "verse" && !!bookCode && !!chapter;
+  const isCurrentInBookmarks = canAddCurrent && bookmarks.some(
+    (b) => b.book_code === bookCode && b.chapter === chapter && b.version === mainVersion
+  );
 
   // ─── 클립보드 복사 피드백 ───
   const [copied, setCopied] = useState(false);
@@ -881,7 +926,7 @@ export default function SearchPanel({
           </div>
 
           {/* 성경목차 / 책갈피 */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2 mb-3 relative">
             <button
               onClick={() => { setMode("chapter"); setBrowseStep("book"); }}
               className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:bg-gray-900 transition-colors text-left min-w-0"
@@ -897,30 +942,100 @@ export default function SearchPanel({
               </div>
             </button>
             <button
-              onClick={() => {
-                if (!bookmark) return;
-                setBookCode(bookmark.book_code);
-                setChapter(bookmark.chapter);
-                setMode("chapter");
-                setBrowseStep("verse");
-              }}
-              disabled={!bookmark}
+              onClick={() => setShowBookmarkMenu(!showBookmarkMenu)}
               className={`border rounded-lg px-3 py-2 flex items-center gap-2 transition-colors text-left min-w-0 ${
-                bookmark
+                totalBookmarkCount > 0
                   ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 hover:bg-amber-100 dark:hover:bg-amber-900"
-                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 opacity-60 cursor-not-allowed"
+                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:bg-gray-900"
               }`}
             >
               <div className="w-7 h-7 rounded-md bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 text-sm">🔖</div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">책갈피</div>
-                <div className={`text-[10px] truncate ${bookmark ? "text-amber-700 dark:text-amber-400" : "text-gray-400 italic"}`}>
-                  {bookmark
-                    ? `${bookmark.book_name} ${bookmark.chapter}장 · ${formatRelativeTime(bookmark.savedAt)}`
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                  책갈피
+                  {totalBookmarkCount > 0 && (
+                    <span className="text-[9px] bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-1.5 py-0.5 rounded-full font-medium">{totalBookmarkCount}</span>
+                  )}
+                </div>
+                <div className={`text-[10px] truncate ${recent || bookmarks.length > 0 ? "text-amber-700 dark:text-amber-400" : "text-gray-400 italic"}`}>
+                  {recent
+                    ? `최근: ${recent.book_name} ${recent.chapter}장 · ${formatRelativeTime(recent.savedAt)}`
+                    : bookmarks.length > 0
+                    ? `${bookmarks[0].book_name} ${bookmarks[0].chapter}장 외 ${bookmarks.length - 1}개`
                     : "아직 기록이 없어요"}
                 </div>
               </div>
+              <svg className={`w-3 h-3 text-amber-700 dark:text-amber-400 shrink-0 transition-transform ${showBookmarkMenu ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
+
+            {/* 책갈피 펼침 메뉴 */}
+            {showBookmarkMenu && (
+              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden">
+                {/* 최근 (자동) */}
+                {recent && (
+                  <button
+                    onClick={() => jumpTo(recent)}
+                    className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-amber-50 dark:hover:bg-amber-950 border-b border-gray-100 dark:border-gray-700 text-left"
+                  >
+                    <span className="text-amber-600 dark:text-amber-400 text-sm shrink-0">⚡</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                        최근: {recent.book_name} {recent.chapter}장
+                      </div>
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400">{formatRelativeTime(recent.savedAt)} · 자동 갱신</div>
+                    </div>
+                  </button>
+                )}
+                {/* 수동 책갈피 목록 */}
+                {bookmarks.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto">
+                    {bookmarks.map((b) => (
+                      <div key={b.id} className="flex items-center hover:bg-gray-50 dark:hover:bg-gray-900 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                        <button
+                          onClick={() => jumpTo(b)}
+                          className="flex-1 px-3 py-2.5 flex items-center gap-2 text-left min-w-0"
+                        >
+                          <span className="text-amber-600 dark:text-amber-400 text-sm shrink-0">🔖</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+                              {b.book_name} {b.chapter}장
+                            </div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400">{formatRelativeTime(b.savedAt)}</div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => b.id && deleteBookmark(b.id)}
+                          className="p-2 mr-1 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400"
+                          title="삭제"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* 현재 위치 추가 */}
+                {canAddCurrent && (
+                  <button
+                    onClick={addCurrentToBookmarks}
+                    disabled={isCurrentInBookmarks}
+                    className="w-full px-3 py-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950 disabled:opacity-50 disabled:cursor-not-allowed border-t border-gray-100 dark:border-gray-700"
+                  >
+                    <span>+</span>
+                    {isCurrentInBookmarks
+                      ? "이미 책갈피에 있습니다"
+                      : `현재 위치(${getBookByCode(bookCode)?.nameKr ?? ""} ${chapter}장) 추가`}
+                  </button>
+                )}
+                {!recent && bookmarks.length === 0 && (
+                  <div className="px-3 py-4 text-center text-xs text-gray-400 italic">
+                    성경 본문을 읽으면 자동으로 기록됩니다
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

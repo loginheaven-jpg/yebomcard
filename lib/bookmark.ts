@@ -1,13 +1,20 @@
 /**
- * 책갈피 — 마지막으로 읽던 성경 위치
- * localStorage 기반 (1단계). 향후 Supabase user_bookmarks 테이블로 확장 가능.
+ * 책갈피 시스템 — 2종 분리
+ * - Recent (자동, 단일): 마지막으로 읽던 위치. 본문 진입 후 자동 갱신
+ * - Bookmarks (수동, 배열): 사용자가 명시적으로 추가한 책갈피들
+ *
+ * 1단계: localStorage 기반. 향후 Supabase user_bookmarks 테이블로 확장 가능.
  */
 
 import type { BibleVersion } from "./types";
 
-const KEY = "yebom_bookmark";
+const RECENT_KEY = "yebom_recent";
+const BOOKMARKS_KEY = "yebom_bookmarks";
+const LEGACY_KEY = "yebom_bookmark"; // 이전 단일 슬롯 (Recent로 마이그레이션)
 
-export interface Bookmark {
+const MAX_BOOKMARKS = 30;
+
+export interface BiblePosition {
   book_code: string;
   book_name: string;
   book_abbr: string;
@@ -17,31 +24,95 @@ export interface Bookmark {
   savedAt: number;
 }
 
-export function readBookmark(): Bookmark | null {
-  if (typeof window === "undefined") return null;
+/** 호환용 별칭 — 기존 코드에서 Bookmark 타입 사용 */
+export type Bookmark = BiblePosition & { id?: string };
+
+// ─── 마이그레이션: yebom_bookmark → yebom_recent ───
+function migrateLegacy() {
+  if (typeof window === "undefined") return;
   try {
-    const raw = localStorage.getItem(KEY);
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    const recent = localStorage.getItem(RECENT_KEY);
+    if (legacy && !recent) {
+      localStorage.setItem(RECENT_KEY, legacy);
+      localStorage.removeItem(LEGACY_KEY);
+    }
+  } catch {}
+}
+
+// ─── Recent (자동 단일) ───
+
+export function readRecent(): BiblePosition | null {
+  if (typeof window === "undefined") return null;
+  migrateLegacy();
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as Bookmark;
+    return JSON.parse(raw) as BiblePosition;
   } catch {
     return null;
   }
 }
 
-export function saveBookmark(bm: Omit<Bookmark, "savedAt">) {
+export function saveRecent(pos: Omit<BiblePosition, "savedAt">) {
   if (typeof window === "undefined") return;
   try {
-    const next: Bookmark = { ...bm, savedAt: Date.now() };
-    localStorage.setItem(KEY, JSON.stringify(next));
-  } catch { /* silent */ }
+    const next: BiblePosition = { ...pos, savedAt: Date.now() };
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {}
 }
 
-export function clearBookmark() {
+// ─── Bookmarks (수동 배열) ───
+
+export function readBookmarks(): Bookmark[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(BOOKMARKS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBookmarks(list: Bookmark[]) {
   if (typeof window === "undefined") return;
-  try { localStorage.removeItem(KEY); } catch {}
+  try {
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+  } catch {}
 }
 
-/** "5분 전", "어제", "3일 전" 등 사용자 친화적 표현 */
+export function addBookmark(pos: Omit<Bookmark, "savedAt" | "id">): Bookmark[] {
+  const list = readBookmarks();
+  // 중복 체크 (같은 book+chapter+version)
+  const dupIdx = list.findIndex(
+    (b) =>
+      b.book_code === pos.book_code &&
+      b.chapter === pos.chapter &&
+      b.version === pos.version
+  );
+  const next: Bookmark = {
+    ...pos,
+    id: crypto.randomUUID?.() ?? `bm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    savedAt: Date.now(),
+  };
+  if (dupIdx >= 0) {
+    list.splice(dupIdx, 1); // 기존 제거 후 맨 위로
+  }
+  const updated = [next, ...list].slice(0, MAX_BOOKMARKS);
+  writeBookmarks(updated);
+  return updated;
+}
+
+export function removeBookmark(id: string): Bookmark[] {
+  const list = readBookmarks().filter((b) => b.id !== id);
+  writeBookmarks(list);
+  return list;
+}
+
+// ─── 시간 포맷 ───
+
 export function formatRelativeTime(savedAt: number): string {
   const diff = Date.now() - savedAt;
   const min = Math.floor(diff / 60_000);
