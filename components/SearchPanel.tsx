@@ -883,22 +883,19 @@ export default function SearchPanel({
     );
   }
 
-  // ─── Shared: verse item renderer ───
-  function VerseItem({
-    verse,
-    showBookInfo,
-    altText,
-  }: {
-    verse: BibleVerse;
-    showBookInfo?: boolean;
-    altText?: string;
-  }) {
+  // ─── Shared: verse item 렌더 함수 (컴포넌트가 아닌 JSX 반환 — 매 렌더 remount 방지) ───
+  function renderVerseItem(
+    verse: BibleVerse,
+    opts?: { showBookInfo?: boolean; altText?: string }
+  ) {
     if (editingVerseId === verse.id) {
       return renderEditForm(verse);
     }
+    const { showBookInfo, altText } = opts ?? {};
     const selected = isSelected(verse, selectedVerses);
     return (
       <button
+        key={verse.id}
         onClick={() => handleToggle(verse)}
         className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
           selected
@@ -1350,9 +1347,7 @@ export default function SearchPanel({
                         )}
                       </div>
                       {/* 구절 목록 */}
-                      {group.verses.map((v) => (
-                        <VerseItem key={v.id} verse={v} showBookInfo />
-                      ))}
+                      {group.verses.map((v) => renderVerseItem(v, { showBookInfo: true }))}
                     </div>
                   );
                 })}
@@ -1598,9 +1593,7 @@ export default function SearchPanel({
                   ) : browseVerses.length === 0 ? (
                     <div className="p-4 text-center text-gray-400">구절이 없습니다</div>
                   ) : (
-                    browseVerses.map((v) => (
-                      <VerseItem key={v.id} verse={v} />
-                    ))
+                    browseVerses.map((v) => renderVerseItem(v))
                   )}
                 </div>
               )}
@@ -1639,7 +1632,7 @@ export default function SearchPanel({
                   const alt = parallel ? topicResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
                   ) : undefined;
-                  return <VerseItem key={v.id} verse={v} showBookInfo altText={alt?.text} />;
+                  return renderVerseItem(v, { showBookInfo: true, altText: alt?.text });
                 })}
               </div>
               <p className="text-xs text-gray-400 mt-2 text-center">
