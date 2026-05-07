@@ -427,6 +427,9 @@ export default function SearchPanel({
 
   // ─── 말씀 검색 (모든 버전 동시 검색, 결과 있는 버전부터 정렬) ───
   const PREFERRED_VERSION_ORDER: BibleVersion[] = ["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"];
+  const KOREAN_VERSIONS: BibleVersion[] = ["nkrv", "rnksv", "easy"];
+  const ENGLISH_VERSIONS: BibleVersion[] = ["kjv", "nirv", "gnt"];
+  const hasKorean = (s: string) => /[가-힯]/.test(s);
   const executeSearch = useCallback(async () => {
     const trimmed = searchInput.trim();
     if (!trimmed) {
@@ -444,7 +447,7 @@ export default function SearchPanel({
     const parsed = parseReference(trimmed);
 
     if (parsed) {
-      // === Reference search across all versions ===
+      // === Reference search: 모든 버전 (절 비교 가치 있음) ===
       setLastSearchType("ref");
       setSearchError("");
       setSearchLoading(true);
@@ -492,7 +495,7 @@ export default function SearchPanel({
         setSearchLoading(false);
       }
     } else {
-      // === Word search across all versions ===
+      // === Word search: 언어 감지로 한글 3개 또는 영어 3개만 쿼리 ===
       if (trimmed.length < 2) {
         setSearchError("2글자 이상 입력해주세요");
         return;
@@ -515,7 +518,15 @@ export default function SearchPanel({
         setLastSearchType(isOr ? "word-or" : "word-and");
         const PER_VERSION_LIMIT = 50;
 
-        const versionPromises = allVersions.map(async (v) => {
+        // 검색어에 한글 포함 여부로 언어 그룹 결정
+        const isKorean = hasKorean(trimmed);
+        let searchVersions = isKorean ? KOREAN_VERSIONS : ENGLISH_VERSIONS;
+        // 통독(easy)은 로그인 시에만
+        if (sessionLoading || !isLoggedIn) {
+          searchVersions = searchVersions.filter((v) => v !== "easy");
+        }
+
+        const versionPromises = searchVersions.map(async (v) => {
           if (isOr) {
             const subPromises = words.map((w) =>
               supabase
