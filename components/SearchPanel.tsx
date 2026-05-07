@@ -587,12 +587,14 @@ export default function SearchPanel({
 
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
+    let cancelled = false;
     async function loadChapters() {
       // RPC로 DISTINCT chapter 조회 (Supabase 1000행 제한 우회)
       const { data, error } = await supabase.rpc("get_chapters", {
         p_version: mainVersion,
         p_book_code: bookCode,
       });
+      if (cancelled) return; // 이전 요청 결과 무시 (race 방지)
 
       if (error || !data) return;
 
@@ -603,9 +605,11 @@ export default function SearchPanel({
       }
     }
     loadChapters();
+    return () => { cancelled = true; };
   }, [bookCode, mainVersion]);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadVerses() {
       if (!chapter) return;
       setLoadingBrowse(true);
@@ -616,6 +620,7 @@ export default function SearchPanel({
         .eq("book_code", bookCode)
         .eq("chapter", chapter)
         .order("verse");
+      if (cancelled) return; // 이전 요청 결과 무시 (race 방지)
 
       if (!error && data) {
         setBrowseVerses(data as BibleVerse[]);
@@ -623,11 +628,13 @@ export default function SearchPanel({
       setLoadingBrowse(false);
     }
     loadVerses();
+    return () => { cancelled = true; };
   }, [bookCode, chapter, mainVersion]);
 
   // 병기 모드: 부 버전 로드
   useEffect(() => {
     if (!parallel || !chapter) { setBrowseVersesAlt([]); return; }
+    let cancelled = false;
     const altVersion = subVersion;
     supabase
       .from("bible_verses")
@@ -637,8 +644,10 @@ export default function SearchPanel({
       .eq("chapter", chapter)
       .order("verse")
       .then(({ data }) => {
+        if (cancelled) return; // 이전 요청 결과 무시 (race 방지)
         if (data) setBrowseVersesAlt(data as BibleVerse[]);
       });
+    return () => { cancelled = true; };
   }, [parallel, bookCode, chapter, mainVersion, subVersion]);
 
   // 버전 전환 또는 "본문으로 가기" 후 해당 절로 스크롤
@@ -674,8 +683,8 @@ export default function SearchPanel({
   useEffect(() => {
     if (prevVersion.current !== mainVersion) {
       prevVersion.current = mainVersion;
-      // 주제 추천 결과가 있으면 DB만 재조회 (AI 재호출 없음)
       if (topicRecommendations.length > 0) {
+        let cancelled = false;
         savedScroll.current = scrollRef.current?.scrollTop ?? 0;
         (async () => {
           const promises = topicRecommendations.map((rec) =>
@@ -689,6 +698,7 @@ export default function SearchPanel({
               .single()
           );
           const results = await Promise.all(promises);
+          if (cancelled) return;
           const found: BibleVerse[] = [];
           for (const res of results) {
             if (res.data) found.push(res.data as BibleVerse);
@@ -698,6 +708,7 @@ export default function SearchPanel({
             if (scrollRef.current) scrollRef.current.scrollTop = savedScroll.current;
           });
         })();
+        return () => { cancelled = true; };
       }
     }
   }, [mainVersion]);
@@ -708,6 +719,7 @@ export default function SearchPanel({
       setTopicResultsAlt([]);
       return;
     }
+    let cancelled = false;
     const altVersion = subVersion;
     if (topicResults.length > 0) {
       (async () => {
@@ -722,11 +734,13 @@ export default function SearchPanel({
             .single()
         );
         const results = await Promise.all(promises);
+        if (cancelled) return;
         setTopicResultsAlt(
           results.filter((r) => r.data).map((r) => r.data as BibleVerse)
         );
       })();
     }
+    return () => { cancelled = true; };
   }, [parallel, topicResults, mainVersion, subVersion]);
 
   // ─── 주제 추천 ───
