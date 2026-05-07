@@ -19,6 +19,7 @@ import {
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
+import { isAdmin } from "@/lib/admin";
 import { useFont, FONTS } from "@/contexts/FontContext";
 
 interface SearchPanelProps {
@@ -30,6 +31,8 @@ interface SearchPanelProps {
   onToggleVerse: (verse: BibleVerse) => void;
   onConfirm: () => void;
   isAddingMore: boolean;
+  bulkEditMode?: boolean;
+  onVerseUpdated?: (updated: BibleVerse) => void;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -51,8 +54,11 @@ export default function SearchPanel({
   onToggleVerse,
   onConfirm,
   isAddingMore,
+  bulkEditMode = false,
+  onVerseUpdated,
 }: SearchPanelProps) {
-  const { isLoggedIn, loading: sessionLoading } = useSession();
+  const { session, isLoggedIn, loading: sessionLoading } = useSession();
+  const adminMode = isAdmin(session);
   // 통독은 로그인 확정 시에만 표시 (loading 중에도 제외해 hydration mismatch 방지)
   const versionOptions: readonly BibleVersion[] = (
     !sessionLoading && isLoggedIn
@@ -220,6 +226,87 @@ export default function SearchPanel({
 
   // ─── 클립보드 복사 피드백 ───
   const [copied, setCopied] = useState(false);
+
+  // ─── 관리자: 인라인 편집 (A안) + 편집모드 토글 (B안) ───
+  const [editingVerseId, setEditingVerseId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [comparisonVerses, setComparisonVerses] = useState<{ version: string; text: string }[]>([]);
+  const [editToast, setEditToast] = useState<string | null>(null);
+
+  async function enterEdit(verse: BibleVerse) {
+    setEditingVerseId(verse.id);
+    setEditText(verse.text);
+    setEditError(null);
+    setComparisonVerses([]);
+    // 다른 모든 버전 동시 fetch (참조용)
+    const ALL = ["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"];
+    const others = ALL.filter((v) => v !== verse.version);
+    const { data } = await supabase
+      .from("bible_verses")
+      .select("version, text")
+      .in("version", others)
+      .eq("book_code", verse.book_code)
+      .eq("chapter", verse.chapter)
+      .eq("verse", verse.verse);
+    if (data) setComparisonVerses(data as { version: string; text: string }[]);
+  }
+
+  function cancelEdit() {
+    setEditingVerseId(null);
+    setEditText("");
+    setEditError(null);
+    setComparisonVerses([]);
+  }
+
+  async function saveEdit() {
+    if (editingVerseId == null) return;
+    const trimmed = editText.trim();
+    if (!trimmed) {
+      setEditError("본문이 비어있을 수 없습니다");
+      return;
+    }
+    // 변경 없으면 그냥 닫기
+    const current = [...browseVerses, ...searchResults, ...topicResults, ...browseVersesAlt, ...searchResultsAlt, ...topicResultsAlt]
+      .find((v) => v.id === editingVerseId);
+    if (current && current.text === trimmed) {
+      cancelEdit();
+      return;
+    }
+
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      const res = await fetch("/api/admin/verse", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingVerseId, text: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setEditError(json.error || "저장 실패");
+        setEditLoading(false);
+        return;
+      }
+      const updated = json.verse as BibleVerse;
+      // 모든 표시 배열 업데이트
+      setBrowseVerses((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setSearchResults((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setTopicResults((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setBrowseVersesAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setSearchResultsAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setTopicResultsAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      // 부모(selectedVerses) 동기화
+      onVerseUpdated?.(updated);
+      setEditToast(`저장됨: ${updated.book_name} ${updated.chapter}:${updated.verse}`);
+      setTimeout(() => setEditToast(null), 1800);
+      cancelEdit();
+    } catch (e) {
+      setEditError("네트워크 오류");
+      setEditLoading(false);
+    }
+  }
 
   // ─── 선택구절 → 형식화된 텍스트 ───
   const VERSION_LABEL: Record<string, string> = { nkrv: "개역", rnksv: "새번역", kjv: "KJV" };
@@ -729,6 +816,11 @@ export default function SearchPanel({
 
   // ─── Verse toggle with scroll preservation ───
   function handleToggle(verse: BibleVerse) {
+    // 편집 모드 ON (관리자) → 탭 시 토글 대신 편집 진입
+    if (bulkEditMode && adminMode) {
+      enterEdit(verse);
+      return;
+    }
     const scrollPos = scrollRef.current?.scrollTop;
     onToggleVerse(verse);
     requestAnimationFrame(() => {
@@ -736,6 +828,67 @@ export default function SearchPanel({
         scrollRef.current.scrollTop = scrollPos;
       }
     });
+  }
+
+  // ─── 편집 폼 (인라인) — VerseItem & 병기 모드 모두에서 사용 ───
+  function EditForm({ verse }: { verse: BibleVerse }) {
+    return (
+      <div
+        className="px-4 py-3 border-b border-amber-200 dark:border-amber-800 last:border-b-0 bg-amber-50 dark:bg-amber-950/20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-2 text-[10px] text-gray-500 dark:text-gray-400">
+          <span className="font-mono font-semibold">{verse.book_name} {verse.chapter}:{verse.verse}</span>
+          <span className="text-gray-400">·</span>
+          <span>{getVersionLabel(verse.version)}</span>
+          <span className="ml-auto">{verse.text.length}자 → <span className={editText.length !== verse.text.length ? "font-semibold text-amber-700 dark:text-amber-400" : ""}>{editText.length}자</span></span>
+        </div>
+        <textarea
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+            if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+          }}
+          autoFocus
+          rows={Math.max(2, Math.min(8, Math.ceil(editText.length / 35) + 1))}
+          className="w-full px-3 py-2 border border-amber-300 dark:border-amber-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-y"
+          style={{ fontSize: `${fontSize}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight, lineHeight: 1.5 }}
+        />
+        {comparisonVerses.length > 0 && (
+          <div className="mt-2 space-y-1 border-t border-amber-200 dark:border-amber-800 pt-2">
+            <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-1">참고 (다른 번역)</div>
+            {comparisonVerses.map((c) => (
+              <div key={c.version} className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                <span className="inline-block min-w-[40px] font-semibold text-gray-700 dark:text-gray-300 mr-1.5">{getVersionLabel(c.version as BibleVersion)}</span>
+                {c.text}
+              </div>
+            ))}
+          </div>
+        )}
+        {editError && (
+          <p className="mt-2 text-xs text-red-500">{editError}</p>
+        )}
+        <div className="flex gap-2 mt-3 justify-end">
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={editLoading}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md disabled:opacity-50"
+          >
+            취소 (Esc)
+          </button>
+          <button
+            type="button"
+            onClick={saveEdit}
+            disabled={editLoading || editText.trim().length === 0 || editText === verse.text}
+            className="px-4 py-1.5 text-xs font-semibold text-white bg-gray-900 rounded-md hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {editLoading ? "저장 중..." : "저장 (Enter)"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ─── Shared: verse item renderer ───
@@ -748,6 +901,9 @@ export default function SearchPanel({
     showBookInfo?: boolean;
     altText?: string;
   }) {
+    if (editingVerseId === verse.id) {
+      return <EditForm verse={verse} />;
+    }
     const selected = isSelected(verse, selectedVerses);
     return (
       <button
@@ -842,6 +998,18 @@ export default function SearchPanel({
 
   return (
     <div className="w-full max-w-[1200px] mx-auto">
+      {/* 관리자 편집 모드 ON 배너 */}
+      {bulkEditMode && adminMode && (
+        <div className="mb-2 px-3 py-2 bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-2 text-xs">
+          <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+          </svg>
+          <span className="flex-1 text-amber-800 dark:text-amber-300 font-medium">
+            <span className="font-bold">편집 모드 ON</span> — 절을 탭하면 바로 수정
+          </span>
+          <span className="text-[10px] text-amber-700 dark:text-amber-500">⚙ 도구함에서 OFF</span>
+        </div>
+      )}
       {showFullscreen && (
         <FullscreenReader
           verses={fullscreenVerses}
@@ -875,14 +1043,14 @@ export default function SearchPanel({
             </div>
             <div className="flex flex-col">
               <div
-                className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)]"
-                style={{ fontSize: "19px", fontWeight: 400, letterSpacing: "0.2px", lineHeight: 1 }}
+                className="text-gray-400 dark:text-gray-500"
+                style={{ fontSize: "8px", fontWeight: 500, letterSpacing: "5.6px", paddingLeft: "5.6px", lineHeight: 1, textAlign: "center" }}
               >
                 Yebom
               </div>
               <div
-                className="text-gray-400 dark:text-gray-500"
-                style={{ fontSize: "8px", fontWeight: 500, letterSpacing: "5.6px", paddingLeft: "5.6px", marginTop: "6px", lineHeight: 1, textAlign: "center" }}
+                className="italic text-gray-700 dark:text-gray-200 font-[family-name:var(--font-playfair)]"
+                style={{ fontSize: "20px", fontWeight: 400, letterSpacing: "0.5px", lineHeight: 1, marginTop: "4px" }}
               >
                 BIBLE
               </div>
@@ -1357,6 +1525,13 @@ export default function SearchPanel({
 
                       {browseVerses.map((v) => {
                         const alt = browseVersesAlt.find((a) => a.verse === v.verse);
+                        // 편집 중인 절: EditForm으로 교체 (주절 또는 대역절 모두 처리)
+                        if (editingVerseId === v.id) {
+                          return <EditForm key={v.id} verse={v} />;
+                        }
+                        if (alt && editingVerseId === alt.id) {
+                          return <EditForm key={alt.id} verse={alt} />;
+                        }
                         const selected = isSelected(v, selectedVerses);
                         return (
                           <button
@@ -1503,6 +1678,19 @@ export default function SearchPanel({
           >
             {copied ? "✓ 복사됨" : "클립보드 복사"}
           </button>
+          {/* 관리자: 단일 선택 시 [수정] 진입 (A안) */}
+          {adminMode && !bulkEditMode && selectedVerses.length === 1 && editingVerseId == null && (
+            <button
+              onClick={() => enterEdit(selectedVerses[0])}
+              className="pointer-events-auto px-4 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-full shadow-md dark:shadow-none hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-95 transition-all flex items-center gap-1.5"
+              title="이 절을 수정"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+              </svg>
+              수정
+            </button>
+          )}
           <button
             onClick={onConfirm}
             className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[#B8860B] rounded-full shadow-xl hover:bg-[#9A7009] active:scale-95 transition-all flex items-center gap-2"
@@ -1512,6 +1700,13 @@ export default function SearchPanel({
               {selectedVerses.length}
             </span>
           </button>
+        </div>
+      )}
+
+      {/* 관리자 편집 결과 토스트 */}
+      {editToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-3 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg shadow-lg z-[200] animate-[fadeInUp_0.2s_ease-out]">
+          {editToast}
         </div>
       )}
     </div>

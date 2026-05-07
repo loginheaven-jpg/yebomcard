@@ -8,6 +8,7 @@ import ScrapList from "@/components/ScrapList";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
+import { isAdmin } from "@/lib/admin";
 import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
 import HymnModal from "@/components/HymnModal";
@@ -18,6 +19,7 @@ import { useFont } from "@/contexts/FontContext";
 
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
+  const adminMode = isAdmin(session);
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
   const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
@@ -31,7 +33,18 @@ export default function Home() {
   const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showHymn, setShowHymn] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [bulkEditMode, setBulkEditMode] = useState(false);
   const { showFontSettings, setShowFontSettings } = useFont();
+
+  // 관리자 권한 잃으면 편집 모드 자동 해제
+  useEffect(() => {
+    if (!adminMode && bulkEditMode) setBulkEditMode(false);
+  }, [adminMode, bulkEditMode]);
+
+  // 편집 저장 후 selectedVerses 동기화
+  const handleVerseUpdated = useCallback((updated: BibleVerse) => {
+    setSelectedVerses((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+  }, []);
 
   // --- 하드웨어 뒤로가기 제어 ---
   useHardwareBack(showScrap, () => setShowScrap(false));
@@ -214,6 +227,8 @@ export default function Home() {
           onToggleVerse={handleToggleVerse}
           onConfirm={handleConfirm}
           isAddingMore={isAddingMore}
+          bulkEditMode={bulkEditMode}
+          onVerseUpdated={handleVerseUpdated}
         />
       </div>
 
@@ -315,6 +330,25 @@ export default function Home() {
               </svg>
               성경카드
             </button>
+            {/* 관리자 전용: 편집 모드 토글 */}
+            {adminMode && (
+              <button
+                onClick={() => { setShowToolMenu(false); setBulkEditMode(!bulkEditMode); }}
+                className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2.5 border-t border-gray-100 dark:border-gray-800 ${
+                  bulkEditMode
+                    ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900"
+                }`}
+              >
+                <svg className={`w-4 h-4 ${bulkEditMode ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+                <span className="flex-1">편집 모드</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${bulkEditMode ? "bg-amber-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
+                  {bulkEditMode ? "ON" : "OFF"}
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>
