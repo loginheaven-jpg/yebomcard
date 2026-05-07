@@ -975,7 +975,7 @@ export default function SearchPanel({
   );
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto">
+    <div className="w-full max-w-[1400px] mx-auto">
       {/* 관리자 편집 모드 ON 배너 */}
       {bulkEditMode && adminMode && (
         <div className="mb-2 px-3 py-2 bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-2 text-xs">
@@ -1314,7 +1314,7 @@ export default function SearchPanel({
           {searchByVersion.some((g) => g.verses.length > 0) && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] lg:max-h-[78vh] overflow-y-auto">
                 {searchByVersion.map((group) => {
                   const has = group.verses.length > 0;
                   return (
@@ -1505,7 +1505,7 @@ export default function SearchPanel({
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] lg:max-h-[78vh] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : (
@@ -1578,7 +1578,7 @@ export default function SearchPanel({
                 </div>
               ) : (
                 /* 단일 버전 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] lg:max-h-[78vh] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : browseVerses.length === 0 ? (
@@ -1620,7 +1620,7 @@ export default function SearchPanel({
           {topicResults.length > 0 && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] lg:max-h-[78vh] overflow-y-auto">
                 {topicResults.map((v) => {
                   const alt = parallel ? topicResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
