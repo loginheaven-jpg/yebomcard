@@ -134,17 +134,19 @@ export default function SearchPanel({
     });
   }
 
-  // ─── Unified search state (reference + word merged) ───
+  // ─── Unified search state (reference + word merged, multi-version) ───
   const [searchInput, setSearchInput] = useState("");
-  const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
+  // 모든 버전을 한 번에 검색해 그룹별로 보관 (있는 버전 먼저, 없는 버전 뒤로)
+  const [searchByVersion, setSearchByVersion] = useState<{ version: BibleVersion; verses: BibleVerse[] }[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [lastSearchType, setLastSearchType] = useState<"ref" | "word-and" | "word-or" | null>(null);
-  const [searchOffset, setSearchOffset] = useState(0);
-  const [hasMoreResults, setHasMoreResults] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [searchResultsAlt, setSearchResultsAlt] = useState<BibleVerse[]>([]);
   const [topicResultsAlt, setTopicResultsAlt] = useState<BibleVerse[]>([]);
+  // 풀스크린 등 외부에서 사용하는 mainVersion 결과 (호환용 derived)
+  const searchResults = useMemo(
+    () => searchByVersion.find((g) => g.version === mainVersion)?.verses ?? [],
+    [searchByVersion, mainVersion]
+  );
 
   // Chapter browse state
   const [browseStep, setBrowseStep] = useState<"book" | "chapter" | "verse">("book");
@@ -287,7 +289,8 @@ export default function SearchPanel({
       return;
     }
     // 변경 없으면 그냥 닫기
-    const current = [...browseVerses, ...searchResults, ...topicResults, ...browseVersesAlt, ...searchResultsAlt, ...topicResultsAlt]
+    const allSearchVerses = searchByVersion.flatMap((g) => g.verses);
+    const current = [...browseVerses, ...allSearchVerses, ...topicResults, ...browseVersesAlt, ...topicResultsAlt]
       .find((v) => v.id === editingVerseId);
     if (current && current.text === trimmed) {
       cancelEdit();
@@ -311,10 +314,14 @@ export default function SearchPanel({
       const updated = (json.verse ?? { id: targetId, text: trimmed }) as BibleVerse;
       // 모든 표시 배열 업데이트
       setBrowseVerses((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
-      setSearchResults((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
+      setSearchByVersion((prev) =>
+        prev.map((g) => ({
+          ...g,
+          verses: g.verses.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)),
+        }))
+      );
       setTopicResults((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
       setBrowseVersesAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
-      setSearchResultsAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
       setTopicResultsAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
       // 부모(selectedVerses) 동기화
       onVerseUpdated?.(updated);
@@ -418,7 +425,8 @@ export default function SearchPanel({
     }
   }
 
-  // ─── 말씀 검색 (auto-detect: reference or word) ───
+  // ─── 말씀 검색 (모든 버전 동시 검색, 결과 있는 버전부터 정렬) ───
+  const PREFERRED_VERSION_ORDER: BibleVersion[] = ["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"];
   const executeSearch = useCallback(async () => {
     const trimmed = searchInput.trim();
     if (!trimmed) {
@@ -428,63 +436,69 @@ export default function SearchPanel({
     setShowHistory(false);
     addToHistory(trimmed);
 
-    // Try reference parse first
+    // 통독은 로그인 시에만
+    const allVersions: BibleVersion[] = (!sessionLoading && isLoggedIn)
+      ? PREFERRED_VERSION_ORDER
+      : PREFERRED_VERSION_ORDER.filter((v) => v !== "easy");
+
     const parsed = parseReference(trimmed);
 
     if (parsed) {
-      // === Reference search ===
+      // === Reference search across all versions ===
       setLastSearchType("ref");
       setSearchError("");
       setSearchLoading(true);
 
       try {
-        let query = supabase
-          .from("bible_verses")
-          .select("*")
-          .eq("version", mainVersion)
-          .eq("book_code", parsed.bookCode)
-          .eq("chapter", parsed.chapter);
-
-        if (parsed.verses.length > 0) {
-          query = query.in("verse", parsed.verses);
-        }
-
-        const { data, error } = await query.order("verse");
-
-        if (error) {
-          setSearchError("검색 중 오류가 발생했습니다");
-          setSearchResults([]);
-        } else if (!data || data.length === 0) {
+        const queries = allVersions.map((v) => {
+          let q = supabase
+            .from("bible_verses")
+            .select("*")
+            .eq("version", v)
+            .eq("book_code", parsed.bookCode)
+            .eq("chapter", parsed.chapter);
+          if (parsed.verses.length > 0) q = q.in("verse", parsed.verses);
+          return q.order("verse");
+        });
+        const results = await Promise.all(queries);
+        const groups = allVersions.map((v, i) => ({
+          version: v,
+          verses: ((results[i].data ?? []) as BibleVerse[]),
+        }));
+        // 결과 있는 것 먼저, 없는 것 나중 (preferred order 유지)
+        const sorted = [
+          ...groups.filter((g) => g.verses.length > 0),
+          ...groups.filter((g) => g.verses.length === 0),
+        ];
+        setSearchByVersion(sorted);
+        const totalCount = sorted.reduce((acc, g) => acc + g.verses.length, 0);
+        if (totalCount === 0) {
           setSearchError("해당 구절을 찾을 수 없습니다");
-          setSearchResults([]);
-        } else {
-          const results = data as BibleVerse[];
-          setSearchResults(results);
-          if (results.length === 1 && !isSelected(results[0], selectedVerses)) {
-            onToggleVerse(results[0]);
-          }
-          requestAnimationFrame(() => {
-            if (scrollRef.current && savedScroll.current > 0) {
-              scrollRef.current.scrollTop = savedScroll.current;
-              savedScroll.current = 0;
-            }
-          });
         }
+        // 자동 선택: 주성경 결과가 정확히 1개일 때만
+        const mainGroup = sorted.find((g) => g.version === mainVersion);
+        if (mainGroup?.verses.length === 1 && !isSelected(mainGroup.verses[0], selectedVerses)) {
+          onToggleVerse(mainGroup.verses[0]);
+        }
+        requestAnimationFrame(() => {
+          if (scrollRef.current && savedScroll.current > 0) {
+            scrollRef.current.scrollTop = savedScroll.current;
+            savedScroll.current = 0;
+          }
+        });
       } catch {
         setSearchError("검색 중 오류가 발생했습니다");
       } finally {
         setSearchLoading(false);
       }
     } else {
-      // === Word search ===
+      // === Word search across all versions ===
       if (trimmed.length < 2) {
         setSearchError("2글자 이상 입력해주세요");
         return;
       }
       setSearchError("");
       setSearchLoading(true);
-      setSearchOffset(0);
-      setHasMoreResults(false);
 
       try {
         const isOr = trimmed.includes("x");
@@ -498,113 +512,67 @@ export default function SearchPanel({
           return;
         }
 
-        if (isOr) {
-          setLastSearchType("word-or");
-          const promises = words.map((w) =>
-            supabase
-              .from("bible_verses")
-              .select("*")
-              .eq("version", mainVersion)
-              .ilike("text", `%${w}%`)
+        setLastSearchType(isOr ? "word-or" : "word-and");
+        const PER_VERSION_LIMIT = 50;
+
+        const versionPromises = allVersions.map(async (v) => {
+          if (isOr) {
+            const subPromises = words.map((w) =>
+              supabase
+                .from("bible_verses")
+                .select("*")
+                .eq("version", v)
+                .ilike("text", `%${w}%`)
+                .order("book_order")
+                .order("chapter")
+                .order("verse")
+                .limit(30)
+            );
+            const subResults = await Promise.all(subPromises);
+            const merged = new Map<number, BibleVerse>();
+            for (const res of subResults) {
+              if (res.data) for (const verse of res.data as BibleVerse[]) merged.set(verse.id, verse);
+            }
+            const sortedVerses = [...merged.values()].sort((a, b) => {
+              if (a.book_order !== b.book_order) return a.book_order - b.book_order;
+              if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+              return a.verse - b.verse;
+            });
+            return { version: v, verses: sortedVerses.slice(0, PER_VERSION_LIMIT) };
+          } else {
+            let q = supabase.from("bible_verses").select("*").eq("version", v);
+            for (const w of words) q = q.ilike("text", `%${w}%`);
+            const { data } = await q
               .order("book_order")
               .order("chapter")
               .order("verse")
-              .limit(30)
-          );
-          const results = await Promise.all(promises);
-          const merged = new Map<number, BibleVerse>();
-          for (const res of results) {
-            if (res.data) {
-              for (const v of res.data as BibleVerse[]) {
-                merged.set(v.id, v);
-              }
-            }
+              .range(0, PER_VERSION_LIMIT - 1);
+            return { version: v, verses: (data ?? []) as BibleVerse[] };
           }
-          const sorted = [...merged.values()].sort((a, b) => {
-            if (a.book_order !== b.book_order) return a.book_order - b.book_order;
-            if (a.chapter !== b.chapter) return a.chapter - b.chapter;
-            return a.verse - b.verse;
-          });
-          setSearchResults(sorted.slice(0, 50));
-          if (sorted.length === 0) setSearchError("검색 결과가 없습니다");
-        } else {
-          setLastSearchType("word-and");
-          const PAGE_SIZE = 50;
-          let query = supabase
-            .from("bible_verses")
-            .select("*")
-            .eq("version", mainVersion);
+        });
 
-          for (const w of words) {
-            query = query.ilike("text", `%${w}%`);
+        const groups = await Promise.all(versionPromises);
+        const sorted = [
+          ...groups.filter((g) => g.verses.length > 0),
+          ...groups.filter((g) => g.verses.length === 0),
+        ];
+        setSearchByVersion(sorted);
+        const totalCount = sorted.reduce((acc, g) => acc + g.verses.length, 0);
+        if (totalCount === 0) setSearchError("검색 결과가 없습니다");
+
+        requestAnimationFrame(() => {
+          if (scrollRef.current && savedScroll.current > 0) {
+            scrollRef.current.scrollTop = savedScroll.current;
+            savedScroll.current = 0;
           }
-
-          const { data, error } = await query
-            .order("book_order")
-            .order("chapter")
-            .order("verse")
-            .range(0, PAGE_SIZE - 1);
-
-          if (error) {
-            setSearchError("검색 중 오류가 발생했습니다");
-            setSearchResults([]);
-          } else {
-            setSearchResults((data as BibleVerse[]) || []);
-            setHasMoreResults((data?.length || 0) === PAGE_SIZE);
-            if (data?.length === 0) setSearchError("검색 결과가 없습니다");
-            requestAnimationFrame(() => {
-              if (scrollRef.current && savedScroll.current > 0) {
-                scrollRef.current.scrollTop = savedScroll.current;
-                savedScroll.current = 0;
-              }
-            });
-          }
-        }
+        });
       } catch {
         setSearchError("검색 중 오류가 발생했습니다");
       } finally {
         setSearchLoading(false);
       }
     }
-  }, [searchInput, mainVersion]);
-
-  // ─── 다음 50건 불러오기 (AND 검색 전용) ───
-  const loadMore = useCallback(async () => {
-    const trimmed = searchInput.trim();
-    const words = trimmed.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return;
-
-    const PAGE_SIZE = 50;
-    const newOffset = searchOffset + PAGE_SIZE;
-    setLoadingMore(true);
-
-    try {
-      let query = supabase
-        .from("bible_verses")
-        .select("*")
-        .eq("version", mainVersion);
-
-      for (const w of words) {
-        query = query.ilike("text", `%${w}%`);
-      }
-
-      const { data } = await query
-        .order("book_order")
-        .order("chapter")
-        .order("verse")
-        .range(newOffset, newOffset + PAGE_SIZE - 1);
-
-      if (data) {
-        setSearchResults((prev) => [...prev, ...(data as BibleVerse[])]);
-        setSearchOffset(newOffset);
-        setHasMoreResults(data.length === PAGE_SIZE);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [searchInput, searchOffset, mainVersion]);
+  }, [searchInput, mainVersion, isLoggedIn, sessionLoading, selectedVerses, onToggleVerse]);
 
   // ─── 장절 선택 (Chapter browse) ───
   useEffect(() => {
@@ -690,16 +658,11 @@ export default function SearchPanel({
     setTimeout(tryScroll, 50);
   }, [browseVerses, rememberedVerse]);
 
-  // ─── 버전 전환 시 말씀 검색 결과 재조회 ───
+  // ─── 버전 전환 시 주제 추천 결과 재조회 (말씀검색은 모든 버전 캐싱되어 재조회 불필요) ───
   const prevVersion = useRef(mainVersion);
   useEffect(() => {
     if (prevVersion.current !== mainVersion) {
       prevVersion.current = mainVersion;
-      // 말씀 검색 결과가 있으면 재실행
-      if (searchResults.length > 0 && searchInput.trim()) {
-        savedScroll.current = scrollRef.current?.scrollTop ?? 0;
-        executeSearch();
-      }
       // 주제 추천 결과가 있으면 DB만 재조회 (AI 재호출 없음)
       if (topicRecommendations.length > 0) {
         savedScroll.current = scrollRef.current?.scrollTop ?? 0;
@@ -728,36 +691,13 @@ export default function SearchPanel({
     }
   }, [mainVersion]);
 
-  // ─── 병기: 검색 결과 + 주제 추천 부 버전 조회 ───
+  // ─── 병기: 주제 추천 부 버전만 (말씀검색은 모든 버전 동시 표시되어 alt 불필요) ───
   useEffect(() => {
     if (!parallel) {
-      setSearchResultsAlt([]);
       setTopicResultsAlt([]);
       return;
     }
     const altVersion = subVersion;
-
-    // 검색 결과 부 버전
-    if (searchResults.length > 0) {
-      (async () => {
-        const promises = searchResults.map((v) =>
-          supabase
-            .from("bible_verses")
-            .select("*")
-            .eq("version", altVersion)
-            .eq("book_code", v.book_code)
-            .eq("chapter", v.chapter)
-            .eq("verse", v.verse)
-            .single()
-        );
-        const results = await Promise.all(promises);
-        setSearchResultsAlt(
-          results.filter((r) => r.data).map((r) => r.data as BibleVerse)
-        );
-      })();
-    }
-
-    // 주제 추천 부 버전
     if (topicResults.length > 0) {
       (async () => {
         const promises = topicResults.map((v) =>
@@ -776,7 +716,7 @@ export default function SearchPanel({
         );
       })();
     }
-  }, [parallel, searchResults, topicResults, mainVersion, subVersion]);
+  }, [parallel, topicResults, mainVersion, subVersion]);
 
   // ─── 주제 추천 ───
   const searchTopic = useCallback(async () => {
@@ -982,11 +922,11 @@ export default function SearchPanel({
   }, [mode, browseStep, searchResults, browseVerses, topicResults]);
 
   const visibleAlt: BibleVerse[] = useMemo(() => {
-    if (mode === "search") return searchResultsAlt;
+    if (mode === "search") return []; // 말씀검색은 모든 버전 동시 표시 → alt 불필요
     if (mode === "chapter" && browseStep === "verse") return browseVersesAlt;
     if (mode === "topic") return topicResultsAlt;
     return [];
-  }, [mode, browseStep, searchResultsAlt, browseVersesAlt, topicResultsAlt]);
+  }, [mode, browseStep, browseVersesAlt, topicResultsAlt]);
 
   const mainVersionLabel = getVersionLabel(mainVersion);
   const subVersionLabel = getVersionLabel(subVersion);
@@ -1353,39 +1293,51 @@ export default function SearchPanel({
         </>
       )}
 
-      {/* ─── Tab 1: 말씀 검색 결과 ─── */}
+      {/* ─── Tab 1: 말씀 검색 결과 (모든 버전 동시 표시) ─── */}
       {mode === "search" && (
         <div>
           {searchError && (
             <p className="text-sm text-red-500 mb-3 text-center">{searchError}</p>
           )}
 
-          {searchResults.length > 0 && (
+          {searchByVersion.some((g) => g.verses.length > 0) && (
             <>
               {fontSlider}
               <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[60vh] overflow-y-auto">
-                {searchResults.map((v) => {
-                  const alt = parallel ? searchResultsAlt.find(
-                    (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
-                  ) : undefined;
-                  return <VerseItem key={v.id} verse={v} showBookInfo altText={alt?.text} />;
+                {searchByVersion.map((group) => {
+                  const has = group.verses.length > 0;
+                  return (
+                    <div key={group.version}>
+                      {/* 버전 섹션 헤더 (sticky) */}
+                      <div
+                        className={`sticky top-0 z-10 px-4 py-1.5 text-[11px] font-bold border-b ${
+                          has
+                            ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-600"
+                            : "bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 border-gray-100 dark:border-gray-700"
+                        }`}
+                      >
+                        <span>{getVersionLabel(group.version)}</span>
+                        <span className="ml-2 font-normal text-[10px]">
+                          {has ? `${group.verses.length}건` : "없음"}
+                        </span>
+                        {group.version === mainVersion && (
+                          <span className="ml-2 text-[9px] font-medium text-gray-500 dark:text-gray-400">· 주성경</span>
+                        )}
+                      </div>
+                      {/* 구절 목록 */}
+                      {group.verses.map((v) => (
+                        <VerseItem key={v.id} verse={v} showBookInfo />
+                      ))}
+                    </div>
+                  );
                 })}
               </div>
-              {lastSearchType === "word-and" && hasMoreResults && (
-                <button
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="w-full py-2.5 mt-2 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:bg-gray-800 disabled:opacity-50 transition-colors"
-                >
-                  {loadingMore ? "불러오는 중..." : "다음 50건 불러오기"}
-                </button>
-              )}
-              {(lastSearchType === "word-and" || lastSearchType === "word-or") && (
-                <p className="text-xs text-gray-400 mt-2 text-center">
-                  {searchResults.length}건
-                  {lastSearchType === "word-or" && searchResults.length >= 50 && " (OR 검색은 최대 50건까지 표시됩니다)"}
-                </p>
-              )}
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                총 {searchByVersion.reduce((acc, g) => acc + g.verses.length, 0)}건 ·
+                {" "}
+                {searchByVersion.filter((g) => g.verses.length > 0).length}/{searchByVersion.length}개 버전
+                {(lastSearchType === "word-and" || lastSearchType === "word-or") && " · 버전당 최대 50건"}
+              </p>
             </>
           )}
         </div>
