@@ -168,9 +168,21 @@ export default function SearchPanel({
   const [recent, setRecent] = useState<BiblePosition | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
+  // 첫 마운트 시 최근 위치로 자동 점프 (한 번만)
+  const bootstrappedRef = useRef(false);
   useEffect(() => {
-    setRecent(readRecent());
+    const r = readRecent();
+    setRecent(r);
     setBookmarks(readBookmarks());
+    if (!bootstrappedRef.current && r && r.book_code && r.chapter) {
+      bootstrappedRef.current = true;
+      setBookCode(r.book_code);
+      setChapter(r.chapter);
+      setMode("chapter");
+      setBrowseStep("verse");
+      if (r.version) setMainVersion(r.version);
+      if (r.subVersion !== undefined) setSubVersion(r.subVersion);
+    }
   }, []);
   // verse 단계 진입 후 3초 머물면 Recent 자동 갱신
   useEffect(() => {
@@ -185,20 +197,24 @@ export default function SearchPanel({
         book_abbr: book.abbr,
         chapter,
         version: mainVersion,
+        subVersion,
       };
       saveRecent(next);
       setRecent({ ...next, savedAt: Date.now() });
     }, 3000);
     return () => clearTimeout(t);
-  }, [mode, browseStep, bookCode, chapter, mainVersion]);
+  }, [mode, browseStep, bookCode, chapter, mainVersion, subVersion]);
 
-  // 위치로 점프
+  // 위치로 점프 — 번역본(주·부)도 함께 복원
   function jumpTo(pos: BiblePosition | Bookmark) {
     setBookCode(pos.book_code);
     setChapter(pos.chapter);
     setMode("chapter");
     setBrowseStep("verse");
     setShowBookmarkMenu(false);
+    // 저장 당시 번역본 복원 (없으면 현재 유지)
+    if (pos.version) setMainVersion(pos.version);
+    if (pos.subVersion !== undefined) setSubVersion(pos.subVersion);
   }
   // 현재 위치를 책갈피로 추가
   function addCurrentToBookmarks() {
@@ -211,6 +227,7 @@ export default function SearchPanel({
       book_abbr: book.abbr,
       chapter,
       version: mainVersion,
+      subVersion,
     });
     setBookmarks(updated);
   }
@@ -239,6 +256,7 @@ export default function SearchPanel({
     setEditingVerseId(verse.id);
     setEditText(verse.text);
     setEditError(null);
+    setEditLoading(false);  // 이전 편집의 잔존 로딩 상태 리셋
     setComparisonVerses([]);
     // 다른 모든 버전 동시 fetch (참조용)
     const ALL = ["nkrv", "rnksv", "easy", "kjv", "nirv", "gnt"];
@@ -257,6 +275,7 @@ export default function SearchPanel({
     setEditingVerseId(null);
     setEditText("");
     setEditError(null);
+    setEditLoading(false);
     setComparisonVerses([]);
   }
 
@@ -275,21 +294,21 @@ export default function SearchPanel({
       return;
     }
 
+    const targetId = editingVerseId; // 저장 시점 id 캡처 (race 방지)
     setEditLoading(true);
     setEditError(null);
     try {
       const res = await fetch("/api/admin/verse", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingVerseId, text: trimmed }),
+        body: JSON.stringify({ id: targetId, text: trimmed }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setEditError(json.error || "저장 실패");
-        setEditLoading(false);
+        setEditError(json.error || `저장 실패 (${res.status})`);
         return;
       }
-      const updated = json.verse as BibleVerse;
+      const updated = (json.verse ?? { id: targetId, text: trimmed }) as BibleVerse;
       // 모든 표시 배열 업데이트
       setBrowseVerses((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
       setSearchResults((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
@@ -299,11 +318,18 @@ export default function SearchPanel({
       setTopicResultsAlt((prev) => prev.map((v) => (v.id === updated.id ? { ...v, text: updated.text } : v)));
       // 부모(selectedVerses) 동기화
       onVerseUpdated?.(updated);
-      setEditToast(`저장됨: ${updated.book_name} ${updated.chapter}:${updated.verse}`);
+      const where = updated.book_name && updated.chapter && updated.verse
+        ? `${updated.book_name} ${updated.chapter}:${updated.verse}`
+        : "구절";
+      setEditToast(`저장됨: ${where}`);
       setTimeout(() => setEditToast(null), 1800);
-      cancelEdit();
+      // 저장 완료된 verse가 현재 편집 중인 것과 같을 때만 닫기 (race 방지)
+      if (editingVerseId === targetId) {
+        cancelEdit();
+      }
     } catch (e) {
       setEditError("네트워크 오류");
+    } finally {
       setEditLoading(false);
     }
   }
@@ -830,10 +856,11 @@ export default function SearchPanel({
     });
   }
 
-  // ─── 편집 폼 (인라인) — VerseItem & 병기 모드 모두에서 사용 ───
-  function EditForm({ verse }: { verse: BibleVerse }) {
+  // ─── 편집 폼 JSX (함수 컴포넌트가 아닌 단순 렌더 함수 — 매 렌더 remount 방지) ───
+  function renderEditForm(verse: BibleVerse) {
     return (
       <div
+        key={`edit-${verse.id}`}
         className="px-4 py-3 border-b border-amber-200 dark:border-amber-800 last:border-b-0 bg-amber-50 dark:bg-amber-950/20"
         onClick={(e) => e.stopPropagation()}
       >
@@ -902,7 +929,7 @@ export default function SearchPanel({
     altText?: string;
   }) {
     if (editingVerseId === verse.id) {
-      return <EditForm verse={verse} />;
+      return renderEditForm(verse);
     }
     const selected = isSelected(verse, selectedVerses);
     return (
@@ -1056,15 +1083,16 @@ export default function SearchPanel({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <select
               value={mainVersion}
               onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-              className="text-[11px] font-semibold bg-gray-900 text-white border-none outline-none cursor-pointer"
+              className="text-[11px] font-semibold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
               style={{
                 height: "30px",
+                width: "78px",
                 paddingLeft: "10px",
-                paddingRight: "20px",
+                paddingRight: "18px",
                 borderRadius: "4px",
                 backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
                 backgroundRepeat: "no-repeat",
@@ -1082,18 +1110,20 @@ export default function SearchPanel({
               disabled={subVersion === "none"}
               title="주/부 버전 교환"
               aria-label="주/부 버전 교환"
-              className="text-gray-400 dark:text-gray-500 text-[10px] px-0.5 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              style={{ width: "26px", height: "30px", borderRadius: "4px", fontSize: "13px", fontWeight: 600 }}
             >
               ⇄
             </button>
             <select
               value={subVersion}
               onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-              className="text-[11px] font-semibold bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 outline-none cursor-pointer"
+              className="text-[11px] font-semibold bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 outline-none cursor-pointer text-center"
               style={{
                 height: "30px",
+                width: "78px",
                 paddingLeft: "10px",
-                paddingRight: "20px",
+                paddingRight: "18px",
                 borderRadius: "4px",
                 backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
                 backgroundRepeat: "no-repeat",
@@ -1527,10 +1557,10 @@ export default function SearchPanel({
                         const alt = browseVersesAlt.find((a) => a.verse === v.verse);
                         // 편집 중인 절: EditForm으로 교체 (주절 또는 대역절 모두 처리)
                         if (editingVerseId === v.id) {
-                          return <EditForm key={v.id} verse={v} />;
+                          return <div key={v.id}>{renderEditForm(v)}</div>;
                         }
                         if (alt && editingVerseId === alt.id) {
-                          return <EditForm key={alt.id} verse={alt} />;
+                          return <div key={alt.id}>{renderEditForm(alt)}</div>;
                         }
                         const selected = isSelected(v, selectedVerses);
                         return (

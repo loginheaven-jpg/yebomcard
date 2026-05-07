@@ -21,6 +21,7 @@ export interface BiblePosition {
   chapter: number;
   verse?: number;
   version: BibleVersion;
+  subVersion?: BibleVersion | "none"; // 대역 버전 (구버전 책갈피 호환: optional)
   savedAt: number;
 }
 

@@ -17,6 +17,9 @@ import { useHardwareBack } from "@/hooks/useHardwareBack";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 import { useFont } from "@/contexts/FontContext";
 
+const MAIN_VERSION_KEY = "yebom_main_version";
+const SUB_VERSION_KEY = "yebom_sub_version";
+
 export default function Home() {
   const { session, requireAuth, isLoggedIn, logout } = useSession();
   const adminMode = isAdmin(session);
@@ -24,6 +27,26 @@ export default function Home() {
   const [view, setView] = useState<ViewMode>("search");
   const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
   const [subVersion, setSubVersion] = useState<BibleVersion | "none">("none");
+  const [versionsLoaded, setVersionsLoaded] = useState(false);
+
+  // 번역본 설정 localStorage 복원/영속화
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(MAIN_VERSION_KEY) as BibleVersion | null;
+      const s = localStorage.getItem(SUB_VERSION_KEY) as BibleVersion | "none" | null;
+      if (m) setMainVersion(m);
+      if (s) setSubVersion(s);
+    } catch {}
+    setVersionsLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (!versionsLoaded) return;
+    try { localStorage.setItem(MAIN_VERSION_KEY, mainVersion); } catch {}
+  }, [mainVersion, versionsLoaded]);
+  useEffect(() => {
+    if (!versionsLoaded) return;
+    try { localStorage.setItem(SUB_VERSION_KEY, subVersion); } catch {}
+  }, [subVersion, versionsLoaded]);
   const [isAddingMore, setIsAddingMore] = useState(false);
   const [scrapCount, setScrapCount] = useState(0);
   const [showScrap, setShowScrap] = useState(false);
