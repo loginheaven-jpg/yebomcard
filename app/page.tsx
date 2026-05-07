@@ -250,18 +250,11 @@ export default function Home() {
           )}
         </button>
 
-      {/* 도구함 및 폰트 아이콘 (우상단) */}
-      <div className="fixed top-4 right-4 z-[150] flex items-center gap-2">
-        <button
-          onClick={() => setShowFontSettings(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all font-serif font-bold text-gray-700 dark:text-gray-300 text-lg"
-          title="폰트 설정"
-        >
-          T
-        </button>
+      {/* 도구함 (우하단 — 좌하단 스크랩과 좌우대칭) */}
+      <div className="fixed bottom-6 right-6 z-[150]">
         <button
           onClick={() => setShowToolMenu(!showToolMenu)}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
+          className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
           title="도구함"
         >
           <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -270,7 +263,7 @@ export default function Home() {
           </svg>
         </button>
         {showToolMenu && (
-          <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden min-w-[180px]">
+          <div className="absolute right-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden min-w-[180px]">
             {/* 사용자 영역 */}
             {isLoggedIn ? (
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
