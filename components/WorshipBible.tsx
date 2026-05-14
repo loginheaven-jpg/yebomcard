@@ -87,6 +87,13 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [altVerseMap, setAltVerseMap] = useState<Map<string, string>>(new Map());
 
+  // 모달 열림 시 입력창 자동 포커스
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, []);
+
   // 프레젠테이션 모드
   const presentChannel = useRef<BroadcastChannel | null>(null);
   const presentWindow = useRef<Window | null>(null);
@@ -499,6 +506,8 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
             <div className="flex gap-2 mb-2 items-stretch">
               <div className="flex-1 relative">
                 <textarea
+                ref={inputRef}
+                lang="ko"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleParse(); } }}

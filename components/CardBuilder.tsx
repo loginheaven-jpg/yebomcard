@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { parseReference, type ParsedReference } from "@/lib/parseReference";
 import { getBookByCode } from "@/lib/books";
@@ -52,6 +52,13 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // 모달 열림 시 입력창 자동 포커스
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(INPUT_KEY, input); } catch {}
@@ -127,6 +134,8 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
           {/* 입력 영역 */}
           <div className="flex gap-2 mb-2">
             <textarea
+              ref={inputRef}
+              lang="ko"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleParse(); } }}

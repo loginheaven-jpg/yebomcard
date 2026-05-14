@@ -124,6 +124,14 @@ export default function SearchPanel({
   const [showHistory, setShowHistory] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 검색 펼침 시 입력창 자동 포커스
+  useEffect(() => {
+    if (showSearchRow) {
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [showSearchRow]);
+
   function addToHistory(query: string) {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -744,8 +752,9 @@ export default function SearchPanel({
   }, [parallel, topicResults, mainVersion, subVersion]);
 
   // ─── 주제 추천 ───
-  const searchTopic = useCallback(async () => {
-    const trimmed = topicInput.trim();
+  // topic 인자를 받으면 그 값으로, 없으면 topicInput state로 검색 (state 갱신 race 회피)
+  const searchTopic = useCallback(async (topic?: string) => {
+    const trimmed = (topic ?? topicInput).trim();
     if (trimmed.length < 1) {
       setTopicError("주제를 입력해주세요 (예: 감사, 위로, 결혼)");
       return;
@@ -987,6 +996,40 @@ export default function SearchPanel({
 
   return (
     <div className="w-full max-w-[1400px] mx-auto">
+      {/* PC 전용: 좌/우 공백 클릭으로 이전/다음 장 (목차 브라우즈 verse step에서만) */}
+      {mode === "chapter" && browseStep === "verse" && (
+        <>
+          {canPrevChapter && (
+            <button
+              type="button"
+              onClick={() => setChapter(chapters[chapterIdx - 1])}
+              className="hidden lg:flex fixed left-0 top-24 bottom-24 z-20 items-center justify-start pl-2 group cursor-pointer bg-transparent"
+              style={{ width: "max(40px, calc((100vw - 1400px) / 2))" }}
+              title="이전 장"
+              aria-label="이전 장"
+            >
+              <svg className="w-8 h-8 text-gray-400 opacity-0 group-hover:opacity-60 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+          )}
+          {canNextChapter && (
+            <button
+              type="button"
+              onClick={() => setChapter(chapters[chapterIdx + 1])}
+              className="hidden lg:flex fixed right-0 top-24 bottom-24 z-20 items-center justify-end pr-2 group cursor-pointer bg-transparent"
+              style={{ width: "max(40px, calc((100vw - 1400px) / 2))" }}
+              title="다음 장"
+              aria-label="다음 장"
+            >
+              <svg className="w-8 h-8 text-gray-400 opacity-0 group-hover:opacity-60 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          )}
+        </>
+      )}
+
       {/* 관리자 편집 모드 ON 배너 */}
       {bulkEditMode && adminMode && (
         <div className="mb-2 px-3 py-2 bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-md flex items-center gap-2 text-xs">
@@ -1246,6 +1289,9 @@ export default function SearchPanel({
                   <input
                     ref={inputRef}
                     type="text"
+                    lang="ko"
+                    inputMode="text"
+                    autoComplete="off"
                     value={searchInput}
                     onChange={(e) => { setSearchInput(e.target.value); setShowHistory(false); }}
                     onFocus={() => { if (searchHistory.length > 0 && !searchInput) setShowHistory(true); }}
@@ -1291,10 +1337,12 @@ export default function SearchPanel({
                 </button>
                 <button
                   onClick={() => {
+                    const t = searchInput;
                     setMode("topic");
-                    setTopicInput(searchInput);
+                    setTopicInput(t);
                     setSearchHelperShown(false);
-                    setTimeout(() => searchTopic(), 0);
+                    addToHistory(t);
+                    searchTopic(t); // 명시 인자로 즉시 호출 (setState race 회피)
                   }}
                   disabled={topicLoading}
                   className="shrink-0 h-9 px-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 text-xs font-semibold hover:bg-gray-50 dark:bg-gray-900 disabled:opacity-50 transition-colors"

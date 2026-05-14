@@ -189,7 +189,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   const [fontScale, setFontScale] = useState(100); // 80~140%
   const [verticalPos, setVerticalPos] = useState(50);
   const [cardRatio, setCardRatio] = useState<"4/5" | "9/16">("4/5");
-  const [overlayStrength, setOverlayStrength] = useState(30); // 0~100%
+  const [overlayStrength, setOverlayStrength] = useState(0); // 0~100% (0=원본 사진 그대로)
 
   const koreanText = verses.map((v) => stripNotes(v.text)).join(" ");
   const firstVerse = verses[0];
@@ -444,7 +444,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   } else if (activeCard === "photo" && photos.length > 0) {
     const selectedPhoto = photos[selectedPhotoIdx];
     const oTop = (overlayStrength / 100).toFixed(2);
-    const oBot = (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
+    const oBot = overlayStrength === 0 ? "0" : (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
     cardStyle = {
       backgroundImage: `linear-gradient(rgba(0,0,0,${oTop}), rgba(0,0,0,${oBot})), url(${selectedPhoto.url})`,
       backgroundSize: "cover",
@@ -476,7 +476,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   } else if (activeCard === "upload" && uploads.length > 0) {
     const sel = uploads[selectedUploadIdx] ?? uploads[0];
     const oTop = (overlayStrength / 100).toFixed(2);
-    const oBot = (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
+    const oBot = overlayStrength === 0 ? "0" : (Math.min(overlayStrength + 15, 100) / 100).toFixed(2);
     cardStyle = {
       backgroundImage: `linear-gradient(rgba(0,0,0,${oTop}), rgba(0,0,0,${oBot})), url(${sel.dataUrl})`,
       backgroundSize: "cover",
@@ -661,8 +661,8 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
         </div>
       )}
 
-      {/* Card preview + vertical position slider */}
-      <div className="relative">
+      {/* Card preview + vertical position slider — 모바일에서 슬라이더 보이도록 오른쪽 여백 */}
+      <div className="relative mr-9 lg:mr-0">
       <div
         ref={cardRef}
         className="relative rounded-2xl overflow-hidden shadow-lg"
@@ -749,19 +749,20 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
         )}
       </div>
 
-      {/* Vertical position slider — absolute right side */}
-      <div className="absolute -right-8 top-0 bottom-0 flex flex-col items-center justify-between py-3 w-6">
-        <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 2 L1 8 L11 8 Z" /></svg>
+      {/* Vertical position slider — 모바일은 카드 내부 우측, PC는 카드 외부 */}
+      <div className="absolute right-2 top-2 bottom-2 lg:-right-8 lg:top-0 lg:bottom-0 flex flex-col items-center justify-between py-2 lg:py-3 w-6 bg-white/30 backdrop-blur-sm rounded-full lg:bg-transparent lg:backdrop-blur-none lg:rounded-none">
+        <svg className="w-3 h-3 text-gray-700 lg:text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 2 L1 8 L11 8 Z" /></svg>
         <input
           type="range"
           min={0}
           max={100}
           value={verticalPos}
           onChange={(e) => setVerticalPos(Number(e.target.value))}
-          className="h-full w-1.5 appearance-none cursor-pointer bg-gray-200 rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
+          className="h-full w-1.5 appearance-none cursor-pointer bg-gray-200/70 lg:bg-gray-200 rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-gray-700 lg:[&::-webkit-slider-thumb]:bg-gray-500 [&::-webkit-slider-thumb]:rounded-full"
           style={{ writingMode: "vertical-lr" }}
+          aria-label="텍스트 상하 위치"
         />
-        <svg className="w-3 h-3 text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 10 L1 4 L11 4 Z" /></svg>
+        <svg className="w-3 h-3 text-gray-700 lg:text-gray-300" viewBox="0 0 12 12" fill="currentColor"><path d="M6 10 L1 4 L11 4 Z" /></svg>
       </div>
       </div>
 
