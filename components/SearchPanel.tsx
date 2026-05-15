@@ -1077,7 +1077,7 @@ export default function SearchPanel({
             <div className="flex flex-col">
               <div
                 className="text-gray-400 dark:text-gray-500"
-                style={{ fontSize: "8px", fontWeight: 500, letterSpacing: "5.6px", paddingLeft: "5.6px", lineHeight: 1, textAlign: "center" }}
+                style={{ fontSize: "8px", fontWeight: 500, letterSpacing: "1.2px", paddingLeft: "1.2px", lineHeight: 1, textAlign: "center" }}
               >
                 Yebom
               </div>
