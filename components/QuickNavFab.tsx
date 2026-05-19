@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
 import { supabase } from "@/lib/supabase";
 import type { BibleVersion } from "@/lib/types";
 import { readRecent, readBookmarks, type Bookmark, type BiblePosition } from "@/lib/bookmark";
 
-type Corner = "tl" | "tr" | "bl" | "br";
+type FabPos = "tr" | "br";
 
 interface QuickNavFabProps {
   currentBookCode: string;
@@ -16,19 +16,19 @@ interface QuickNavFabProps {
   onJump: (bookCode: string, chapter: number, verse: number) => void;
 }
 
-const CORNER_POS: Record<Corner, { top?: string; bottom?: string; left?: string; right?: string }> = {
-  tl: { top: "12px", left: "12px" },
-  tr: { top: "12px", right: "12px" },
-  bl: { bottom: "68px", left: "12px" },   // 좌하단 스크랩 FAB 위
-  br: { bottom: "68px", right: "12px" },  // 우하단 도구 FAB 위
+// FAB 위치: 우상단 / 우하단 두 곳만
+const FAB_POS: Record<FabPos, React.CSSProperties> = {
+  tr: { top: "138px", right: "12px" },  // 우상단 — '전체화면' 버튼 바로 아래
+  br: { bottom: "76px", right: "12px" }, // 우하단 — 도구함 FAB 위 여유
 };
 
-// 패널은 FAB의 안쪽 방향으로 펼침
-const PANEL_POS: Record<Corner, { top?: string; bottom?: string; left?: string; right?: string }> = {
-  tl: { top: "60px", left: "12px" },
-  tr: { top: "60px", right: "12px" },
-  bl: { bottom: "120px", left: "12px" },
-  br: { bottom: "120px", right: "12px" },
+// 패널은 FAB 위치와 무관하게 항상 같은 위치 (전체화면 버튼 아래)
+const PANEL_POS: React.CSSProperties = {
+  position: "fixed",
+  top: "138px",
+  right: "64px",
+  bottom: "12px",
+  maxHeight: "60vh",
 };
 
 export default function QuickNavFab({
@@ -37,7 +37,7 @@ export default function QuickNavFab({
   mainVersion,
   onJump,
 }: QuickNavFabProps) {
-  const [corner, setCorner] = useState<Corner>("tl");
+  const [pos, setPos] = useState<FabPos>("tr");
   const [open, setOpen] = useState(false);
   const [testament, setTestament] = useState<"old" | "new">("old");
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
@@ -46,29 +46,25 @@ export default function QuickNavFab({
   const [verses, setVerses] = useState<number[]>([]);
   const [recents, setRecents] = useState<(BiblePosition | Bookmark)[]>([]);
 
-  // 드래그 상태
-  const [dragging, setDragging] = useState(false);
-  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  // 길게 누르기 → 위치 토글
   const longPressTimer = useRef<number | null>(null);
-  const moved = useRef(false);
+  const wasLongPress = useRef(false);
 
   // 컬럼 스크롤 ref (▲▼ 버튼용)
   const bookScrollRef = useRef<HTMLDivElement>(null);
   const chapterScrollRef = useRef<HTMLDivElement>(null);
   const verseScrollRef = useRef<HTMLDivElement>(null);
 
-  // localStorage 코너 위치
+  // localStorage 위치 로드/저장
   useEffect(() => {
     try {
       const stored = localStorage.getItem("yebom_quicknav_pos");
-      if (stored && ["tl", "tr", "bl", "br"].includes(stored)) {
-        setCorner(stored as Corner);
-      }
+      if (stored === "tr" || stored === "br") setPos(stored);
     } catch {}
   }, []);
   useEffect(() => {
-    try { localStorage.setItem("yebom_quicknav_pos", corner); } catch {}
-  }, [corner]);
+    try { localStorage.setItem("yebom_quicknav_pos", pos); } catch {}
+  }, [pos]);
 
   // 최근 위치 모음
   useEffect(() => {
@@ -134,46 +130,31 @@ export default function QuickNavFab({
     return () => { cancelled = true; };
   }, [selectedBook, selectedChapter, mainVersion]);
 
-  // 길게 누르기 → 드래그 진입
-  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    moved.current = false;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    longPressTimer.current = window.setTimeout(() => {
-      setDragging(true);
-      setDragPos({ x: startX, y: startY });
-    }, 400);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (dragging) {
-      moved.current = true;
-      setDragPos({ x: e.clientX, y: e.clientY });
-    }
-  };
-
-  const handlePointerUp = () => {
+  // 길게 누르기 (500ms) → 반대 위치로 토글 + 햅틱
+  const cancelLongPress = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
-    if (dragging && dragPos) {
-      // 가장 가까운 코너로 스냅
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      const left = dragPos.x < w / 2;
-      const top = dragPos.y < h / 2;
-      const newCorner = `${top ? "t" : "b"}${left ? "l" : "r"}` as Corner;
-      setCorner(newCorner);
-      setDragging(false);
-      setDragPos(null);
-    }
   };
+  const handlePointerDown = () => {
+    wasLongPress.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      wasLongPress.current = true;
+      setPos((p) => (p === "tr" ? "br" : "tr"));
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try { navigator.vibrate(50); } catch {}
+      }
+    }, 500);
+  };
+  const handlePointerUp = () => cancelLongPress();
+  const handlePointerLeave = () => cancelLongPress();
+  const handlePointerCancel = () => cancelLongPress();
 
   const handleClick = () => {
-    // 드래그 종료 직후 클릭은 무시
-    if (moved.current) {
-      moved.current = false;
+    // 길게 누르기로 위치 토글된 직후의 클릭은 무시
+    if (wasLongPress.current) {
+      wasLongPress.current = false;
       return;
     }
     setOpen((v) => !v);
@@ -196,7 +177,7 @@ export default function QuickNavFab({
     setSelectedChapter(null);
   };
 
-  // 컬럼 스크롤 helper
+  // 컬럼 스크롤 helper (▲▼ 버튼)
   const scrollColumn = (ref: React.RefObject<HTMLDivElement | null>, delta: number) => {
     if (ref.current) ref.current.scrollBy({ top: delta, behavior: "smooth" });
   };
@@ -207,53 +188,42 @@ export default function QuickNavFab({
     [testament]
   );
 
-  // FAB 위치 스타일
-  const fabStyle = dragging && dragPos
-    ? { position: "fixed" as const, left: dragPos.x - 22, top: dragPos.y - 22 }
-    : { position: "fixed" as const, ...CORNER_POS[corner] };
-
-  // 패널 위치 스타일
-  const panelStyle = { position: "fixed" as const, ...PANEL_POS[corner] };
-
   return (
     <>
       {/* FAB */}
       <button
         type="button"
         onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerCancel}
         onClick={handleClick}
-        title="퀵 네비게이션 (길게 누르면 위치 이동)"
+        title="퀵 네비게이션 (길게 누르면 위치 토글)"
         aria-label="퀵 네비게이션"
-        className={`w-11 h-11 rounded-full bg-white border-2 border-amber-600 shadow-lg active:scale-95 transition-transform z-[55] flex items-center justify-center ${dragging ? "opacity-70 cursor-grabbing" : "cursor-pointer hover:scale-105"}`}
-        style={fabStyle}
+        className={`fixed w-11 h-11 rounded-full border-2 shadow-lg active:scale-95 transition-all z-[55] flex items-center justify-center cursor-pointer hover:scale-105 ${
+          open
+            ? "bg-amber-600 border-amber-600 text-white"
+            : "bg-white border-amber-600 text-amber-600"
+        }`}
+        style={FAB_POS[pos]}
       >
-        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
         </svg>
-        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-600 text-white text-[8px] font-bold flex items-center justify-center">▸</span>
+        <span className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-[8px] font-bold flex items-center justify-center ${open ? "bg-white text-amber-600" : "bg-amber-600 text-white"}`}>
+          {open ? "◂" : "▸"}
+        </span>
       </button>
 
-      {/* 드래그 가이드 점 */}
-      {dragging && (
-        <>
-          <span className="fixed top-3 left-3 w-2 h-2 rounded-full bg-amber-600/40 z-[54] pointer-events-none" />
-          <span className="fixed top-3 right-3 w-2 h-2 rounded-full bg-amber-600/40 z-[54] pointer-events-none" />
-          <span className="fixed bottom-3 left-3 w-2 h-2 rounded-full bg-amber-600/40 z-[54] pointer-events-none" />
-          <span className="fixed bottom-3 right-3 w-2 h-2 rounded-full bg-amber-600/40 z-[54] pointer-events-none" />
-        </>
-      )}
-
-      {/* 펼침 패널 */}
-      {open && !dragging && (
+      {/* 펼침 패널 — FAB 위치와 무관하게 항상 같은 자리 */}
+      {open && (
         <>
           {/* 바깥 탭 시 닫기 */}
           <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
 
           <div
             className="z-[60] flex bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
-            style={{ ...panelStyle, height: "440px" }}
+            style={PANEL_POS}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 0열: 최근 */}
