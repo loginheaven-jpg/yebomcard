@@ -61,16 +61,45 @@ export default function HymnModal({ onClose }: Props) {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 
+  const LAST_HYMN_KEY = "yebom_last_hymn";
+
   useEffect(() => {
     async function fetchAll() {
-      if (cachedHymns) return;
+      if (cachedHymns) {
+        // 캐시 있으면 즉시 마지막 본 찬송가 복원
+        try {
+          const num = parseInt(localStorage.getItem(LAST_HYMN_KEY) || "", 10);
+          if (Number.isFinite(num)) {
+            const last = cachedHymns.find((h) => h.number === num);
+            if (last) setSelectedHymn(last);
+          }
+        } catch {}
+        return;
+      }
       setLoading(true);
       const { data } = await supabase.from("hymns").select("*").order("number");
-      if (data) cachedHymns = data;
+      if (data) {
+        cachedHymns = data;
+        // 데이터 받은 후 마지막 본 찬송가 복원
+        try {
+          const num = parseInt(localStorage.getItem(LAST_HYMN_KEY) || "", 10);
+          if (Number.isFinite(num)) {
+            const last = data.find((h) => h.number === num);
+            if (last) setSelectedHymn(last);
+          }
+        } catch {}
+      }
       setLoading(false);
     }
     fetchAll();
   }, []);
+
+  // selectedHymn 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (selectedHymn) {
+      try { localStorage.setItem(LAST_HYMN_KEY, String(selectedHymn.number)); } catch {}
+    }
+  }, [selectedHymn]);
 
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);

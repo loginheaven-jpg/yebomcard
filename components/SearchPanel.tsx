@@ -17,6 +17,7 @@ import {
   type Bookmark,
 } from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
+import QuickNavFab from "./QuickNavFab";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
@@ -1517,9 +1518,14 @@ export default function SearchPanel({
                   </svg>
                   목차로
                 </button>
-                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setBrowseStep("book")}
+                  className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  title="성경 선택으로"
+                >
                   {getBookByCode(bookCode)?.nameKr || "책 선택"}
-                </span>
+                </button>
                 <span className="w-14" />
               </div>
 
@@ -1572,11 +1578,16 @@ export default function SearchPanel({
                       <path d="M15 4 L4 14 L15 24 Z" />
                     </svg>
                   </button>
-                  <span className="text-sm text-gray-600 dark:text-gray-400 mx-1">
+                  <button
+                    type="button"
+                    onClick={() => setBrowseStep("chapter")}
+                    className="text-sm text-gray-600 dark:text-gray-400 mx-1 hover:text-gray-800 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                    title="장 선택으로"
+                  >
                     {getBookByCode(bookCode)?.nameKr}{" "}
                     <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{chapter}</span>
                     <span className="text-gray-400">/{chapters.length}장</span>
-                  </span>
+                  </button>
                   <button
                     onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
                     disabled={!canNextChapter}
@@ -1793,6 +1804,25 @@ export default function SearchPanel({
             </span>
           </button>
         </div>
+      )}
+
+      {/* 퀵 네비게이션 FAB */}
+      {!isAddingMore && (
+        <QuickNavFab
+          currentBookCode={bookCode}
+          currentChapter={chapter}
+          mainVersion={mainVersion}
+          onJump={(bc, ch, v) => {
+            // 헤더 버전(주/부)은 그대로 두고 위치만 이동 + 해당 절로 자동 스크롤
+            setBookCode(bc);
+            setChapter(ch);
+            setRememberedVerse(v);
+            setMode("chapter");
+            setBrowseStep("verse");
+            setShowBookmarkMenu(false);
+            setShowSearchRow(false);
+          }}
+        />
       )}
 
       {/* 관리자 편집 결과 토스트 */}
