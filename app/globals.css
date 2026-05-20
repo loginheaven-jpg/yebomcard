@@ -6,12 +6,14 @@
 :root {
   --background: #f8f9fa;
   --foreground: #1a1a2e;
+  --qnav-panel-bg: #faf6ee;   /* 부드러운 아이보리 */
   color-scheme: light;
 }
 
 html.dark {
   --background: #0f1115;
   --foreground: #e5e7eb;
+  --qnav-panel-bg: #1a2942;   /* 연하늘 (밤하늘) */
   color-scheme: dark;
 }
 

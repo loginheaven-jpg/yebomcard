@@ -255,7 +255,7 @@ export default function QuickNavFab({
             className="z-[60] flex border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
             style={{
               ...PANEL_POS,
-              backgroundColor: "rgba(255, 255, 255, 0.6)",
+              backgroundColor: "var(--qnav-panel-bg)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
