@@ -229,12 +229,13 @@ export default function QuickNavFab({
         onClick={handleClick}
         title="퀵 네비게이션 (길게 누르면 위치 토글)"
         aria-label="퀵 네비게이션"
-        className={`fixed w-11 h-11 rounded-full border-2 shadow-lg active:scale-95 transition-all z-[55] flex items-center justify-center cursor-pointer hover:scale-105 backdrop-blur-md ${
+        className={`fixed w-11 h-11 rounded-full border-2 shadow-lg active:scale-95 transition-all z-[55] flex items-center justify-center cursor-pointer hover:scale-105 ${
           open ? "border-amber-600 text-white" : "border-amber-600 text-amber-600"
         }`}
         style={{
           ...FAB_POS[pos],
-          backgroundColor: open ? "rgba(184, 134, 11, 0.85)" : "rgba(255, 255, 255, 0.6)",
+          backgroundColor: open ? "rgba(184, 134, 11, 0.8)" : "rgba(255, 255, 255, 0.5)",
+          backdropFilter: "blur(2px)",
         }}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -252,8 +253,12 @@ export default function QuickNavFab({
           <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
 
           <div
-            className="z-[60] flex backdrop-blur-md border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
-            style={{ ...PANEL_POS, backgroundColor: "rgba(255, 255, 255, 0.65)" }}
+            className="z-[60] flex border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
+            style={{
+              ...PANEL_POS,
+              backgroundColor: "rgba(255, 255, 255, 0.55)",
+              backdropFilter: "blur(3px)",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 0열: 최근 */}
