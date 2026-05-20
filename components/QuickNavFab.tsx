@@ -235,7 +235,6 @@ export default function QuickNavFab({
         style={{
           ...FAB_POS[pos],
           backgroundColor: open ? "rgba(184, 134, 11, 0.8)" : "rgba(255, 255, 255, 0.5)",
-          backdropFilter: "blur(2px)",
         }}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -256,8 +255,7 @@ export default function QuickNavFab({
             className="z-[60] flex border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden"
             style={{
               ...PANEL_POS,
-              backgroundColor: "rgba(255, 255, 255, 0.55)",
-              backdropFilter: "blur(3px)",
+              backgroundColor: "rgba(255, 255, 255, 0.6)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
