@@ -196,6 +196,33 @@ export default function SearchPanel({
       if (r.subVersion !== undefined) setSubVersion(r.subVersion);
     }
   }, []);
+
+  // ─── 하드웨어 뒤로가기: 다단계 (verse → chapter → book → 블랭크 홈 → 종료팝업) ───
+  // 모달성(showSearchRow/showBookmarkMenu/editingVerseId)은 마지막에 등록되어 stack top → 우선 처리
+  useHardwareBack(
+    mode === "chapter" && browseStep === "verse" && !isAddingMore,
+    () => setBrowseStep("chapter")
+  );
+  useHardwareBack(
+    mode === "chapter" && browseStep === "chapter" && !isAddingMore,
+    () => setBrowseStep("book")
+  );
+  useHardwareBack(
+    mode === "chapter" && browseStep === "book" && !isAddingMore,
+    () => setMode("search")
+  );
+  useHardwareBack(
+    mode === "search" && searchByVersion.some((g) => g.verses.length > 0),
+    () => { setSearchByVersion([]); setSearchError(""); }
+  );
+  useHardwareBack(
+    mode === "topic" && (topicResults.length > 0 || topicRecommendations.length > 0),
+    () => { setTopicResults([]); setTopicRecommendations([]); setTopicError(""); }
+  );
+  // 모달성: 검색 펼침 행 / 책갈피 메뉴 (verse browse + 편집은 별도 hook)
+  useHardwareBack(showSearchRow, () => setShowSearchRow(false));
+  useHardwareBack(showBookmarkMenu, () => setShowBookmarkMenu(false));
+
   // verse 단계 진입 후 3초 머물면 Recent 자동 갱신
   useEffect(() => {
     if (mode !== "chapter" || browseStep !== "verse") return;
@@ -290,6 +317,9 @@ export default function SearchPanel({
     setEditLoading(false);
     setComparisonVerses([]);
   }
+
+  // 편집 모드는 가장 안쪽 상태 — useHardwareBack 스택에서 top이 되도록 마지막에 등록
+  useHardwareBack(editingVerseId !== null, () => cancelEdit());
 
   async function saveEdit() {
     if (editingVerseId == null) return;
