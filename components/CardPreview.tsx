@@ -191,6 +191,11 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   const [cardRatio, setCardRatio] = useState<"4/5" | "9/16">("4/5");
   const [overlayStrength, setOverlayStrength] = useState(0); // 0~100% (0=원본 사진 그대로)
 
+  // 텍스트 인라인 편집 (한글/영문 본문, 레퍼런스는 자동 유지)
+  const [textEditMode, setTextEditMode] = useState(false);
+  const [editedKorean, setEditedKorean] = useState<string | null>(null);
+  const [editedEnglish, setEditedEnglish] = useState<string | null>(null);
+
   const koreanText = verses.map((v) => stripNotes(v.text)).join(" ");
   const firstVerse = verses[0];
   // 연속 절은 범위(1-3), 비연속은 쉼표(1,2,6)로 표시
@@ -236,6 +241,13 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   const keywords = extractKeywords(koreanText);
   const fontCss =
     FONT_OPTIONS.find((f) => f.key === selectedFont)?.css || FONT_OPTIONS[0].css;
+
+  // verses 변경 시 편집 내용 리셋 (원본이 바뀌므로 편집도 무효)
+  useEffect(() => {
+    setEditedKorean(null);
+    setEditedEnglish(null);
+    setTextEditMode(false);
+  }, [koreanText]);
 
   // 0. English verse
   useEffect(() => {
@@ -530,9 +542,12 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   // PNG Download
   const handleDownload = async () => {
     if (!cardRef.current) return;
+    // 다운로드 전 편집모드 OFF — textarea 대신 <p>로 렌더되어야 깔끔한 PNG
+    if (textEditMode) setTextEditMode(false);
     setDownloading(true);
     try {
       await document.fonts.ready;
+      await new Promise((r) => setTimeout(r, 100)); // 렌더 안정화
       const el = cardRef.current;
       const ratio = 1080 / el.offsetWidth;
       const dataUrl = await toPng(el, {
@@ -553,9 +568,12 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   // PNG 저장 및 스크랩 연동
   const handleScrapAndDownload = async () => {
     if (!cardRef.current) return;
+    // 다운로드 전 편집모드 OFF
+    if (textEditMode) setTextEditMode(false);
     setDownloading(true);
     try {
       await document.fonts.ready;
+      await new Promise((r) => setTimeout(r, 100)); // 렌더 안정화
       const el = cardRef.current;
       const ratio = 1080 / el.offsetWidth;
       const dataUrl = await toPng(el, {
@@ -627,7 +645,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
       </div>
 
       {/* Card type selector */}
-      <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-xl">
+      <div className="flex gap-1 mb-2 bg-gray-50 p-1 rounded-xl">
         <button onClick={() => setActiveCard("gradient")} className={tabClass("gradient")}>
           그라데이션
         </button>
@@ -638,6 +656,36 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
           내 사진
         </button>
         {/* AI 아트 — 퀄리티 개선 후 재활성화 */}
+      </div>
+
+      {/* 텍스트 편집 토글 + 원본 복원 */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <button
+          onClick={() => setTextEditMode((v) => !v)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+            textEditMode
+              ? "bg-amber-50 border-amber-300 text-amber-700"
+              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
+          title="카드 텍스트를 편집 (줄바꿈·오타 수정)"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+          </svg>
+          {textEditMode ? "편집 중" : "텍스트 편집"}
+        </button>
+        {(editedKorean !== null || editedEnglish !== null) && (
+          <button
+            onClick={() => { setEditedKorean(null); setEditedEnglish(null); }}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+            title="편집 전 원본으로 복원"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+            </svg>
+            원본 복원
+          </button>
+        )}
       </div>
 
       {/* AI sub-toggle + generate button */}
@@ -690,31 +738,67 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
                   : "0 1px 4px rgba(255,255,255,0.5)",
             }}
           >
-            {/* Korean verse */}
-            <p
-              className="text-xl leading-[1.9] text-center mb-3"
-              style={{
-                fontFamily: fontCss,
-                fontSize: `${fontScale}%`,
-                wordBreak: "keep-all",
-                overflowWrap: "break-word",
-                textWrap: "balance" as never,
-              }}
-            >
-              {koreanText}
-            </p>
+            {/* Korean verse (편집 모드면 textarea) */}
+            {textEditMode ? (
+              <textarea
+                value={editedKorean ?? koreanText}
+                onChange={(e) => setEditedKorean(e.target.value)}
+                rows={Math.max(2, Math.ceil((editedKorean ?? koreanText).length / 24))}
+                className="w-full text-xl leading-[1.9] text-center mb-3 bg-transparent border-0 focus:outline-none resize-none"
+                style={{
+                  fontFamily: fontCss,
+                  fontSize: `${fontScale}%`,
+                  wordBreak: "keep-all",
+                  color: "inherit",
+                  outline: "1px dashed currentColor",
+                  outlineOffset: "6px",
+                  borderRadius: "2px",
+                }}
+              />
+            ) : (
+              <p
+                className="text-xl leading-[1.9] text-center mb-3"
+                style={{
+                  fontFamily: fontCss,
+                  fontSize: `${fontScale}%`,
+                  wordBreak: "keep-all",
+                  overflowWrap: "break-word",
+                  textWrap: "balance" as never,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {editedKorean ?? koreanText}
+              </p>
+            )}
 
             {/* Korean ref */}
             <p className="text-sm opacity-80 font-semibold mb-5" style={{ fontSize: `${fontScale * 0.7}%` }}>{koreanRef}</p>
 
-            {/* English verse */}
-            {englishText && (
+            {/* English verse (편집 모드면 textarea) */}
+            {(editedEnglish ?? englishText) && (
+              textEditMode ? (
+                <textarea
+                  value={editedEnglish ?? englishText}
+                  onChange={(e) => setEditedEnglish(e.target.value)}
+                  rows={Math.max(2, Math.ceil((editedEnglish ?? englishText).length / 35))}
+                  className="w-full text-base font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2 bg-transparent border-0 focus:outline-none resize-none"
+                  style={{
+                    fontSize: `${fontScale * 0.85}%`,
+                    wordBreak: "keep-all",
+                    color: "inherit",
+                    outline: "1px dashed currentColor",
+                    outlineOffset: "6px",
+                    borderRadius: "2px",
+                  }}
+                />
+              ) : (
               <p
                 className="text-base font-[family-name:var(--font-playfair)] italic opacity-60 text-center leading-relaxed mb-2"
-                style={{ fontSize: `${fontScale * 0.85}%`, wordBreak: "keep-all", textWrap: "balance" as never }}
+                style={{ fontSize: `${fontScale * 0.85}%`, wordBreak: "keep-all", textWrap: "balance" as never, whiteSpace: "pre-wrap" }}
               >
-                {englishText}
+                {editedEnglish ?? englishText}
               </p>
+              )
             )}
 
             {/* English ref */}
