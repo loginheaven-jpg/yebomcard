@@ -260,14 +260,14 @@ export default function QuickNavFab({
             onClick={(e) => e.stopPropagation()}
           >
             {/* 0열: 최근 */}
-            <div className="flex flex-col bg-amber-50/40 dark:bg-amber-950/20" style={{ width: 42 }}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">최근</div>
+            <div className="flex flex-col bg-amber-50/40 dark:bg-amber-950/20" style={{ width: 46 }}>
+              <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">최근</div>
               <div className="flex-1 overflow-y-auto scrollbar-hide">
                 {recents.length > 0 ? recents.map((r, i) => (
                   <button
                     key={i}
                     onClick={() => handleRecentTap(r)}
-                    className="block w-full text-center text-[9px] py-2 text-amber-700 dark:text-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-900/30 truncate font-semibold"
+                    className="block w-full text-center text-[11px] py-2 text-amber-700 dark:text-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-900/30 truncate font-semibold"
                   >
                     {getBookByCode(r.book_code)?.abbr ?? r.book_code}
                     {r.chapter}
@@ -279,25 +279,25 @@ export default function QuickNavFab({
             </div>
 
             {/* 1열: 권 (구약/신약) */}
-            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 32 }}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">권</div>
+            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 34 }}>
+              <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">권</div>
               <button
                 onClick={() => { setTestament("old"); setSelectedBook(null); setSelectedChapter(null); }}
-                className={`text-[10px] py-2 transition-colors ${testament === "old" ? "bg-gray-900 text-white font-bold" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+                className={`text-[12px] py-2 transition-colors ${testament === "old" ? "bg-gray-900 text-white font-bold" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
               >
                 구
               </button>
               <button
                 onClick={() => { setTestament("new"); setSelectedBook(null); setSelectedChapter(null); }}
-                className={`text-[10px] py-2 transition-colors ${testament === "new" ? "bg-gray-900 text-white font-bold" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+                className={`text-[12px] py-2 transition-colors ${testament === "new" ? "bg-gray-900 text-white font-bold" : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
               >
                 신
               </button>
             </div>
 
             {/* 2열: 책 */}
-            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 52 }}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">책</div>
+            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 56 }}>
+              <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">책</div>
               <button
                 onClick={() => scrollColumn(bookScrollRef, -80)}
                 className="h-4 bg-gray-50/70 dark:bg-gray-900/40 text-gray-400 dark:text-gray-500 text-[9px] hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -308,7 +308,7 @@ export default function QuickNavFab({
                   <button
                     key={b.code}
                     onClick={() => { setSelectedBook(b.code); setSelectedChapter(null); }}
-                    className={`block w-full text-center text-[10px] py-2 transition-colors ${selectedBook === b.code ? "bg-gray-900 text-white font-bold" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+                    className={`block w-full text-center text-[12px] py-2 transition-colors ${selectedBook === b.code ? "bg-gray-900 text-white font-bold" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                   >
                     {b.abbr}
                   </button>
@@ -322,8 +322,8 @@ export default function QuickNavFab({
             </div>
 
             {/* 3열: 장 */}
-            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 52 }}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">장</div>
+            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 56 }}>
+              <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">장</div>
               <button
                 onClick={() => scrollColumn(chapterScrollRef, -80)}
                 className="h-4 bg-gray-50/70 dark:bg-gray-900/40 text-gray-400 dark:text-gray-500 text-[9px] hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -336,7 +336,7 @@ export default function QuickNavFab({
                   <button
                     key={c}
                     onClick={() => setSelectedChapter(c)}
-                    className={`block w-full text-center text-[10px] py-2 transition-colors ${selectedChapter === c ? "bg-gray-900 text-white font-bold" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
+                    className={`block w-full text-center text-[12px] py-2 transition-colors ${selectedChapter === c ? "bg-gray-900 text-white font-bold" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                   >
                     {c}
                   </button>
@@ -349,8 +349,8 @@ export default function QuickNavFab({
             </div>
 
             {/* 4열: 절 */}
-            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 52 }}>
-              <div className="text-[10px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">절</div>
+            <div className="flex flex-col border-l border-gray-100 dark:border-gray-700" style={{ width: 56 }}>
+              <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 text-center py-2 tracking-wide bg-gray-100/70 dark:bg-gray-900/60 sticky top-0">절</div>
               <button
                 onClick={() => scrollColumn(verseScrollRef, -80)}
                 className="h-4 bg-gray-50/70 dark:bg-gray-900/40 text-gray-400 dark:text-gray-500 text-[9px] hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -363,7 +363,7 @@ export default function QuickNavFab({
                   <button
                     key={v}
                     onClick={() => handleVerseTap(v)}
-                    className="block w-full text-center text-[10px] py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-900 hover:text-white transition-colors font-medium"
+                    className="block w-full text-center text-[12px] py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-900 hover:text-white transition-colors font-medium"
                   >
                     {v}
                   </button>
