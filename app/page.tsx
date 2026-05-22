@@ -13,7 +13,7 @@ import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
 import HymnModal from "@/components/HymnModal";
 import GlobalFontSettings from "@/components/GlobalFontSettings";
-import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 import { useFont } from "@/contexts/FontContext";
 
@@ -94,6 +94,10 @@ export default function Home() {
     const handlePop = (e: PopStateEvent) => {
       // 종료 진행 중이면 핸들러 우회 (무한 재차단 방지)
       if (exitingRef.current) return;
+      // useHardwareBack 모달이 활성 상태면 그쪽에서 처리 — 종료 팝업 우회
+      // (마운트 타이밍상 modalId 상태가 isHome 없이 history에 끼어들어
+      //  sub-mode 뒤로가기에서 종료 팝업이 같이 떠버리는 버그 방지)
+      if (getActiveModalCount() > 0) return;
       if (e.state && e.state.isAppRoot && !e.state.isHome) {
         setShowExitConfirm(true);
         // 즉시 홈 상태를 복구하여 앱 종료를 막음

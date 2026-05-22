@@ -2,8 +2,13 @@ import { useEffect, useRef } from "react";
 
 // 글로벌 스택: 여러 개의 useHardwareBack이 동시에 활성화될 때,
 // 가장 마지막에(최상단에) 열린 뷰만 뒤로가기 이벤트를 처리하도록 합니다.
-const modalStack: { id: string; onBack: () => void }[] = [];
+export const modalStack: { id: string; onBack: () => void }[] = [];
 let skipPopstateCount = 0;
+
+// 외부에서 modalStack 크기 조회 (app/page.tsx에서 종료 팝업 발화 가드용)
+export function getActiveModalCount(): number {
+  return modalStack.length;
+}
 
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", (e: PopStateEvent) => {
