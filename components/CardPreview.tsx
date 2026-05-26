@@ -359,7 +359,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
         blob = await resizeImage(file);
       } catch { /* 리사이즈 실패 시 원본 사용 */ }
 
-      // 2. 글자지움 모드면 AI 편집
+      // 2. 글자지움 모드면 AI 편집 — 실패 시 명시적 알림 후 업로드 중단
       if (pendingUploadMode.current === "remove-text") {
         const reader = new FileReader();
         const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -376,14 +376,22 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ image: base64, media_type: mediaType }),
           });
-          if (res.ok) {
-            const { data, media_type } = await res.json();
-            const b64 = atob(data);
-            const arr = new Uint8Array(b64.length);
-            for (let i = 0; i < b64.length; i++) arr[i] = b64.charCodeAt(i);
-            blob = new Blob([arr], { type: media_type });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `AI 응답 오류 (${res.status})`);
           }
-        } catch { /* 실패 시 원본 사용 */ }
+          const { data, media_type } = await res.json();
+          if (!data) throw new Error("AI 응답에 이미지 데이터가 없습니다");
+          const b64 = atob(data);
+          const arr = new Uint8Array(b64.length);
+          for (let i = 0; i < b64.length; i++) arr[i] = b64.charCodeAt(i);
+          blob = new Blob([arr], { type: media_type });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[remove-text]", msg);
+          alert(`글자 제거 AI 호출 실패\n\n${msg}\n\n원본 그대로 사용하려면 '그냥' 옵션을 선택하세요.`);
+          return; // 원본을 업로드하지 않음 — 사용자가 다시 선택하도록
+        }
       }
 
       // 3. 서버 업로드
