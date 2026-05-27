@@ -90,7 +90,8 @@ export async function callImageEdit(
   imageBase64: string,
   mediaType: string,
   editType: string = "remove_text",
-  caller?: string
+  caller?: string,
+  provider?: string,
 ): Promise<ImageResult> {
   const res = await fetch(`${AI_GATEWAY_URL}/api/ai/image/edit`, {
     method: "POST",
@@ -100,6 +101,7 @@ export async function callImageEdit(
       media_type: mediaType,
       edit_type: editType,
       ...(caller && { caller }),
+      ...(provider && { provider }),
     }),
   });
 

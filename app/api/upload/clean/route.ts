@@ -14,11 +14,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // DALL-E는 OpenAI가 response_format 파라미터를 더 이상 지원 안 함 → 게이트웨이 400 에러
+    // imagen으로 강제 (env IMAGE_EDIT_PROVIDER로 override 가능)
+    const provider = process.env.IMAGE_EDIT_PROVIDER || "imagen";
     const result = await callImageEdit(
       image,
       media_type,
       "remove_text",
-      "yebom-card:upload-clean"
+      "yebom-card:upload-clean",
+      provider,
     );
 
     return NextResponse.json({
