@@ -18,7 +18,7 @@ import {
 } from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
-import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
 import { useFont, FONTS } from "@/contexts/FontContext";
@@ -222,6 +222,56 @@ export default function SearchPanel({
   // 모달성: 검색 펼침 행 / 책갈피 메뉴 (verse browse + 편집은 별도 hook)
   useHardwareBack(showSearchRow, () => setShowSearchRow(false));
   useHardwareBack(showBookmarkMenu, () => setShowBookmarkMenu(false));
+
+  // ─── 키보드: ← 이전장 / → 다음장 / Space 스마트 다음장 (PC) ───
+  useEffect(() => {
+    if (mode !== "chapter" || browseStep !== "verse") return;
+    if (showFullscreen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      // 입력 요소에 포커스 있으면 무시
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      // 모디파이어 키 있으면 무시 (Ctrl/Shift/Alt/Meta+화살표 = 텍스트 선택 등)
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+      // verse useHardwareBack 외에 다른 모달/메뉴 열림 시 무시
+      // (verse 핸들러 1개는 기본 — 그 이상이면 책갈피 메뉴, 검색 펼침, 편집 등이 열린 상태)
+      if (getActiveModalCount() > 1) return;
+
+      const idx = chapters.indexOf(chapter);
+      const canPrev = idx > 0;
+      const canNext = idx >= 0 && idx < chapters.length - 1;
+
+      if (e.key === "ArrowLeft") {
+        if (canPrev) {
+          e.preventDefault();
+          setChapter(chapters[idx - 1]);
+        }
+      } else if (e.key === "ArrowRight") {
+        if (canNext) {
+          e.preventDefault();
+          setChapter(chapters[idx + 1]);
+        }
+      } else if (e.key === " " || e.code === "Space") {
+        if (!canNext) return;
+        // 스마트 Space: 본문 컨테이너가 하단까지 스크롤됐을 때만 다음 장
+        const container = scrollRef.current;
+        if (container) {
+          const atBottom =
+            container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+          if (!atBottom) return; // 평소처럼 스크롤 (preventDefault 안 함)
+        }
+        e.preventDefault();
+        setChapter(chapters[idx + 1]);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [mode, browseStep, showFullscreen, chapters, chapter]);
 
   // verse 단계 진입 후 3초 머물면 Recent 자동 갱신
   useEffect(() => {
