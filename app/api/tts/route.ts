@@ -100,9 +100,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Chirp 3 HD voices — Neural2 보다 자연스러움. pitch 파라미터는 미지원.
     const voiceName =
-      voice === "male" ? "ko-KR-Neural2-C" : "ko-KR-Neural2-A";
+      voice === "male" ? "ko-KR-Chirp3-HD-Charon" : "ko-KR-Chirp3-HD-Aoede";
+    const isChirp = voiceName.includes("Chirp");
     const token = await getAccessToken();
+
+    const audioConfig: Record<string, unknown> = {
+      audioEncoding: "MP3",
+      speakingRate: speed ?? 1.0,
+      volumeGainDb: volumeGainDb ?? 0,
+    };
+    if (!isChirp) {
+      audioConfig.pitch = pitch ?? 0;
+    }
 
     const apiResponse = await fetch(TTS_API_URL, {
       method: "POST",
@@ -113,12 +124,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         input: { text },
         voice: { languageCode: "ko-KR", name: voiceName },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: speed ?? 1.0,
-          pitch: pitch ?? 0,
-          volumeGainDb: volumeGainDb ?? 0,
-        },
+        audioConfig,
       }),
     });
     if (!apiResponse.ok) {

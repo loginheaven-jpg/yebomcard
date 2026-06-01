@@ -8,7 +8,8 @@
  */
 
 const DB_NAME = "yebom_tts_cache";
-const DB_VERSION = 1;
+// v2: GCP Neural2 → Chirp 3 HD 전환 — 기존 캐시는 음원 모델이 다르므로 onupgradeneeded 에서 제거
+const DB_VERSION = 2;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
@@ -24,10 +25,12 @@ function openDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "key" });
-        store.createIndex("accessedAt", "accessedAt", { unique: false });
+      // 버전 업그레이드 시 기존 store 삭제 후 재생성 — 엔진 교체로 인한 stale 캐시 제거
+      if (db.objectStoreNames.contains(STORE)) {
+        db.deleteObjectStore(STORE);
       }
+      const store = db.createObjectStore(STORE, { keyPath: "key" });
+      store.createIndex("accessedAt", "accessedAt", { unique: false });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
