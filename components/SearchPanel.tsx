@@ -181,12 +181,26 @@ export default function SearchPanel({
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
   // 첫 마운트 시 최근 위치로 자동 점프 (한 번만)
+  // ?fresh=1 param 있으면 자동 점프 스킵 (예: /share에서 홈으로 누른 경우)
   const bootstrappedRef = useRef(false);
   useEffect(() => {
     const r = readRecent();
     setRecent(r);
     setBookmarks(readBookmarks());
-    if (!bootstrappedRef.current && r && r.book_code && r.chapter) {
+    if (bootstrappedRef.current) return;
+
+    // URL ?fresh=1 검사: 블랭크 홈으로 시작
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("fresh") === "1") {
+        bootstrappedRef.current = true;
+        // URL 정리 (fresh param 제거)
+        window.history.replaceState(window.history.state, "", "/");
+        return;
+      }
+    }
+
+    if (r && r.book_code && r.chapter) {
       bootstrappedRef.current = true;
       setBookCode(r.book_code);
       setChapter(r.chapter);

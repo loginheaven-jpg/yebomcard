@@ -99,7 +99,7 @@ export default function ShareContent() {
     <div className="min-h-screen bg-gray-50">
       <div className="px-4 py-4">
         <a
-          href="/"
+          href="/?fresh=1"
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
