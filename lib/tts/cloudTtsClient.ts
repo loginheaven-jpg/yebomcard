@@ -31,6 +31,16 @@ export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<CloudTtsRes
     signal: p.signal,
   });
   if (!res.ok) {
+    // 진단용: 에러 본문 전체 로깅 (env/quota/voice 문제 원인 파악)
+    let bodyText = "";
+    try {
+      bodyText = await res.text();
+    } catch {
+      /* ignore */
+    }
+    console.error(
+      `[TTS] /api/tts ${res.status} ${res.statusText}\nbody: ${bodyText.slice(0, 500)}`,
+    );
     throw new Error(`TTS_ERROR_${res.status}`);
   }
   const voiceUsed = res.headers.get("X-TTS-Voice") || "";
