@@ -53,7 +53,37 @@ export interface TtsTrack {
   bookCode: string;
   bookName: string;
   chapter: number;
+  /** 절 번호. 0 = 장 시작 announcement (예: "예레미야 33장"). 절은 1부터 시작. */
   verse: number;
+}
+
+/** 큐 앞·중간(장 경계)에 "책명 N장" announcement 트랙 삽입 */
+function injectChapterAnnouncements(tracks: TtsTrack[]): TtsTrack[] {
+  if (tracks.length === 0) return tracks;
+  const out: TtsTrack[] = [];
+  let prevKey = "";
+  for (const t of tracks) {
+    if (t.verse === 0) {
+      out.push(t);
+      prevKey = `${t.bookCode}-${t.chapter}`;
+      continue;
+    }
+    const key = `${t.bookCode}-${t.chapter}`;
+    if (key !== prevKey) {
+      out.push({
+        text: `${t.bookName} ${t.chapter}장`,
+        ref: `${t.bookName} ${t.chapter}장`,
+        version: t.version,
+        bookCode: t.bookCode,
+        bookName: t.bookName,
+        chapter: t.chapter,
+        verse: 0,
+      });
+      prevKey = key;
+    }
+    out.push(t);
+  }
+  return out;
 }
 
 export type LoadNextChapterFn = () => Promise<TtsTrack[] | null>;
@@ -222,8 +252,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             const nextTracks = await nextLoader();
             if (playGenRef.current !== gen) return;
             if (nextTracks && nextTracks.length > 0) {
-              queueRef.current = nextTracks;
-              setQueueLength(nextTracks.length);
+              const augmented = injectChapterAnnouncements(nextTracks);
+              queueRef.current = augmented;
+              setQueueLength(augmented.length);
               indexRef.current = -1;
               playIndexRef.current(0);
               return;
@@ -261,9 +292,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         speed: sp,
       });
 
-      const playableText = readVerseNumberRef.current
-        ? `${track.verse}절. ${track.text}`
-        : track.text;
+      const isAnnouncement = track.verse === 0;
+      const playableText =
+        !isAnnouncement && readVerseNumberRef.current
+          ? `${track.verse}절. ${track.text}`
+          : track.text;
 
       let blob: Blob | null = null;
       try {
@@ -356,12 +389,26 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const start = useCallback(
     (p: StartParams) => {
       if (!p.tracks || p.tracks.length === 0) return;
-      queueRef.current = p.tracks;
-      setQueueLength(p.tracks.length);
+      const augmented = injectChapterAnnouncements(p.tracks);
+      queueRef.current = augmented;
+      setQueueLength(augmented.length);
       loadNextChapterRef.current = p.loadNextChapter ?? null;
       setIsWebSpeechFallback(false);
-      const startAt = Math.max(0, Math.min(p.startIndex ?? 0, p.tracks.length - 1));
-      playIndex(startAt);
+
+      // startIndex 매핑: 0/미지정 → announcement 부터(index 0).
+      // 0보다 크면 원본 인덱스의 절을 augmented 큐에서 찾아 그 위치부터 재생 (announcement 스킵).
+      let startIdx = 0;
+      if (p.startIndex && p.startIndex > 0) {
+        const target = p.tracks[Math.min(p.startIndex, p.tracks.length - 1)];
+        const found = augmented.findIndex(
+          (t) =>
+            t.bookCode === target.bookCode &&
+            t.chapter === target.chapter &&
+            t.verse === target.verse,
+        );
+        startIdx = found >= 0 ? found : 0;
+      }
+      playIndex(startIdx);
     },
     [playIndex],
   );
