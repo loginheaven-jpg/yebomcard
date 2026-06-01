@@ -72,6 +72,8 @@ export const viewport: Viewport = {
 };
 
 import { FontProvider } from "@/contexts/FontContext";
+import { TtsProvider } from "@/contexts/TtsContext";
+import TTSMiniPlayer from "@/components/TTSMiniPlayer";
 
 export default function RootLayout({
   children,
@@ -85,7 +87,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <FontProvider>
-          {children}
+          <TtsProvider>
+            {children}
+            <TTSMiniPlayer />
+          </TtsProvider>
           <VersionCheck />
           <PwaInstall />
         </FontProvider>

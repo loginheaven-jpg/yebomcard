@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getBookByCode } from "@/lib/books";
 import type { BibleVerse } from "@/lib/types";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function ShareContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [koreanVerses, setKoreanVerses] = useState<BibleVerse[]>([]);
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
@@ -98,15 +99,18 @@ export default function ShareContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="px-4 py-4">
-        <a
-          href="/?fresh=1"
+        {/* FIX C: router.replace로 /share entry를 history stack에서 제거 →
+            홈에서 multi-step 네비 후 책 선택 시 /share로 튕겨 돌아가는 버그 방지.
+            (기존 <a href="/?fresh=1"> 풀 페이지 이동은 bfcache로 /share가 즉시 복원되어 race 발생) */}
+        <button
+          onClick={() => router.replace("/")}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           홈으로
-        </a>
+        </button>
       </div>
 
       <div className="max-w-lg mx-auto px-4 pb-12">

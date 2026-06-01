@@ -18,6 +18,9 @@ import {
 } from "@/lib/bookmark";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
+import HomeBlankContent from "./HomeBlankContent";
+import TTSButton from "./TTSButton";
+import { useTts, type TtsTrack } from "@/contexts/TtsContext";
 import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
@@ -346,6 +349,68 @@ export default function SearchPanel({
 
   // ─── 클립보드 복사 피드백 ───
   const [copied, setCopied] = useState(false);
+
+  // ─── TTS (본문 읽기) ───
+  const tts = useTts();
+  const ttsActiveOnThisChapter =
+    tts.status !== "idle" &&
+    tts.currentTrack?.bookCode === bookCode &&
+    tts.currentTrack?.chapter === chapter;
+
+  const buildTtsTracks = useCallback(
+    (verses: BibleVerse[]): TtsTrack[] =>
+      verses
+        .filter((v) => v.text && v.text.trim().length > 0)
+        .map((v) => ({
+          text: stripNotes(v.text),
+          ref: `${v.book_name} ${v.chapter}:${v.verse}`,
+          version: v.version,
+          bookCode: v.book_code,
+          bookName: v.book_name,
+          chapter: v.chapter,
+          verse: v.verse,
+        })),
+    [],
+  );
+
+  const loadNextChapterForTts = useCallback(async (): Promise<TtsTrack[] | null> => {
+    const idx = chapters.indexOf(chapter);
+    if (idx === -1 || idx >= chapters.length - 1) return null;
+    const nextCh = chapters[idx + 1];
+    const { data } = await supabase
+      .from("bible_verses")
+      .select("*")
+      .eq("version", mainVersion)
+      .eq("book_code", bookCode)
+      .eq("chapter", nextCh)
+      .order("verse");
+    if (!data || data.length === 0) return null;
+    setChapter(nextCh);
+    return buildTtsTracks(data as BibleVerse[]);
+  }, [bookCode, chapter, chapters, mainVersion, buildTtsTracks]);
+
+  const handleTtsToggle = useCallback(() => {
+    if (ttsActiveOnThisChapter) {
+      tts.stop();
+      return;
+    }
+    const tracks = buildTtsTracks(browseVerses);
+    if (tracks.length === 0) return;
+    tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
+  }, [ttsActiveOnThisChapter, tts, browseVerses, buildTtsTracks, loadNextChapterForTts]);
+
+  // TTS 재생 중 현재 절을 화면 중앙으로 스크롤
+  useEffect(() => {
+    if (!ttsActiveOnThisChapter || !tts.currentTrack) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const target = root.querySelector(
+      `[data-book="${tts.currentTrack.bookCode}"][data-chapter="${tts.currentTrack.chapter}"][data-verse="${tts.currentTrack.verse}"]`,
+    );
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [tts.currentTrack, ttsActiveOnThisChapter]);
 
   // ─── 관리자: 인라인 편집 (A안) + 편집모드 토글 (B안) ───
   const [editingVerseId, setEditingVerseId] = useState<number | null>(null);
@@ -1002,6 +1067,9 @@ export default function SearchPanel({
       <button
         key={verse.id}
         onClick={() => handleToggle(verse)}
+        data-book={verse.book_code}
+        data-chapter={verse.chapter}
+        data-verse={verse.verse}
         className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
           selected
             ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400"
@@ -1067,6 +1135,11 @@ export default function SearchPanel({
         ref: `${v.book_name} ${v.chapter}장 ${v.verse}절`,
         main: stripNotes(v.text),
         sub: alt ? stripNotes(alt.text) : undefined,
+        bookCode: v.book_code,
+        bookName: v.book_name,
+        chapter: v.chapter,
+        verse: v.verse,
+        version: v.version,
       };
     });
   }, [visibleMain, visibleAlt]);
@@ -1509,6 +1582,24 @@ export default function SearchPanel({
             <p className="text-sm text-red-500 mb-3 text-center">{searchError}</p>
           )}
 
+          {/* 빈 홈 화면 — 검색 전이고 결과 없을 때만 표시 (다시 펴기 · 책갈피 · 환영) */}
+          {!searchError &&
+            !searchLoading &&
+            !isAddingMore &&
+            lastSearchType === null &&
+            !searchByVersion.some((g) => g.verses.length > 0) && (
+              <HomeBlankContent
+                recent={recent}
+                bookmarks={bookmarks}
+                mainVersion={mainVersion}
+                onJump={(pos) => jumpTo(pos)}
+                onOpenAllBookmarks={() => {
+                  setShowBookmarkMenu(true);
+                  setShowSearchRow(false);
+                }}
+              />
+            )}
+
           {searchByVersion.some((g) => g.verses.length > 0) && (
             <>
               {fontSlider}
@@ -1693,9 +1784,14 @@ export default function SearchPanel({
                   </button>
                 </div>
 
-                {/* 우: 풀스크린 버튼 */}
+                {/* 우: 읽기 + 전체화면 버튼 */}
                 <div className="flex items-center shrink-0 gap-1.5">
-
+                  <TTSButton
+                    isPlaying={ttsActiveOnThisChapter}
+                    isLoading={ttsActiveOnThisChapter && tts.status === "loading"}
+                    disabled={browseVerses.length === 0}
+                    onClick={handleTtsToggle}
+                  />
                   <button
                     type="button"
                     onClick={() => setShowFullscreen(true)}

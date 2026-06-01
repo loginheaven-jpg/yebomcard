@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { useTts, type TtsTrack } from "@/contexts/TtsContext";
+import TTSButton from "./TTSButton";
 
 export interface FullscreenVerseItem {
   ref: string;
   main: string;
   sub?: string;
+  /** TTS 캐시·식별용 — 절 단위 재생을 위해 필요 (선택) */
+  bookCode?: string;
+  bookName?: string;
+  chapter?: number;
+  verse?: number;
+  version?: string;
 }
 
 import { type BibleVersion } from "@/lib/types";
@@ -268,6 +276,74 @@ export default function FullscreenReader({
   }, [go, onClose]);
 
   const current = verses[idx];
+
+  // ─── TTS ───
+  const tts = useTts();
+  const ttsTracks = useMemo<TtsTrack[]>(
+    () =>
+      verses
+        .filter(
+          (v): v is FullscreenVerseItem & {
+            bookCode: string;
+            bookName: string;
+            chapter: number;
+            verse: number;
+            version: string;
+          } =>
+            !!v.bookCode &&
+            !!v.bookName &&
+            typeof v.chapter === "number" &&
+            typeof v.verse === "number" &&
+            !!v.version &&
+            !!v.main,
+        )
+        .map((v) => ({
+          text: v.main,
+          ref: v.ref,
+          version: v.version,
+          bookCode: v.bookCode,
+          bookName: v.bookName,
+          chapter: v.chapter,
+          verse: v.verse,
+        })),
+    [verses],
+  );
+
+  const ttsActiveHere =
+    tts.status !== "idle" &&
+    !!tts.currentTrack &&
+    !!current?.bookCode &&
+    tts.currentTrack.bookCode === current.bookCode &&
+    tts.currentTrack.chapter === current.chapter;
+
+  // TTS 진행 시 풀스크린 idx를 현재 절로 동기화 (외부 상태 → 로컬 상태 반영)
+  useEffect(() => {
+    if (!ttsActiveHere || !tts.currentTrack) return;
+    const ct = tts.currentTrack;
+    const newIdx = verses.findIndex(
+      (v) => v.bookCode === ct.bookCode && v.chapter === ct.chapter && v.verse === ct.verse,
+    );
+    if (newIdx !== -1 && newIdx !== idx) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIdx(newIdx);
+    }
+  }, [tts.currentTrack, ttsActiveHere, verses, idx]);
+
+  const handleTtsToggleFs = useCallback(() => {
+    if (ttsActiveHere) {
+      tts.stop();
+      return;
+    }
+    if (ttsTracks.length === 0) return;
+    const startAt = ttsTracks.findIndex(
+      (t) =>
+        t.bookCode === current?.bookCode &&
+        t.chapter === current?.chapter &&
+        t.verse === current?.verse,
+    );
+    tts.start({ tracks: ttsTracks, startIndex: startAt >= 0 ? startAt : 0 });
+  }, [ttsActiveHere, tts, ttsTracks, current]);
+
   if (!current) return null;
 
   const isDark = theme === "dark";
@@ -687,6 +763,18 @@ export default function FullscreenReader({
             <span style={{ fontSize: 15 }}>{isDark ? "☀" : "☾"}</span>
             {isDark ? "Light" : "Dark"}
           </button>
+          <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
+
+          {/* 본문 읽기 (TTS) — verses에 bookCode 등 메타데이터 있을 때만 활성 */}
+          <span style={{ color: vars.muted, display: "inline-flex" }}>
+            <TTSButton
+              variant="footer"
+              isPlaying={ttsActiveHere}
+              isLoading={ttsActiveHere && tts.status === "loading"}
+              disabled={ttsTracks.length === 0}
+              onClick={handleTtsToggleFs}
+            />
+          </span>
           <span aria-hidden style={{ width: 1, height: 14, background: vars.divider, opacity: 0.7 }} />
 
           {/* 폰트 선택 버튼 + 팝업 */}
