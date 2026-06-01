@@ -5,6 +5,86 @@
 
 ---
 
+## TTS 음질 추가 개선 — ElevenLabs 통합 (보류, 2026-06-01)
+
+**현재 상태**
+GCP Chirp 3 HD voice(Aoede/Charon) + Neural2 폴백으로 사용자 청취 만족 확인 (2026-06-01). 본 항목은 향후 만족도 저하 시 활성화.
+
+**도입 트리거**
+- 사용자가 "Chirp 도 부자연스럽다" 피드백을 명시적으로 줄 때
+- 또는 새 voice 모델 출시 후 비교 필요 시점
+
+**작업 내용**
+- `/api/tts/route.ts` 에 `provider` 분기 추가 (`gcp` | `elevenlabs`)
+- ElevenLabs Korean voice (Rachel/Bella multilingual v2) 통합
+- API key 발급 후 `.env.local` + Vercel env 추가
+- 미니 플레이어에 "고품질 음성" 토글 (운영비 통제용)
+- IndexedDB 캐시 키에 provider 포함 → 엔진 전환 시 자동 분리 캐시
+
+**비용**
+- Starter $5/월 (30K자) — 한국어 60~70장 분량
+- Creator $22/월 (100K자)
+- 무료 tier 10K자/월
+- pay-as-you-go: 1M자 $165 (Creator 가격)
+
+**예상 작업량** ~3시간 (라우트 분기 1h + UI 토글 0.5h + 키 등록/배포 0.5h + 비교 검증 1h)
+
+---
+
+## Supabase 일괄 사전 캐싱 — bible_audio 인프라 재활용 (보류, 사용자 임계 도달 시)
+
+**현재 상태**
+인프라(bible_audio 테이블 + Storage 버킷 + download-audio.mjs)는 이미 구축됨 (bskorea 다운로드용으로 만들었으나 그 시도는 취소됨 — 아래 ~~취소 항목~~ 참고). 이 인프라를 GCP TTS 일괄 합성용으로 **재활용** 가능.
+
+**왜 보류했나**
+현재 IndexedDB 클라이언트 캐시로 충분 (개인/소그룹 무료 tier 안). 사용자 규모 확장 시점에만 효용.
+
+**도입 트리거**
+- 활성 사용자 100명 초과
+- 또는 GCP Cloud TTS 월 청구액 $50 초과
+- 또는 동일 본문을 여러 사용자가 자주 청취해서 first-fetch 비용이 누적될 때
+
+**작업 내용**
+1. `download-audio.mjs` 수정 — bskorea 다운로드 로직 제거하고 GCP Chirp 합성 호출 로직으로 교체
+   - 입력: 절 별 텍스트 (또는 장 합본)
+   - 출력: mp3 blob → Supabase Storage 적재 → bible_audio 매핑 INSERT
+2. `lib/bibleAudio.ts` 신설 — `lookupChapterAudio(version, bookCode, chapter)` Supabase 조회 + 메모리 캐시
+3. `contexts/TtsContext.tsx` 분기:
+   - L1: bible_audio 매핑 hit → public URL 의 mp3 재생
+   - L2: 매핑 miss → 기존 /api/tts (Chirp on-demand) 폴백
+4. 미니 플레이어 엔진 배지 확장: `Real`(파랑, Supabase 적재) | Chirp | N2 | Web
+
+**비용 추산**
+- 일회성 합성: 1,189장 × 2 버전 × 2 voice = 4,756 트랙 × 500자 × 3bytes ≈ 7.1MB → $213 (무료 tier 차감 시 ~$200)
+- 합성 후 운영비 0 (Supabase Storage free tier 1GB 안에 충분)
+- voice/속도 추가 조합은 별도 합성 필요 → 1.0배속 + 여/남만 기본 적재 권장
+
+**예상 작업량** ~3시간 (스크립트 변환 1.5h + bibleAudio.ts + Context 분기 1h + UI/검증 0.5h)
+
+**보유 자산 (재활용 대상)**
+- [bible_audio_create_table.sql](bible_audio_create_table.sql) — 테이블 스키마 + RLS (그대로 사용)
+- [download-audio.mjs](download-audio.mjs) — 동시성·재시도·MP3 검증 패턴 (소스 부분만 GCP 합성으로 교체)
+
+---
+
+## TTS 절 단위 타임스탬프 — seek 정확도 향상 (보류, 우선순위 낮음)
+
+**현재 상태**
+미니 플레이어 진행바는 "절 N / 전체 M" 단위. 사용자가 화면 중간 절을 클릭해서 "이 절부터 듣기"는 가능하지만, 한 절 안에서 seek (예: 절 5의 중간으로 이동)은 불가.
+
+**도입 트리거**
+- 사용자가 "긴 절 중간으로 점프하고 싶다"는 피드백
+- 또는 장 단위 음원(Supabase 캐시) 도입 후 절 동기화 정확도 필요할 때
+
+**작업 내용**
+- GCP Chirp 3 HD 의 timepoint 지원 확인 (SSML `<mark>` 또는 word-level boundary API)
+- 또는 클라이언트 측 절 길이 추정 (텍스트 길이 비례) 후 진행바 분할
+- 미니 플레이어에 절 간 ◀ ▶ 버튼 추가 (현재 절 다시 / 다음 절)
+
+**예상 작업량** ~2시간 (조사 1h + 구현 1h)
+
+---
+
 ## TTS 백그라운드 재생 keep-alive (보류, 2026-06-01)
 
 **무엇이 보류되었나**
@@ -35,5 +115,17 @@ TTS 재생 중 모바일 화면 잠금 / 백그라운드 전환 시에도 오디
 - 모바일 iOS Safari는 Wake Lock 미지원 — 무음 앵커만으로 부분 동작
 
 **예상 작업량** ~3시간 (포팅 1h + yebom TTS 컨텍스트와 통합 1h + iOS/Android 실기 검증 1h)
+
+---
+
+## ~~성경 음원 다운로드 — 대한성서공회 bskorea (취소, 2026-06-01)~~
+
+~~bskorea.or.kr 의 성경듣기 음원을 받아 Supabase Storage 에 재호스팅하려 했음.~~
+
+**취소 이유**: bskorea 음원이 실제 성우 녹음이 아니라 **AI 합성 음성**으로 확인됨 (2026-06-01). GCP Chirp 와 본질적으로 같은 카테고리라 다운로드 가치 없음. 또한 실제 URL 이 CloudFront signed URL 패턴(3개월 만료)이라 정적 경로 가정도 어긋남.
+
+**보존되는 자산** (다른 항목에서 재활용)
+- `bible_audio_create_table.sql` — Supabase 사전 캐싱 (위 #2 항목) 에서 그대로 사용
+- `download-audio.mjs` — 동시성·재시도·MP3 검증 패턴 추출용. 소스 부분만 GCP 합성 호출로 교체하면 #2 항목 스크립트로 변신
 
 ---
