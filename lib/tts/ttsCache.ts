@@ -51,7 +51,13 @@ export function makeCacheKey(k: TtsCacheKey): string {
   return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${k.voice}-${k.speed}`;
 }
 
-export async function getCachedAudio(key: string): Promise<Blob | null> {
+export interface CachedAudio {
+  blob: Blob;
+  /** 캐시 작성 시 서버가 사용한 voice 이름 (UI 엔진 표시용). 비어있을 수 있음 */
+  voiceUsed: string;
+}
+
+export async function getCachedAudio(key: string): Promise<CachedAudio | null> {
   try {
     const db = await openDB();
     return new Promise((resolve) => {
@@ -60,14 +66,19 @@ export async function getCachedAudio(key: string): Promise<Blob | null> {
       const req = store.get(key);
       req.onsuccess = () => {
         const row = req.result as
-          | { key: string; blob: Blob; accessedAt: number }
+          | {
+              key: string;
+              blob: Blob;
+              accessedAt: number;
+              voiceUsed?: string;
+            }
           | undefined;
         if (!row) {
           resolve(null);
           return;
         }
         store.put({ ...row, accessedAt: Date.now() });
-        resolve(row.blob);
+        resolve({ blob: row.blob, voiceUsed: row.voiceUsed ?? "" });
       };
       req.onerror = () => resolve(null);
     });
@@ -76,13 +87,17 @@ export async function getCachedAudio(key: string): Promise<Blob | null> {
   }
 }
 
-export async function putCachedAudio(key: string, blob: Blob): Promise<void> {
+export async function putCachedAudio(
+  key: string,
+  blob: Blob,
+  voiceUsed: string = "",
+): Promise<void> {
   try {
     const db = await openDB();
     await new Promise<void>((resolve) => {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
-      store.put({ key, blob, accessedAt: Date.now() });
+      store.put({ key, blob, voiceUsed, accessedAt: Date.now() });
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     });

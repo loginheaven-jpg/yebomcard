@@ -13,7 +13,13 @@ export interface CloudTtsParams {
   signal?: AbortSignal;
 }
 
-export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<Blob> {
+export interface CloudTtsResult {
+  blob: Blob;
+  /** 서버가 실제 사용한 GCP voice 이름 (X-TTS-Voice 헤더). 비어있을 수 있음 */
+  voiceUsed: string;
+}
+
+export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<CloudTtsResult> {
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -27,5 +33,7 @@ export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<Blob> {
   if (!res.ok) {
     throw new Error(`TTS_ERROR_${res.status}`);
   }
-  return res.blob();
+  const voiceUsed = res.headers.get("X-TTS-Voice") || "";
+  const blob = await res.blob();
+  return { blob, voiceUsed };
 }

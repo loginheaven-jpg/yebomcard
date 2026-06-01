@@ -90,7 +90,7 @@ export default function TTSMiniPlayer() {
           )}
         </button>
 
-        {/* ref + progress */}
+        {/* ref + progress + engine badge */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-1.5">
             <span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">
@@ -99,6 +99,26 @@ export default function TTSMiniPlayer() {
             {total > 0 && (
               <span className="text-[10px] text-gray-400 shrink-0">
                 {idx + 1}/{total}
+              </span>
+            )}
+            {tts.engine !== "unknown" && (
+              <span
+                className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${
+                  tts.engine === "chirp"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                    : tts.engine === "neural2" || tts.engine === "wavenet"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                }`}
+                title={tts.engineVoice || tts.engine}
+              >
+                {tts.engine === "chirp"
+                  ? "Chirp"
+                  : tts.engine === "neural2"
+                    ? "N2"
+                    : tts.engine === "wavenet"
+                      ? "Wave"
+                      : "Web"}
               </span>
             )}
           </div>

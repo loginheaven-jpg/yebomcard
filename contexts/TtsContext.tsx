@@ -94,6 +94,9 @@ interface StartParams {
   loadNextChapter?: LoadNextChapterFn;
 }
 
+/** 현재 재생 중인 음원의 엔진 식별 */
+export type TtsEngine = "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
+
 interface TtsContextValue {
   status: TtsStatus;
   currentIndex: number;
@@ -104,6 +107,10 @@ interface TtsContextValue {
   autoNext: boolean;
   readVerseNumber: boolean;
   isWebSpeechFallback: boolean;
+  /** 마지막으로 재생된 트랙의 엔진 (UI 표시용) */
+  engine: TtsEngine;
+  /** 서버가 실제 사용한 voice 이름 (예: ko-KR-Chirp3-HD-Aoede) */
+  engineVoice: string;
   start: (p: StartParams) => void;
   stop: () => void;
   pause: () => void;
@@ -113,6 +120,14 @@ interface TtsContextValue {
   setSpeed: (s: TtsSpeed) => void;
   setAutoNext: (b: boolean) => void;
   setReadVerseNumber: (b: boolean) => void;
+}
+
+function classifyEngine(voiceName: string): TtsEngine {
+  if (!voiceName) return "unknown";
+  if (voiceName.includes("Chirp")) return "chirp";
+  if (voiceName.includes("Neural2")) return "neural2";
+  if (voiceName.includes("Wavenet")) return "wavenet";
+  return "unknown";
 }
 
 const Ctx = createContext<TtsContextValue | null>(null);
@@ -152,6 +167,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const [readVerseNumber, setReadVerseNumberState] = useState(false);
   const [isWebSpeechFallback, setIsWebSpeechFallback] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<TtsTrack | null>(null);
+  const [engine, setEngine] = useState<TtsEngine>("unknown");
+  const [engineVoice, setEngineVoice] = useState("");
 
   const queueRef = useRef<TtsTrack[]>([]);
   const indexRef = useRef(-1);
@@ -299,8 +316,13 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           : track.text;
 
       let blob: Blob | null = null;
+      let resolvedVoice = "";
       try {
-        blob = await getCachedAudio(cacheKey);
+        const cached = await getCachedAudio(cacheKey);
+        if (cached) {
+          blob = cached.blob;
+          resolvedVoice = cached.voiceUsed;
+        }
       } catch {
         blob = null;
       }
@@ -310,14 +332,16 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         try {
           const ctrl = new AbortController();
           abortRef.current = ctrl;
-          blob = await fetchCloudTtsAudio({
+          const result = await fetchCloudTtsAudio({
             text: playableText,
             voice: v,
             speed: sp,
             signal: ctrl.signal,
           });
           if (playGenRef.current !== gen) return;
-          void putCachedAudio(cacheKey, blob);
+          blob = result.blob;
+          resolvedVoice = result.voiceUsed;
+          void putCachedAudio(cacheKey, blob, resolvedVoice);
         } catch (err) {
           if (playGenRef.current !== gen) return;
           console.warn(
@@ -326,6 +350,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           );
           if (isWebSpeechSupported()) {
             setIsWebSpeechFallback(true);
+            setEngine("webspeech");
+            setEngineVoice("Web Speech");
             if (!webSpeechRef.current) {
               webSpeechRef.current = new WebSpeechController();
             }
@@ -355,6 +381,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
+
+      setEngine(classifyEngine(resolvedVoice));
+      setEngineVoice(resolvedVoice);
 
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
@@ -481,6 +510,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       autoNext,
       readVerseNumber,
       isWebSpeechFallback,
+      engine,
+      engineVoice,
       start,
       stop,
       pause,
@@ -501,6 +532,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       autoNext,
       readVerseNumber,
       isWebSpeechFallback,
+      engine,
+      engineVoice,
       start,
       stop,
       pause,
