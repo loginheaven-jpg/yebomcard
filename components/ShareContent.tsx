@@ -38,16 +38,19 @@ export default function ShareContent() {
           .eq("verse", p.verse)
           .single()
       );
-      const enPromises = parts.map((p) =>
-        supabase
-          .from("bible_verses")
-          .select("*")
-          .eq("version", enVersion)
-          .eq("book_code", p.bookCode)
-          .eq("chapter", p.chapter)
-          .eq("verse", p.verse)
-          .single()
-      );
+      // ev=none 일 때는 영문 fetch 스킵 (version=eq.none → 406 에러 방지)
+      const enPromises = enVersion === "none"
+        ? []
+        : parts.map((p) =>
+            supabase
+              .from("bible_verses")
+              .select("*")
+              .eq("version", enVersion)
+              .eq("book_code", p.bookCode)
+              .eq("chapter", p.chapter)
+              .eq("verse", p.verse)
+              .single()
+          );
 
       const [krResults, enResults] = await Promise.all([
         Promise.all(krPromises),
