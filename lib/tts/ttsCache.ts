@@ -8,8 +8,8 @@
  */
 
 const DB_NAME = "yebom_tts_cache";
-// v2: GCP Neural2 → Chirp 3 HD 전환 — 기존 캐시는 음원 모델이 다르므로 onupgradeneeded 에서 제거
-const DB_VERSION = 2;
+// v3: 서버측 Chirp→Neural2 폴백 도입 — 이전 테스트 시 Web Speech 폴백된 음원이 캐싱돼 있을 수 있어 한 번 더 무효화
+const DB_VERSION = 3;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;

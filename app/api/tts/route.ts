@@ -100,58 +100,79 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Chirp 3 HD voices — Neural2 보다 자연스러움. pitch 파라미터는 미지원.
-    const voiceName =
-      voice === "male" ? "ko-KR-Chirp3-HD-Charon" : "ko-KR-Chirp3-HD-Aoede";
-    const isChirp = voiceName.includes("Chirp");
+    const isMale = voice === "male";
+    // Chirp 3 HD voices 1순위, 실패 시 Neural2 로 자동 폴백 — 항상 Cloud TTS 음원 반환 보장
+    const candidates = isMale
+      ? ["ko-KR-Chirp3-HD-Charon", "ko-KR-Neural2-C"]
+      : ["ko-KR-Chirp3-HD-Aoede", "ko-KR-Neural2-A"];
+
     const token = await getAccessToken();
 
-    const audioConfig: Record<string, unknown> = {
-      audioEncoding: "MP3",
-      speakingRate: speed ?? 1.0,
-      volumeGainDb: volumeGainDb ?? 0,
-    };
-    if (!isChirp) {
-      audioConfig.pitch = pitch ?? 0;
+    let audioContent: string | null = null;
+    let usedVoice = "";
+    let lastError = "";
+
+    for (const voiceName of candidates) {
+      const isChirp = voiceName.includes("Chirp");
+      const audioConfig: Record<string, unknown> = {
+        audioEncoding: "MP3",
+        speakingRate: speed ?? 1.0,
+        volumeGainDb: volumeGainDb ?? 0,
+      };
+      if (!isChirp) {
+        audioConfig.pitch = pitch ?? 0;
+      }
+
+      const apiResponse = await fetch(TTS_API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: { text },
+          voice: { languageCode: "ko-KR", name: voiceName },
+          audioConfig,
+        }),
+      });
+
+      if (apiResponse.ok) {
+        const data = await apiResponse.json();
+        if (data.audioContent) {
+          audioContent = data.audioContent;
+          usedVoice = voiceName;
+          break;
+        }
+        lastError = `voice ${voiceName}: empty audio`;
+        continue;
+      }
+
+      const errBody = await apiResponse.text();
+      lastError = `voice ${voiceName}: ${apiResponse.status} ${errBody.slice(0, 200)}`;
+      console.error("[TTS]", lastError);
+      // 다음 후보로 폴백
     }
 
-    const apiResponse = await fetch(TTS_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: { text },
-        voice: { languageCode: "ko-KR", name: voiceName },
-        audioConfig,
-      }),
-    });
-    if (!apiResponse.ok) {
-      return NextResponse.json(
-        { error: `TTS API error: ${apiResponse.status}` },
-        { status: 500 },
-      );
-    }
-    const data = await apiResponse.json();
-    const audioContent = data.audioContent;
     if (!audioContent) {
       return NextResponse.json(
-        { error: "No audio content returned" },
+        { error: "All voice candidates failed", detail: lastError },
         { status: 500 },
       );
     }
+
     const buffer = Buffer.from(audioContent, "base64");
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
         "Cache-Control": "public, max-age=86400",
+        "X-TTS-Voice": usedVoice,
       },
     });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "TTS generation failed";
+    console.error("[TTS] exception:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

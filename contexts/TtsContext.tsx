@@ -318,8 +318,12 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           });
           if (playGenRef.current !== gen) return;
           void putCachedAudio(cacheKey, blob);
-        } catch {
+        } catch (err) {
           if (playGenRef.current !== gen) return;
+          console.warn(
+            `[TTS] Cloud fetch 실패 → Web Speech 폴백 (track: ${track.bookName} ${track.chapter}:${track.verse}, voice: ${v})`,
+            err,
+          );
           if (isWebSpeechSupported()) {
             setIsWebSpeechFallback(true);
             if (!webSpeechRef.current) {

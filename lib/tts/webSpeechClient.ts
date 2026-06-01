@@ -25,15 +25,24 @@ function loadVoices(): SpeechSynthesisVoice[] {
   return cachedVoices;
 }
 
+// 플랫폼별 알려진 한국어 voice 이름 매핑 — Web Speech 폴백 시 사용
+// 한국어 male voice 는 매우 제한적 (대부분 플랫폼은 female 만 제공) → 안내 메시지로 사용자에게 한계 노출
+const KNOWN_FEMALE = ["Heami", "Yuna", "Sora", "한국의", "Korean Female"];
+const KNOWN_MALE = ["InJoon", "Jangmi", "Sangwoo", "Korean Male"];
+
 function pickKoreanVoice(prefer: TTSVoice): SpeechSynthesisVoice | null {
   const all = loadVoices();
   const ko = all.filter((v) => v.lang.startsWith("ko"));
   if (ko.length === 0) return null;
-  // 이름에 female/male 힌트가 있으면 우선
+
+  const knownList = prefer === "male" ? KNOWN_MALE : KNOWN_FEMALE;
+  for (const name of knownList) {
+    const found = ko.find((v) => v.name.includes(name));
+    if (found) return found;
+  }
   const hint = prefer === "male" ? /male|man|남/i : /female|woman|여/i;
   const hinted = ko.find((v) => hint.test(v.name));
   if (hinted) return hinted;
-  // Google 한국어 우선
   const google = ko.find((v) => v.name.includes("Google"));
   return google || ko[0];
 }
