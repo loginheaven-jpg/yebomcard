@@ -5,6 +5,51 @@
 
 ---
 
+## 음원 호스팅 이전 — Supabase → Cloudflare R2 (보류, 트래픽 임계 도달 시)
+
+**현재 상태**
+음원은 Supabase Storage `bible-audio` 버킷에 호스팅. 시편 150편(414MB) 적재 완료. 전체 성경(통독 구약 + 신약 추정) ≈ 6.5GB 예상.
+
+**비교**
+
+| 항목 | Supabase Storage | Cloudflare R2 |
+|---|---|---|
+| Free tier 용량 | 1GB | 10GB |
+| Free tier egress | 월 2GB | **무제한** |
+| 추가 용량 | $0.021/GB/월 | $0.015/GB/월 |
+| 추가 egress | $0.09/GB | **$0/GB** (Cloudflare 정책: egress 무료) |
+| CDN | Smart CDN (region-based) | 전 세계 Cloudflare edge |
+| 인증 | RLS + signed URL | Public bucket 또는 signed URL |
+| 통합도 | yebomcard 가 이미 Supabase 사용 | 별도 설정 필요 |
+
+**시나리오별 월 비용 추산** (전체 성경 6.5GB 적재 가정, 사용자 1인당 월 30장 ≈ 120MB 청취)
+
+| 사용자 수 | 월 egress | Supabase 비용 | R2 비용 |
+|---|---|---|---|
+| 10 | 1.2GB | $0 (free) | $0 |
+| 100 | 12GB | $0.9 | $0 |
+| 500 | 60GB | $5.2 | $0 |
+| 1000 | 120GB | $10.6 | $0 |
+
+스토리지 자체 비용(6.5GB)은 양쪽 다 free tier 내. **차이는 egress 에서 발생**.
+
+**왜 보류했나**
+- 현재 사용자 규모(개인/소그룹)에서 비용 차이 미미 (월 $1 이내)
+- Supabase 통합도 유지가 운영 단순함
+- R2 이전 시 추가 작업: AWS S3 호환 SDK 설치, R2 access key 발급, custom domain 또는 public URL 패턴 변경, bible_audio.audio_url 일괄 업데이트
+
+**도입 트리거**
+- 활성 사용자 100명 초과 또는 월 egress 50GB 초과
+- 또는 Supabase 월 청구액에 Storage 항목이 $5 초과로 잡힐 때
+
+**이전 작업량** ~2시간
+1. R2 계정 + 버킷 생성, custom domain 설정 (예: `audio.yebom.org`)
+2. `upload-bible-audio.mjs` 의 Supabase Storage 업로드 부분만 R2 S3 호환 SDK 호출로 교체 (10-20줄)
+3. 새 URL 형식으로 bible_audio.audio_url 일괄 UPDATE (단일 SQL)
+4. 기존 Supabase Storage 음원은 정합 확인 후 정리
+
+---
+
 ## TTS 음질 추가 개선 — ElevenLabs 통합 (보류, 2026-06-01)
 
 **현재 상태**

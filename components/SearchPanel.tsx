@@ -412,6 +412,19 @@ export default function SearchPanel({
     }
   }, [tts.currentTrack, ttsActiveOnThisChapter]);
 
+  // 사용자가 chapter 화살표/키보드/QuickNav 등으로 같은 책의 다른 장으로 이동 시 TTS 도 따라가기.
+  // auto-next 경로는 TtsContext 가 먼저 currentTrack 을 새 장으로 갱신하므로 이 useEffect 는 skip.
+  useEffect(() => {
+    if (browseVerses.length === 0) return;
+    if (tts.status === "idle" || !tts.currentTrack) return;
+    if (tts.currentTrack.bookCode !== bookCode) return;
+    if (tts.currentTrack.chapter === chapter) return;
+    const tracks = buildTtsTracks(browseVerses);
+    if (tracks.length === 0) return;
+    tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookCode, chapter, browseVerses]);
+
   // ─── 관리자: 인라인 편집 (A안) + 편집모드 토글 (B안) ───
   const [editingVerseId, setEditingVerseId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
