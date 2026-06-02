@@ -104,7 +104,7 @@ const BOOK_BY_KR = {
   '요엘': 'jol',
   '아모스': 'amo',
   '오바댜': 'oba',
-  '요나': 'jon',
+  '요나': 'jnh',
   '미가': 'mic',
   '나훔': 'nam',
   '하박국': 'hab',
@@ -138,6 +138,9 @@ const BOOK_BY_KR = {
   '요한일서': '1jn',
   '요한이서': '2jn',
   '요한삼서': '3jn',
+  '요한1서': '1jn',
+  '요한2서': '2jn',
+  '요한3서': '3jn',
   '유다서': 'jud',
   '요한계시록': 'rev',
 };
@@ -159,6 +162,7 @@ const CLI = {
   zip: flag('zip'),
   dir: flag('dir'),
   batch: flag('batch'),
+  bookHint: flag('book-hint'),  // 책명 강제 (zip/dir 이름이 깨졌을 때)
   concurrency: parseInt(flag('concurrency') || '4', 10),
   dryRun: flagBool('dry-run'),
   overwrite: flagBool('overwrite'),
@@ -208,13 +212,49 @@ function extractZipPS(zipPath, destDir) {
 }
 
 // 파일명에서 한글 책명 + 장 번호 추출
-// 예: "시편01.mp3" → { bookKr: "시편", chapter: 1 }
-//     "예레미야애가05.mp3" → { bookKr: "예레미야애가", chapter: 5 }
-function parseFilename(filename) {
+// 패턴 A: "시편01.mp3" / "예레미야애가05.mp3" → 풀네임 책명 + 장
+// 패턴 B: "창01.mp3" / "출03.mp3"           → 약자 + 장 (BOOK_BY_KR 미매핑 → fallback 사용)
+// 패턴 C: "001편.mp3" / "001장.mp3" / "001.mp3" → 장만 (책명은 fallback 사용)
+function parseFilename(filename, fallbackBookKr = null) {
   const base = basename(filename, extname(filename));
-  const m = base.match(/^([가-힣]+?)(\d+)$/);
-  if (!m) return null;
-  return { bookKr: m[1], chapter: parseInt(m[2], 10) };
+  const a = base.match(/^([가-힣]+?)(\d+)$/);
+  if (a) {
+    // 추출된 한글이 BOOK_BY_KR 매핑에 있으면 그걸 사용, 없으면 (약자 등) fallback 사용
+    const bookKr = BOOK_BY_KR[a[1]] ? a[1] : fallbackBookKr;
+    if (bookKr) return { bookKr, chapter: parseInt(a[2], 10) };
+  }
+  const b = base.match(/^(\d+)(?:편|장)?$/);
+  if (b && fallbackBookKr) {
+    return { bookKr: fallbackBookKr, chapter: parseInt(b[1], 10) };
+  }
+  return null;
+}
+
+// 문자열에서 BOOK_BY_KR 에 등록된 한글 책명을 찾아 반환 (긴 이름 우선 매칭 → "예레미야애가" 가 "예레미야" 보다 먼저)
+function extractBookKr(s) {
+  const candidates = Object.keys(BOOK_BY_KR).sort((a, b) => b.length - a.length);
+  for (const name of candidates) {
+    if (s.includes(name)) return name;
+  }
+  return null;
+}
+
+// 재귀로 mp3 파일 경로 모두 수집
+async function walkMp3(dir) {
+  const out = [];
+  async function recurse(d) {
+    const entries = await readdir(d, { withFileTypes: true });
+    for (const e of entries) {
+      const fp = join(d, e.name);
+      if (e.isDirectory()) {
+        await recurse(fp);
+      } else if (e.isFile() && e.name.toLowerCase().endsWith('.mp3')) {
+        out.push(fp);
+      }
+    }
+  }
+  await recurse(dir);
+  return out;
 }
 
 async function logFailure(entry) {
@@ -229,6 +269,11 @@ async function logFailure(entry) {
 async function uploadOneFile(version, bookCode, chapter, fileBuf, fileBytes) {
   const ch = String(chapter).padStart(3, '0');
   const path = `${version}/${bookCode}/${ch}.mp3`;
+
+  // 0바이트 또는 1KB 미만은 손상된 파일로 간주 → 업로드 skip
+  if (fileBytes < 1024) {
+    throw new Error(`empty/corrupt file (${fileBytes}B)`);
+  }
 
   if (CLI.dryRun) {
     console.log(`  [DRY] would upload ${path} (${(fileBytes / 1024).toFixed(0)}KB)`);
@@ -273,27 +318,31 @@ async function uploadOneFile(version, bookCode, chapter, fileBuf, fileBytes) {
   return 'done';
 }
 
-async function processDirectory(version, dir, bookKrHint = null) {
-  const entries = await readdir(dir);
-  const mp3s = entries.filter((f) => f.toLowerCase().endsWith('.mp3'));
-  if (mp3s.length === 0) {
+async function processDirectory(version, dir, fallbackBookKr = null) {
+  const mp3Paths = await walkMp3(dir);
+  if (mp3Paths.length === 0) {
     console.log(`  [${dir}] mp3 파일 없음`);
     return { done: 0, skip: 0, fail: 0 };
   }
 
-  // 파일명 파싱으로 책명 확정 (혼합 디렉토리 방어)
-  const parsed = mp3s
-    .map((f) => ({ f, p: parseFilename(f) }))
-    .filter((x) => x.p);
+  // 각 mp3 에 대해 책명 추출 — 우선순위: 파일명 패턴 → 부모 디렉토리명 → 인자 fallback
+  const parsed = mp3Paths
+    .map((p) => {
+      const parentName = basename(dirname(p));
+      const dirFallback = extractBookKr(parentName) || fallbackBookKr;
+      const meta = parseFilename(basename(p), dirFallback);
+      return meta ? { f: p, p: meta } : null;
+    })
+    .filter(Boolean);
+
   if (parsed.length === 0) {
-    console.warn(`  [${dir}] 파일명 패턴 매칭 실패. 예: ${mp3s[0]}`);
-    return { done: 0, skip: 0, fail: mp3s.length };
+    console.warn(`  [${dir}] 파일명 패턴 매칭 실패. 예: ${basename(mp3Paths[0])}`);
+    return { done: 0, skip: 0, fail: mp3Paths.length };
   }
 
-  // 책명 통일성 확인 — bookKrHint 와 일치 또는 단일 책명만 존재
   const uniqueBooks = [...new Set(parsed.map((x) => x.p.bookKr))];
   if (uniqueBooks.length > 1) {
-    console.warn(`  [${dir}] 한 디렉토리에 책명 ${uniqueBooks.length}종 혼재: ${uniqueBooks.join(', ')}`);
+    console.log(`  [${dir}] 책 ${uniqueBooks.length}종: ${uniqueBooks.join(', ')}`);
   }
 
   const limit = pLimit(CLI.concurrency);
@@ -307,7 +356,7 @@ async function processDirectory(version, dir, bookKrHint = null) {
         const bookCode = BOOK_BY_KR[p.bookKr];
         if (!bookCode) {
           stats.fail++;
-          console.warn(`  매핑 없음: 책명 "${p.bookKr}" (파일 ${f}). BOOK_BY_KR 확인 필요`);
+          console.warn(`  매핑 없음: 책명 "${p.bookKr}" (파일 ${basename(f)})`);
           await logFailure({
             version,
             file: f,
@@ -318,7 +367,7 @@ async function processDirectory(version, dir, bookKrHint = null) {
           return;
         }
         try {
-          const buf = await readFile(join(dir, f));
+          const buf = await readFile(f);
           const r = await uploadOneFile(version, bookCode, p.chapter, buf, buf.length);
           if (r === 'done' || r === 'dry-ok') stats.done++;
           else stats.skip++;
@@ -335,7 +384,7 @@ async function processDirectory(version, dir, bookKrHint = null) {
           });
         } finally {
           processed++;
-          if (processed % 20 === 0 || processed === total) {
+          if (processed % 30 === 0 || processed === total) {
             console.log(
               `  진행 ${processed}/${total} (done=${stats.done} skip=${stats.skip} fail=${stats.fail})`,
             );
@@ -351,16 +400,19 @@ async function processDirectory(version, dir, bookKrHint = null) {
 // ─── zip 모드 ───
 
 async function runZip(zipPath) {
-  const zipName = basename(zipPath, extname(zipPath)); // "19.시편"
-  const tmpDir = join(tmpdir(), `yebom-audio-${Date.now()}-${zipName}`);
+  const zipName = basename(zipPath, extname(zipPath));
+  const tmpDir = join(tmpdir(), `yebom-audio-${Date.now()}-${zipName.replace(/[^a-zA-Z0-9가-힣_-]/g, '_')}`);
 
   console.log(`[zip] ${zipPath}`);
   console.log(`[tmp] ${tmpDir} 에 풀기...`);
   extractZipPS(resolve(zipPath), tmpDir);
 
+  const fallbackBookKr = CLI.bookHint || extractBookKr(zipName);
+  if (fallbackBookKr) console.log(`  책명 fallback: "${fallbackBookKr}"${CLI.bookHint ? ' (CLI 강제)' : ' (zip 이름에서 추정)'}`);
+
   try {
     const t0 = Date.now();
-    const stats = await processDirectory(CLI.version, tmpDir);
+    const stats = await processDirectory(CLI.version, tmpDir, fallbackBookKr);
     const elapsed = Math.round((Date.now() - t0) / 1000);
     console.log(
       `완료 done=${stats.done} skip=${stats.skip} fail=${stats.fail} (${Math.floor(elapsed / 60)}분 ${elapsed % 60}초)`,
@@ -386,11 +438,12 @@ async function runBatch(folder) {
   for (const z of zips) {
     const zipPath = join(folder, z);
     const zipName = basename(z, extname(z));
-    const tmpDir = join(tmpdir(), `yebom-audio-${Date.now()}-${zipName}`);
-    console.log(`\n[${z}] 풀기 → ${tmpDir}`);
+    const tmpDir = join(tmpdir(), `yebom-audio-${Date.now()}-${zipName.replace(/[^a-zA-Z0-9가-힣_-]/g, '_')}`);
+    const fallbackBookKr = extractBookKr(zipName);
+    console.log(`\n[${z}]${fallbackBookKr ? ` (${fallbackBookKr})` : ''} 풀기...`);
     try {
       extractZipPS(resolve(zipPath), tmpDir);
-      const s = await processDirectory(CLI.version, tmpDir);
+      const s = await processDirectory(CLI.version, tmpDir, fallbackBookKr);
       totalStats.done += s.done;
       totalStats.skip += s.skip;
       totalStats.fail += s.fail;
