@@ -39,6 +39,7 @@ import {
   WebSpeechController,
   isWebSpeechSupported,
 } from "@/lib/tts/webSpeechClient";
+import { lookupChapterAudio } from "@/lib/bibleAudio";
 
 export type TtsStatus = "idle" | "loading" | "speaking" | "paused";
 export type TtsSpeed = 0.85 | 1.0 | 1.2 | 1.5;
@@ -53,8 +54,10 @@ export interface TtsTrack {
   bookCode: string;
   bookName: string;
   chapter: number;
-  /** 절 번호. 0 = 장 시작 announcement (예: "예레미야 33장"). 절은 1부터 시작. */
+  /** 절 번호. 0 = 장 시작 announcement, -1 = 장 통째 음원 (mp3Url 사용), 1+ = 절. */
   verse: number;
+  /** Supabase 적재된 장 단위 음원 URL. 있으면 TTS 합성 대신 이 URL 직접 재생. */
+  mp3Url?: string;
 }
 
 /** 큐 앞·중간(장 경계)에 "책명 N장" announcement 트랙 삽입 */
@@ -86,6 +89,52 @@ function injectChapterAnnouncements(tracks: TtsTrack[]): TtsTrack[] {
   return out;
 }
 
+/**
+ * 절 단위 트랙 배열을 받아 — 동일 (version, book, chapter) 인지 확인하고
+ * bible_audio 매핑이 있으면 [announcement, 장 통째 mp3 트랙] 로 압축.
+ * 매핑 없거나 트랙이 여러 장 섞여있으면 절 단위 + announcement 주입으로 폴백.
+ */
+async function transformWithChapterAudio(
+  tracks: TtsTrack[],
+): Promise<TtsTrack[]> {
+  if (tracks.length === 0) return tracks;
+  const first = tracks[0];
+  const allSameChapter = tracks.every(
+    (t) =>
+      t.version === first.version &&
+      t.bookCode === first.bookCode &&
+      t.chapter === first.chapter,
+  );
+  if (!allSameChapter) {
+    return injectChapterAnnouncements(tracks);
+  }
+  const url = await lookupChapterAudio(first.version, first.bookCode, first.chapter);
+  if (!url) {
+    return injectChapterAnnouncements(tracks);
+  }
+  return [
+    {
+      text: `${first.bookName} ${first.chapter}장`,
+      ref: `${first.bookName} ${first.chapter}장`,
+      version: first.version,
+      bookCode: first.bookCode,
+      bookName: first.bookName,
+      chapter: first.chapter,
+      verse: 0,
+    },
+    {
+      text: "",
+      ref: `${first.bookName} ${first.chapter}장`,
+      version: first.version,
+      bookCode: first.bookCode,
+      bookName: first.bookName,
+      chapter: first.chapter,
+      verse: -1,
+      mp3Url: url,
+    },
+  ];
+}
+
 export type LoadNextChapterFn = () => Promise<TtsTrack[] | null>;
 
 interface StartParams {
@@ -95,7 +144,7 @@ interface StartParams {
 }
 
 /** 현재 재생 중인 음원의 엔진 식별 */
-export type TtsEngine = "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
+export type TtsEngine = "real" | "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
 
 interface TtsContextValue {
   status: TtsStatus;
@@ -210,7 +259,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   }, [voice]);
   useEffect(() => {
     speedRef.current = speed;
-  }, [speed]);
+    // 장 단위 mp3 재생 중이면 즉시 playbackRate 반영 (TTS 합성 모드는 다음 절부터 적용됨)
+    if (audioRef.current && currentTrack?.mp3Url) {
+      audioRef.current.playbackRate = speed;
+    }
+  }, [speed, currentTrack?.mp3Url]);
   useEffect(() => {
     autoNextRef.current = autoNext;
   }, [autoNext]);
@@ -269,7 +322,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             const nextTracks = await nextLoader();
             if (playGenRef.current !== gen) return;
             if (nextTracks && nextTracks.length > 0) {
-              const augmented = injectChapterAnnouncements(nextTracks);
+              const augmented = await transformWithChapterAudio(nextTracks);
+              if (playGenRef.current !== gen) return;
               queueRef.current = augmented;
               setQueueLength(augmented.length);
               indexRef.current = -1;
@@ -297,6 +351,39 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       statusRef.current = "loading";
 
       cleanupAudio();
+
+      // 장 단위 사람 녹음 음원 — TTS 합성 우회, mp3Url 직접 재생
+      if (track.mp3Url) {
+        setEngine("real");
+        setEngineVoice("쉬운성경(통독성경)");
+        setIsWebSpeechFallback(false);
+        const audio = new Audio(track.mp3Url);
+        audio.playbackRate = speedRef.current;
+        audioRef.current = audio;
+        audio.onended = () => {
+          if (playGenRef.current !== gen) return;
+          if (statusRef.current !== "speaking") return;
+          playIndexRef.current(indexRef.current + 1);
+        };
+        audio.onerror = () => {
+          if (playGenRef.current !== gen) return;
+          cleanupAudio();
+          setStatus("idle");
+          statusRef.current = "idle";
+        };
+        try {
+          await audio.play();
+          if (playGenRef.current !== gen) return;
+          setStatus("speaking");
+          statusRef.current = "speaking";
+        } catch {
+          if (playGenRef.current !== gen) return;
+          cleanupAudio();
+          setStatus("idle");
+          statusRef.current = "idle";
+        }
+        return;
+      }
 
       const v = voiceRef.current;
       const sp = speedRef.current;
@@ -420,18 +507,24 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   }, [playIndex]);
 
   const start = useCallback(
-    (p: StartParams) => {
+    async (p: StartParams) => {
       if (!p.tracks || p.tracks.length === 0) return;
-      const augmented = injectChapterAnnouncements(p.tracks);
-      queueRef.current = augmented;
-      setQueueLength(augmented.length);
       loadNextChapterRef.current = p.loadNextChapter ?? null;
       setIsWebSpeechFallback(false);
+      // 즉시 loading 표시 — bible_audio lookup 대기 중에도 미니 플레이어 노출
+      setStatus("loading");
+      statusRef.current = "loading";
 
-      // startIndex 매핑: 0/미지정 → announcement 부터(index 0).
-      // 0보다 크면 원본 인덱스의 절을 augmented 큐에서 찾아 그 위치부터 재생 (announcement 스킵).
+      // 장 단위 음원이 있으면 [announcement, mp3 통째] 큐로 압축, 없으면 절 단위 + announcement
+      const augmented = await transformWithChapterAudio(p.tracks);
+      queueRef.current = augmented;
+      setQueueLength(augmented.length);
+
+      // 장 단위 mp3 모드: startIndex 와 무관하게 announcement 부터 (mp3 는 장 내부 seek 불가)
+      // 절 단위 모드: startIndex > 0 이면 그 절 위치를 augmented 에서 찾아 announcement 스킵
       let startIdx = 0;
-      if (p.startIndex && p.startIndex > 0) {
+      const isChapterAudioMode = augmented.some((t) => t.mp3Url);
+      if (!isChapterAudioMode && p.startIndex && p.startIndex > 0) {
         const target = p.tracks[Math.min(p.startIndex, p.tracks.length - 1)];
         const found = augmented.findIndex(
           (t) =>
