@@ -42,8 +42,8 @@ import {
 import { lookupChapterAudio } from "@/lib/bibleAudio";
 
 export type TtsStatus = "idle" | "loading" | "speaking" | "paused";
-export type TtsSpeed = 0.85 | 1.0 | 1.2 | 1.5;
-export const TTS_SPEEDS: TtsSpeed[] = [0.85, 1.0, 1.2, 1.5];
+export type TtsSpeed = 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
+export const TTS_SPEEDS: TtsSpeed[] = [1.0, 1.15, 1.5, 1.75, 2.0];
 
 export interface TtsTrack {
   text: string;
@@ -112,16 +112,8 @@ async function transformWithChapterAudio(
   if (!url) {
     return injectChapterAnnouncements(tracks);
   }
+  // 음원에 책명·장 안내가 포함되어 있으므로 별도 announcement 트랙 생략 — 장 통째 mp3 한 트랙만
   return [
-    {
-      text: `${first.bookName} ${first.chapter}장`,
-      ref: `${first.bookName} ${first.chapter}장`,
-      version: first.version,
-      bookCode: first.bookCode,
-      bookName: first.bookName,
-      chapter: first.chapter,
-      verse: 0,
-    },
     {
       text: "",
       ref: `${first.bookName} ${first.chapter}장`,

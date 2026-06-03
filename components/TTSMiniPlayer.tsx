@@ -36,6 +36,8 @@ export default function TTSMiniPlayer() {
   const idx = tts.currentIndex;
   const progress = total > 0 ? ((idx + 1) / total) * 100 : 0;
   const refLabel = tts.currentTrack?.ref ?? "";
+  // 음원(사람 녹음) 모드 — 단일 성우 + 장 통째 1트랙 → voice 토글·절 번호 읽기 무의미
+  const isAudioMode = tts.engine === "real" || !!tts.currentTrack?.mp3Url;
 
   return (
     <div
@@ -171,18 +173,20 @@ export default function TTSMiniPlayer() {
           )}
         </div>
 
-        {/* 음성 */}
-        <button
-          type="button"
-          onClick={() =>
-            tts.setVoice(tts.voice === "female" ? "male" : "female")
-          }
-          aria-label={`음성: ${tts.voice === "female" ? "여성" : "남성"}, 전환`}
-          title={`음성: ${tts.voice === "female" ? "여성" : "남성"}`}
-          className="shrink-0 w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:border-[#B8860B] hover:text-[#B8860B] dark:hover:text-amber-400 transition-colors"
-        >
-          {tts.voice === "female" ? "여" : "남"}
-        </button>
+        {/* 음성 — 음원 모드(사람 녹음)에선 단일 성우 고정이라 토글 숨김 */}
+        {!isAudioMode && (
+          <button
+            type="button"
+            onClick={() =>
+              tts.setVoice(tts.voice === "female" ? "male" : "female")
+            }
+            aria-label={`음성: ${tts.voice === "female" ? "여성" : "남성"}, 전환`}
+            title={`음성: ${tts.voice === "female" ? "여성" : "남성"}`}
+            className="shrink-0 w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:border-[#B8860B] hover:text-[#B8860B] dark:hover:text-amber-400 transition-colors"
+          >
+            {tts.voice === "female" ? "여" : "남"}
+          </button>
+        )}
 
         {/* 더보기 */}
         <div className="relative shrink-0">
@@ -215,17 +219,19 @@ export default function TTSMiniPlayer() {
                   자동 다음 장
                 </span>
               </label>
-              <label className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                <input
-                  type="checkbox"
-                  checked={tts.readVerseNumber}
-                  onChange={(e) => tts.setReadVerseNumber(e.target.checked)}
-                  className="w-3.5 h-3.5"
-                />
-                <span className="text-xs text-gray-700 dark:text-gray-200">
-                  절 번호 읽기
-                </span>
-              </label>
+              {!isAudioMode && (
+                <label className="flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={tts.readVerseNumber}
+                    onChange={(e) => tts.setReadVerseNumber(e.target.checked)}
+                    className="w-3.5 h-3.5"
+                  />
+                  <span className="text-xs text-gray-700 dark:text-gray-200">
+                    절 번호 읽기
+                  </span>
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => {
