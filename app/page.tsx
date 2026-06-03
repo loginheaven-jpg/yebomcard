@@ -81,6 +81,19 @@ export default function Home() {
   });
   useHardwareBack(isAddingMore, () => setIsAddingMore(false));
 
+  // 도구함 외부 클릭 시 닫기
+  const toolMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showToolMenu) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (toolMenuRef.current && !toolMenuRef.current.contains(e.target as Node)) {
+        setShowToolMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showToolMenu]);
+
   // 루트 종료 방지
   const exitingRef = useRef(false);
   useEffect(() => {
@@ -295,6 +308,7 @@ export default function Home() {
 
       {/* 도구함 (우하단 — 좌하단 스크랩과 좌우대칭) */}
       <div
+        ref={toolMenuRef}
         className="fixed bottom-3 right-3 z-[150]"
         style={{ marginBottom: "env(safe-area-inset-bottom, 0)", marginRight: "env(safe-area-inset-right, 0)" }}
       >
