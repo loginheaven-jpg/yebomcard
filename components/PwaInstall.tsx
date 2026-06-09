@@ -85,8 +85,8 @@ export default function PwaInstall() {
       <button
         onClick={handleInstall}
         className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full
-          bg-[#B8860B] px-4 py-3 text-sm font-medium text-white shadow-lg
-          hover:bg-[#9A7009] active:scale-95 transition-all"
+          bg-[var(--amber)] px-4 py-3 text-sm font-medium text-white shadow-lg
+          hover:bg-[var(--amber-deep)] active:scale-95 transition-all"
       >
         <svg
           className="w-5 h-5"

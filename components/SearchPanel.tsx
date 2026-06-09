@@ -1105,7 +1105,7 @@ export default function SearchPanel({
           {verse.text}
         </span>
         {altText && (
-          <div className="mt-1 text-gray-400 leading-relaxed" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+          <div className="bible-sub-text leading-relaxed text-gray-400" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
             {altText}
           </div>
         )}
@@ -1860,7 +1860,7 @@ export default function SearchPanel({
                                 </span>
                               </div>
                               {alt && (
-                                <div className="mt-1 ml-7 text-gray-400 leading-relaxed" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
+                                <div className="bible-sub-text ml-7 leading-relaxed text-gray-400" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
                                   {alt.text}
                                 </div>
                               )}
@@ -1999,7 +1999,7 @@ export default function SearchPanel({
           )}
           <button
             onClick={onConfirm}
-            className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[#B8860B] rounded-full shadow-xl hover:bg-[#9A7009] active:scale-95 transition-all flex items-center gap-2"
+            className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[var(--amber)] rounded-full shadow-xl hover:bg-[var(--amber-deep)] active:scale-95 transition-all flex items-center gap-2"
           >
             선택 완료
             <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs font-semibold bg-white/25 text-white rounded-full">

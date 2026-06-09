@@ -1128,7 +1128,7 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
         <button
           onClick={handleScrapAndDownload}
           disabled={isLoading || downloading}
-          className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[#9A7009] disabled:opacity-50 transition-colors"
+          className="flex-1 py-3 bg-[var(--amber)] text-white rounded-xl text-sm font-semibold shadow-lg hover:bg-[var(--amber-deep)] disabled:opacity-50 transition-colors"
         >
           {downloading ? "처리 중..." : "저장 및 앱 스크랩"}
         </button>

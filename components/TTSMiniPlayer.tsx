@@ -59,7 +59,7 @@ export default function TTSMiniPlayer() {
           }}
           disabled={isLoading}
           aria-label={isPlaying ? "일시정지" : isPaused ? "재생" : "준비 중"}
-          className="shrink-0 w-9 h-9 rounded-full bg-[#B8860B] text-white flex items-center justify-center shadow-sm active:scale-95 transition-transform disabled:opacity-60"
+          className="shrink-0 w-9 h-9 rounded-full bg-[var(--amber)] text-white flex items-center justify-center shadow-sm active:scale-95 transition-transform disabled:opacity-60"
         >
           {isLoading ? (
             <svg
@@ -130,7 +130,7 @@ export default function TTSMiniPlayer() {
           </div>
           <div className="mt-1 h-[3px] rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
             <div
-              className="h-full bg-[#B8860B] transition-[width] duration-300"
+              className="h-full bg-[var(--amber)] transition-[width] duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -146,7 +146,7 @@ export default function TTSMiniPlayer() {
             }}
             aria-label="재생 속도 선택"
             aria-expanded={speedOpen}
-            className="px-2 py-1 text-[11px] font-mono font-bold text-gray-700 dark:text-gray-200 hover:text-[#B8860B] dark:hover:text-amber-400 transition-colors"
+            className="px-2 py-1 text-[11px] font-mono font-bold text-gray-700 dark:text-gray-200 hover:text-[var(--amber)] dark:hover:text-amber-400 transition-colors"
           >
             {tts.speed === 1.0 ? "1x" : `${tts.speed}x`}
           </button>
@@ -162,7 +162,7 @@ export default function TTSMiniPlayer() {
                   }}
                   className={`block w-full text-center px-3 py-1.5 text-xs font-mono font-bold transition-colors ${
                     tts.speed === s
-                      ? "bg-[#B8860B] text-white"
+                      ? "bg-[var(--amber)] text-white"
                       : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   }`}
                 >
@@ -182,7 +182,7 @@ export default function TTSMiniPlayer() {
             }
             aria-label={`음성: ${tts.voice === "female" ? "여성" : "남성"}, 전환`}
             title={`음성: ${tts.voice === "female" ? "여성" : "남성"}`}
-            className="shrink-0 w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:border-[#B8860B] hover:text-[#B8860B] dark:hover:text-amber-400 transition-colors"
+            className="shrink-0 w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)] dark:hover:text-amber-400 transition-colors"
           >
             {tts.voice === "female" ? "여" : "남"}
           </button>

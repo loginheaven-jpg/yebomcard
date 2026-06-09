@@ -62,7 +62,7 @@ export default function TTSButton({
       title={isPlaying ? "읽기 중지" : "본문 읽기"}
       className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg shadow-sm dark:shadow-none transition-all border ${
         isPlaying
-          ? "text-white bg-[#B8860B] border-[#B8860B] hover:bg-[#9A7009]"
+          ? "text-white bg-[var(--amber)] border-[var(--amber)] hover:bg-[var(--amber-deep)]"
           : "text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200"
       } disabled:opacity-30 disabled:cursor-not-allowed`}
     >

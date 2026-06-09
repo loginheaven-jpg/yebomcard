@@ -423,7 +423,7 @@ export default function VerseDisplay({
         {/* 카드 만들기 */}
         <button
           onClick={onCreateCard}
-          className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors"
+          className="w-full py-3.5 bg-[var(--amber)] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[var(--amber-deep)] transition-colors"
         >
           이 말씀으로 카드 만들기 ({verses.length}절)
         </button>

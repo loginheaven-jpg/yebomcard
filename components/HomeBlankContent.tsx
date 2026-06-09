@@ -191,7 +191,7 @@ export default function HomeBlankContent({
           </p>
         </div>
 
-        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-5 bg-[#FDFBF6] dark:bg-gray-900">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-5 bg-[var(--paper)] dark:bg-gray-900">
           <div className="text-[10px] font-semibold tracking-wider text-amber-700 dark:text-amber-400 mb-2">
             빠른 시작
           </div>
@@ -240,7 +240,7 @@ export default function HomeBlankContent({
                 savedAt: Date.now(),
               } as BiblePosition)
             }
-            className="w-full py-2.5 text-xs font-semibold text-white bg-[#B8860B] rounded-lg hover:bg-[#9A7009] active:scale-[0.98] transition-all"
+            className="w-full py-2.5 text-xs font-semibold text-white bg-[var(--amber)] rounded-lg hover:bg-[var(--amber-deep)] active:scale-[0.98] transition-all"
           >
             본문 펼치기
           </button>
@@ -258,7 +258,7 @@ export default function HomeBlankContent({
           </div>
           <button
             onClick={() => onJump(recent)}
-            className="w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-[#FDFBF6] dark:bg-gray-900 hover:border-amber-300 dark:hover:border-amber-700 hover:shadow-sm transition-all group"
+            className="w-full text-left border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-[var(--paper)] dark:bg-gray-900 hover:border-[var(--amber)] dark:hover:border-amber-700 hover:shadow-sm transition-all group"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
@@ -293,7 +293,7 @@ export default function HomeBlankContent({
                 </span>
               )}
             </p>
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#B8860B] dark:text-amber-400 group-hover:gap-2 transition-all">
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--amber)] dark:text-amber-400 group-hover:gap-2 transition-all">
               <span>▶</span> 계속 읽기
             </div>
           </button>

@@ -3,23 +3,92 @@
 /* Tailwind v4: 클래스 기반 다크 모드 (.dark 또는 그 자손에 적용) */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ─────────────────────────────────────────────────────────────
+   리디자인 토큰 (Phase 1 — 시각 토큰만, IA 변경 0)
+   - 종이/캔버스 메타포 + amber 강조
+   - 컴포넌트는 var(--amber) / var(--paper) 등 직접 참조
+   ───────────────────────────────────────────────────────────── */
 :root {
-  --background: #f8f9fa;
-  --foreground: #1a1a2e;
-  --qnav-panel-bg: #faf6ee;   /* 부드러운 아이보리 */
+  /* 배경 (캔버스/페이퍼/패널) */
+  --canvas: #DBD5C8;        /* 앱 외곽 데스크 배경 */
+  --canvas-2: #D0C9BA;      /* 캔버스 그림자 */
+  --paper: #FBF9F4;         /* 본문 종이색 */
+  --paper-2: #F4EFE4;       /* 칩·세그먼트 비활성 */
+
+  /* 텍스트 */
+  --ink: #2B2A26;           /* 본문 텍스트 */
+  --ink-soft: #6E675B;      /* 보조 라벨 */
+  --ink-faint: #938B7C;     /* 비활성 아이콘 */
+  --muted: #8C8475;         /* sub 번역 본문 */
+
+  /* 선·구분 */
+  --line: #EBE5D8;          /* 일반 보더 */
+  --line-soft: #F1ECE1;     /* 얇은 구분선 */
+
+  /* amber 강조 */
+  --amber: #B97E2C;         /* 1차 강조 (절 번호·CTA·진행바 시작) */
+  --amber-bright: #E0A23C;  /* 2차 강조 (재생원·진행바 끝) */
+  --amber-tint: #F6EBD6;    /* 약색 배경 (선택·활성 영역) */
+  --amber-deep: #8E5E18;    /* 활성 탭 라벨·hover */
+
+  /* 알림·경고 */
+  --bad: #C0563E;
+  --bad-tint: #F6E4DE;
+
+  /* 레거시 (기존 코드 호환) — paper 톤으로 매핑 */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --qnav-panel-bg: #faf6ee;
+
   color-scheme: light;
 }
 
 html.dark {
-  --background: #0f1115;
-  --foreground: #e5e7eb;
-  --qnav-panel-bg: #1a2942;   /* 연하늘 (밤하늘) */
+  /* 다크 토큰 (시안 미정 — 권고 시안 톤 따라가기) */
+  --canvas: #1A1814;
+  --canvas-2: #14110D;
+  --paper: #232019;
+  --paper-2: #2A2620;
+
+  --ink: #E8E2D4;
+  --ink-soft: #B0A998;
+  --ink-faint: #7F7869;
+  --muted: #968D7C;
+
+  --line: #3A352A;
+  --line-soft: #2E2A22;
+
+  /* amber 다크에서도 채도 유지 — 대비비 충분 */
+  --amber: #D29245;
+  --amber-bright: #E8B05A;
+  --amber-tint: #3B2F1C;
+  --amber-deep: #F2C079;
+
+  --bad: #D86E55;
+  --bad-tint: #3B201A;
+
+  /* 레거시 매핑 */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --qnav-panel-bg: #1a2942;
+
   color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-amber: var(--amber);
+  --color-amber-bright: var(--amber-bright);
+  --color-amber-tint: var(--amber-tint);
+  --color-amber-deep: var(--amber-deep);
   --font-sans: var(--font-gothic-a1);
   --font-serif: var(--font-noto-serif-kr);
   --font-display: var(--font-playfair);
@@ -28,6 +97,30 @@ html.dark {
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   sub 번역본 좌측 세로줄 — 모바일/세로 모드에서만 (사용자 결정)
+   PC 가로(lg+) 에서는 좌우 2단 유지, 세로줄 미적용
+   ───────────────────────────────────────────────────────────── */
+.bible-sub-text {
+  border-left: 2px solid var(--line);
+  padding-left: 13px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-family: var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif;
+  font-weight: 400;
+  font-size: 13.5px;
+  line-height: 1.74;
+}
+
+/* lg+ 에서는 좌우 2단이므로 세로줄 제거 */
+@media (min-width: 1024px) {
+  .bible-sub-text {
+    border-left: 0;
+    padding-left: 0;
+    margin-top: 0;
+  }
 }
 
 /* Search panel select styles */

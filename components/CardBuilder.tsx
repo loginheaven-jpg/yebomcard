@@ -208,7 +208,7 @@ export default function CardBuilder({ onClose, onStart }: CardBuilderProps) {
           {totalVerses > 0 && (
             <button
               onClick={handleStart}
-              className="w-full py-3.5 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors"
+              className="w-full py-3.5 bg-[var(--amber)] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[var(--amber-deep)] transition-colors"
             >
               카드 만들기 시작 ({totalVerses}절)
             </button>

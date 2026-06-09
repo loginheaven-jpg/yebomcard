@@ -619,7 +619,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowFullscreen(true)}
-                  className="flex-1 py-3 bg-[#B8860B] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[#9A7009] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-[var(--amber)] text-white rounded-xl text-sm font-semibold shadow-lg dark:shadow-none hover:bg-[var(--amber-deep)] transition-colors flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9m11.25-5.25v4.5m0-4.5h-4.5m4.5 0L15 9m-11.25 11.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25 5.25v-4.5m0 4.5h-4.5m4.5 0L15 15" />

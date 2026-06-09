@@ -10,17 +10,6 @@ export default function VersionCheck() {
   const lastCheck = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-  const isUserTyping = () => {
-    const el = document.activeElement;
-    if (!el) return false;
-    const tag = el.tagName.toLowerCase();
-    return (
-      tag === "input" ||
-      tag === "textarea" ||
-      (el as HTMLElement).isContentEditable
-    );
-  };
-
   const checkVersion = async () => {
     if (showBanner) return;
 
@@ -33,12 +22,10 @@ export default function VersionCheck() {
       if (!res.ok) return;
       const { buildId } = await res.json();
 
+      // 영구 배너 모드 — 자동 reload 안 함 (사용자 결정 Q14=B)
+      // 사용자가 보던 위치/선택을 잃지 않도록 항상 배너만 띄우고 사용자가 탭해야 reload
       if (buildId && buildId !== CURRENT_BUILD_ID) {
-        if (isUserTyping()) {
-          setShowBanner(true);
-        } else {
-          window.location.reload();
-        }
+        setShowBanner(true);
       }
     } catch {
       // 네트워크 에러 무시
@@ -66,8 +53,8 @@ export default function VersionCheck() {
     <div
       onClick={() => window.location.reload()}
       className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 cursor-pointer rounded-full
-        bg-gray-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg
-        animate-bounce hover:bg-gray-800"
+        bg-[var(--amber-deep)] px-5 py-2.5 text-sm font-medium text-white shadow-lg
+        animate-bounce hover:bg-[var(--amber)]"
     >
       새 버전이 있습니다 · 탭하여 업데이트
     </div>
