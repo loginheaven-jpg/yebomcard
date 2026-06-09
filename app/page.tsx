@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import SearchPanel from "@/components/SearchPanel";
+import SearchPanel, { type NavRequest } from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
+import BottomTabBar, { type ActiveTab } from "@/components/BottomTabBar";
+import { readBookmarks } from "@/lib/bookmark";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/hooks/useSession";
@@ -58,6 +60,34 @@ export default function Home() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const { showFontSettings, setShowFontSettings } = useFont();
+
+  // ─── Phase 2a 하단 5탭 ───
+  const [activeTab, setActiveTab] = useState<ActiveTab | null>(null);
+  const [navRequest, setNavRequest] = useState<NavRequest | undefined>();
+  const navNonceRef = useRef(0);
+  const [bookmarkCount, setBookmarkCount] = useState(0);
+
+  // 책갈피 카운트 — 진입 시 + 5초 폴링 (책갈피 추가/삭제는 SearchPanel 안에서 일어남)
+  useEffect(() => {
+    const refresh = () => setBookmarkCount(readBookmarks().length);
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleTabChange = useCallback((tab: ActiveTab) => {
+    setActiveTab(tab);
+    if (tab === "settings") {
+      setShowFontSettings(true);
+      return;
+    }
+    setView("search");
+    navNonceRef.current += 1;
+    setNavRequest({
+      target: tab as "toc" | "search" | "read" | "bookmark",
+      nonce: navNonceRef.current,
+    });
+  }, [setShowFontSettings]);
 
   // 관리자 권한 잃으면 편집 모드 자동 해제
   useEffect(() => {
@@ -269,6 +299,7 @@ export default function Home() {
           isAddingMore={isAddingMore}
           bulkEditMode={bulkEditMode}
           onVerseUpdated={handleVerseUpdated}
+          navRequest={navRequest}
         />
       </div>
 
@@ -289,11 +320,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* 플로팅 스크랩 아이콘 */}
+      {/* 플로팅 스크랩 아이콘 — Phase 2a 동안 BottomTabBar(약 60px) 위로 lift */}
       <button
           onClick={() => { if (requireAuth()) setShowScrap(true); }}
-          className="fixed bottom-3 left-3 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
-          style={{ marginBottom: "env(safe-area-inset-bottom, 0)", marginLeft: "env(safe-area-inset-left, 0)" }}
+          className="fixed left-3 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
+            marginLeft: "env(safe-area-inset-left, 0)",
+          }}
           title="스크랩"
         >
           <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -306,11 +340,14 @@ export default function Home() {
           )}
         </button>
 
-      {/* 도구함 (우하단 — 좌하단 스크랩과 좌우대칭) */}
+      {/* 도구함 (우하단 — 좌하단 스크랩과 좌우대칭) — Phase 2a BottomTabBar 위로 lift */}
       <div
         ref={toolMenuRef}
-        className="fixed bottom-3 right-3 z-[150]"
-        style={{ marginBottom: "env(safe-area-inset-bottom, 0)", marginRight: "env(safe-area-inset-right, 0)" }}
+        className="fixed right-3 z-[150]"
+        style={{
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
+          marginRight: "env(safe-area-inset-right, 0)",
+        }}
       >
         <button
           onClick={() => setShowToolMenu(!showToolMenu)}
@@ -462,6 +499,16 @@ export default function Home() {
       )}
       
       {showFontSettings && <GlobalFontSettings onClose={() => setShowFontSettings(false)} />}
+
+      {/* Phase 2a — 하단 5탭 (검색/목차/읽기/책갈피/설정)
+          전환기: 기존 상단 탭과 공존. Phase 2b 에서 상단 탭 제거 + 시트 통합. */}
+      {view === "search" && (
+        <BottomTabBar
+          active={activeTab}
+          onTabChange={handleTabChange}
+          bookmarkCount={bookmarkCount}
+        />
+      )}
     </main>
   );
 }

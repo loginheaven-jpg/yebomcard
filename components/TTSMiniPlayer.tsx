@@ -46,7 +46,8 @@ export default function TTSMiniPlayer() {
       aria-label="TTS 미니 플레이어"
       className="fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100%-1.5rem)] max-w-2xl"
       style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+        /* Phase 2a — BottomTabBar(약 60px) 위로 lift */
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
       }}
     >
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg backdrop-blur px-2.5 py-2 flex items-center gap-2">

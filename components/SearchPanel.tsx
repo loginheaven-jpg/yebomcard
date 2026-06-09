@@ -26,6 +26,13 @@ import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
 import { useFont, FONTS } from "@/contexts/FontContext";
 
+export interface NavRequest {
+  /** 하단 탭이 요청한 화면 — Phase 2a */
+  target: "toc" | "search" | "read" | "bookmark";
+  /** 같은 target 재요청 시에도 effect 가 다시 돌도록 nonce */
+  nonce: number;
+}
+
 interface SearchPanelProps {
   selectedVerses: BibleVerse[];
   mainVersion: BibleVersion;
@@ -37,6 +44,8 @@ interface SearchPanelProps {
   isAddingMore: boolean;
   bulkEditMode?: boolean;
   onVerseUpdated?: (updated: BibleVerse) => void;
+  /** 하단 5탭에서 들어오는 네비게이션 요청 (Phase 2a) */
+  navRequest?: NavRequest;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -60,6 +69,7 @@ export default function SearchPanel({
   isAddingMore,
   bulkEditMode = false,
   onVerseUpdated,
+  navRequest,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading } = useSession();
   const adminMode = isAdmin(session);
@@ -213,6 +223,44 @@ export default function SearchPanel({
       if (r.subVersion !== undefined) setSubVersion(r.subVersion);
     }
   }, []);
+
+  // ─── Phase 2a 하단 5탭 네비게이션 요청 처리 ───
+  // 외부(BottomTabBar)에서 nonce 와 함께 target 을 보내면 내부 상태 동기화
+  useEffect(() => {
+    if (!navRequest) return;
+    const { target } = navRequest;
+    if (target === "toc") {
+      setMode("chapter");
+      setBrowseStep("book");
+      setShowBookmarkMenu(false);
+      setShowSearchRow(false);
+    } else if (target === "search") {
+      setMode("search");
+      setShowSearchRow(true);
+      setShowBookmarkMenu(false);
+    } else if (target === "read") {
+      // 마지막 위치(recent) 복귀
+      const r = readRecent();
+      if (r && r.book_code && r.chapter) {
+        setBookCode(r.book_code);
+        setChapter(r.chapter);
+        setMode("chapter");
+        setBrowseStep("verse");
+        if (r.version) setMainVersion(r.version);
+        if (r.subVersion !== undefined) setSubVersion(r.subVersion);
+      } else {
+        // recent 없으면 목차로 폴백
+        setMode("chapter");
+        setBrowseStep("book");
+      }
+      setShowBookmarkMenu(false);
+      setShowSearchRow(false);
+    } else if (target === "bookmark") {
+      setShowBookmarkMenu(true);
+      setShowSearchRow(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navRequest?.nonce]);
 
   // ─── 하드웨어 뒤로가기: 다단계 (verse → chapter → book → 블랭크 홈 → 종료팝업) ───
   // 모달성(showSearchRow/showBookmarkMenu/editingVerseId)은 마지막에 등록되어 stack top → 우선 처리
