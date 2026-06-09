@@ -291,6 +291,8 @@ export default function Home() {
           onVerseUpdated={handleVerseUpdated}
           navRequest={navRequest}
           fullscreenRequestNonce={fullscreenRequestNonce}
+          onOpenScrap={() => { if (requireAuth()) setShowScrap(true); }}
+          scrapCount={scrapCount}
         />
       </div>
 
@@ -311,28 +313,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* 플로팅 스크랩 아이콘 — Phase 2a 동안 BottomTabBar(약 60px) 위로 lift */}
-      <button
-          onClick={() => { if (requireAuth()) setShowScrap(true); }}
-          className="fixed left-3 z-40 w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
-          style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
-            marginLeft: "env(safe-area-inset-left, 0)",
-          }}
-          title="스크랩"
-        >
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-          </svg>
-          {scrapCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-gray-700 text-white text-[10px] rounded-full flex items-center justify-center px-1">
-              {scrapCount > 99 ? "99+" : scrapCount}
-            </span>
-          )}
-        </button>
-
-      {/* 도구함 FAB — Phase 2b 에서 하단 5탭 "설정" SettingsSheet 로 흡수 (사용자 #5)
-          (찬송가/예배성경/성경카드/로그인/관리자 편집 모두 설정 시트로 이전) */}
+      {/* 좌하단 스크랩 FAB — Phase 2b 후속 책갈피 탭 안 스크랩 버튼으로 흡수 (사용자 #3) */}
+      {/* 도구함 FAB — Phase 2b SettingsSheet 흡수 (사용자 #5) */}
 
       {/* 예배성경 패널 */}
       {showWorship && (

@@ -143,7 +143,58 @@ export default function SettingsSheet({
 
         {/* 본문 — 스크롤 */}
         <div className="overflow-y-auto p-4 space-y-5 flex-1">
-          {/* 1. 찬송가 (큰 카드) */}
+          {/* 계정 — 최상단 (사용자 요청) */}
+          <section>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">계정</div>
+            {isLoggedIn ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-[var(--ink)] dark:text-gray-100 truncate">{userName ?? "사용자"}</span>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onLogout();
+                    }}
+                    className="text-[11px] text-[var(--ink-soft)] dark:text-gray-400 hover:text-[var(--ink)] px-2 py-1 rounded border border-[var(--line)] dark:border-gray-600"
+                  >
+                    로그아웃
+                  </button>
+                </div>
+                {adminMode && (
+                  <button
+                    onClick={onToggleBulkEdit}
+                    className={`w-full mt-3 px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-between ${
+                      bulkEditMode
+                        ? "bg-[var(--amber-tint)] dark:bg-amber-950/30 text-[var(--amber-deep)] dark:text-amber-400 border-[var(--amber)]"
+                        : "bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600"
+                    }`}
+                  >
+                    <span>관리자 편집 모드</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      bulkEditMode ? "bg-[var(--amber)] text-white" : "bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--ink-soft)]"
+                    }`}>
+                      {bulkEditMode ? "ON" : "OFF"}
+                    </span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  onClose();
+                  onLogin();
+                }}
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95 transition-all"
+              >
+                <svg className="w-5 h-5 text-[var(--ink-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                </svg>
+                <span className="text-sm font-semibold text-[var(--ink)] dark:text-gray-100">로그인</span>
+              </button>
+            )}
+          </section>
+
+          {/* 찬송가 (큰 카드) */}
           <section>
             <button
               onClick={() => {
@@ -377,58 +428,7 @@ export default function SettingsSheet({
             </div>
           </section>
 
-          {/* 6. 계정 */}
-          <section>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">계정</div>
-            {isLoggedIn ? (
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-[var(--ink)] dark:text-gray-100 truncate">{userName ?? "사용자"}</span>
-                  <button
-                    onClick={() => {
-                      onClose();
-                      onLogout();
-                    }}
-                    className="text-[11px] text-[var(--ink-soft)] dark:text-gray-400 hover:text-[var(--ink)] px-2 py-1 rounded border border-[var(--line)] dark:border-gray-600"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-                {adminMode && (
-                  <button
-                    onClick={onToggleBulkEdit}
-                    className={`w-full mt-3 px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-between ${
-                      bulkEditMode
-                        ? "bg-[var(--amber-tint)] dark:bg-amber-950/30 text-[var(--amber-deep)] dark:text-amber-400 border-[var(--amber)]"
-                        : "bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600"
-                    }`}
-                  >
-                    <span>관리자 편집 모드</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                      bulkEditMode ? "bg-[var(--amber)] text-white" : "bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--ink-soft)]"
-                    }`}>
-                      {bulkEditMode ? "ON" : "OFF"}
-                    </span>
-                  </button>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  onClose();
-                  onLogin();
-                }}
-                className="w-full flex items-center gap-3 p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95 transition-all"
-              >
-                <svg className="w-5 h-5 text-[var(--ink-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                </svg>
-                <span className="text-sm font-semibold text-[var(--ink)] dark:text-gray-100">로그인</span>
-              </button>
-            )}
-          </section>
-
-          {/* 7. 앱 정보 */}
+          {/* 앱 정보 */}
           <section className="pb-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">앱 정보</div>
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-[var(--line)] dark:border-gray-700 overflow-hidden">

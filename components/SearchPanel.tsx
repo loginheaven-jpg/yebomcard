@@ -48,6 +48,10 @@ interface SearchPanelProps {
   navRequest?: NavRequest;
   /** SettingsSheet 에서 전체화면 진입 요청 (Phase 2b) — nonce 갱신 시 전체화면 열림 */
   fullscreenRequestNonce?: number;
+  /** 책갈피 메뉴 안 스크랩 버튼 클릭 시 — app/page.tsx 에서 ScrapList 열기 (Phase 2b 후속) */
+  onOpenScrap?: () => void;
+  /** 스크랩 카운트 — 책갈피 메뉴 안 스크랩 버튼 배지 표시 (Phase 2b 후속) */
+  scrapCount?: number;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -73,6 +77,8 @@ export default function SearchPanel({
   onVerseUpdated,
   navRequest,
   fullscreenRequestNonce,
+  onOpenScrap,
+  scrapCount,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading } = useSession();
   const adminMode = isAdmin(session);
@@ -196,6 +202,23 @@ export default function SearchPanel({
   const [recent, setRecent] = useState<BiblePosition | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
+  const bookmarkMenuContainerRef = useRef<HTMLDivElement>(null);
+
+  // 책갈피 메뉴 외부 클릭 시 자동 닫기 (Fix #2)
+  // 하단 5탭 책갈피 버튼 (data-bookmark-tab) 은 토글이므로 제외
+  useEffect(() => {
+    if (!showBookmarkMenu) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (bookmarkMenuContainerRef.current?.contains(target)) return;
+      if (target.closest?.('[data-bookmark-tab="true"]')) return;
+      setShowBookmarkMenu(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showBookmarkMenu]);
+
   // 첫 마운트 시 최근 위치로 자동 점프 (한 번만)
   // ?fresh=1 param 있으면 자동 점프 스킵 (예: /share에서 홈으로 누른 경우)
   const bootstrappedRef = useRef(false);
@@ -259,7 +282,8 @@ export default function SearchPanel({
       setShowBookmarkMenu(false);
       setShowSearchRow(false);
     } else if (target === "bookmark") {
-      setShowBookmarkMenu(true);
+      // 책갈피 탭 재클릭 토글 (사용자 요청)
+      setShowBookmarkMenu((prev) => !prev);
       setShowSearchRow(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1476,84 +1500,16 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* 4버튼 액션 (성경목차 / 본문검색 / 주제추천 / 책갈피) */}
+      {/* 상단 4탭 (성경목차/본문검색/주제추천/책갈피) — Phase 2b 후속 하단 5탭으로 통합되어 제거 */}
       {!isAddingMore && (
         <>
-          <div className="grid grid-cols-4 gap-1 mb-2 relative">
-            <button
-              onClick={() => { setMode("chapter"); setBrowseStep("book"); setShowBookmarkMenu(false); setShowSearchRow(false); }}
-              className="h-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors px-1"
-              style={{ borderRadius: "4px" }}
-            >
-              <svg className="w-3.5 h-3.5 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-              성경목차
-            </button>
-            <button
-              onClick={() => {
-                // 같은 모드로 열려있으면 닫기, 아니면 ref 모드로 열기/전환
-                if (showSearchRow && searchMode === "ref") {
-                  setShowSearchRow(false);
-                } else {
-                  setSearchMode("ref");
-                  setShowSearchRow(true);
-                  setSearchHelperShown(true);
-                  setShowBookmarkMenu(false);
-                }
-              }}
-              className={`h-10 border flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold px-1 ${
-                showSearchRow && searchMode === "ref"
-                  ? "bg-gray-900 dark:bg-gray-700 border-gray-900 dark:border-gray-700 text-white"
-                  : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-              style={{ borderRadius: "4px" }}
-            >
-              <svg className={`w-3.5 h-3.5 shrink-0 ${showSearchRow && searchMode === "ref" ? "text-white" : "text-gray-500 dark:text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607Z" />
-              </svg>
-              본문검색
-            </button>
-            <button
-              onClick={() => {
-                if (showSearchRow && searchMode === "topic") {
-                  setShowSearchRow(false);
-                } else {
-                  setSearchMode("topic");
-                  setShowSearchRow(true);
-                  setSearchHelperShown(true);
-                  setShowBookmarkMenu(false);
-                }
-              }}
-              className={`h-10 border flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold px-1 ${
-                showSearchRow && searchMode === "topic"
-                  ? "bg-gray-900 dark:bg-gray-700 border-gray-900 dark:border-gray-700 text-white"
-                  : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
-              }`}
-              style={{ borderRadius: "4px" }}
-            >
-              <svg className={`w-3.5 h-3.5 shrink-0 ${showSearchRow && searchMode === "topic" ? "text-white" : "text-gray-500 dark:text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-              </svg>
-              주제추천
-            </button>
-            <button
-              onClick={() => { setShowBookmarkMenu(!showBookmarkMenu); setShowSearchRow(false); }}
-              className={`h-10 border ${totalBookmarkCount > 0 ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"} hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors px-1`}
-              style={{ borderRadius: "4px" }}
-            >
-              <svg className={`w-3.5 h-3.5 shrink-0 ${totalBookmarkCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
-              </svg>
-              책갈피
-              {totalBookmarkCount > 0 && (
-                <span className="text-[9px] bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 px-1 rounded-sm font-medium">{totalBookmarkCount}</span>
-              )}
-            </button>
-
-            {/* 책갈피 펼침 메뉴 */}
+          {/* 책갈피 펼침 메뉴 — 하단 책갈피 탭이 트리거. 외부 클릭 시 자동 닫기 */}
+          <div className="relative mb-2">
             {showBookmarkMenu && (
-              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden">
+              <div
+                ref={bookmarkMenuContainerRef}
+                className="absolute z-30 left-0 right-0 top-0 bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden"
+              >
                 {/* 최근 (자동) */}
                 {recent && (
                   <button
@@ -1615,6 +1571,24 @@ export default function SearchPanel({
                     성경 본문을 읽으면 자동으로 기록됩니다
                   </div>
                 )}
+                {/* 스크랩 진입 — 사용자 #3 (좌하단 스크랩 FAB 흡수) */}
+                {onOpenScrap && (
+                  <button
+                    onClick={() => { setShowBookmarkMenu(false); onOpenScrap(); }}
+                    className="w-full px-3 py-2.5 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--amber-deep)] dark:text-amber-400 hover:bg-[var(--amber-tint)] dark:hover:bg-amber-950/30 border-t border-[var(--line)] dark:border-gray-700 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm">📌</span>
+                      <span>스크랩</span>
+                      {typeof scrapCount === "number" && scrapCount > 0 && (
+                        <span className="text-[10px] bg-[var(--amber)] text-white px-1.5 py-0.5 rounded-full">
+                          {scrapCount > 99 ? "99+" : scrapCount}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[var(--ink-faint)]">→</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1622,6 +1596,37 @@ export default function SearchPanel({
           {/* 검색 펼침 행 (showSearchRow 시) */}
           {showSearchRow && (
             <div className="mb-2">
+              {/* 본문/주제 세그먼트 (사용자 #4) */}
+              <div
+                role="tablist"
+                aria-label="검색 모드"
+                className="flex bg-[var(--paper-2)] dark:bg-gray-700 rounded-md p-0.5 mb-1.5"
+              >
+                <button
+                  role="tab"
+                  aria-selected={searchMode === "ref"}
+                  onClick={() => { setSearchMode("ref"); setSearchHelperShown(true); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    searchMode === "ref"
+                      ? "bg-[var(--paper)] dark:bg-gray-800 text-[var(--ink)] dark:text-gray-100 shadow-sm"
+                      : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
+                  }`}
+                >
+                  본문
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={searchMode === "topic"}
+                  onClick={() => { setSearchMode("topic"); setSearchHelperShown(true); }}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    searchMode === "topic"
+                      ? "bg-[var(--paper)] dark:bg-gray-800 text-[var(--ink)] dark:text-gray-100 shadow-sm"
+                      : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
+                  }`}
+                >
+                  주제
+                </button>
+              </div>
               <div className="flex gap-1.5 mb-1.5">
                 <div className="relative flex-1 min-w-0">
                   <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -1701,7 +1706,9 @@ export default function SearchPanel({
                   className="shrink-0 h-9 px-4 bg-gray-900 text-white text-xs font-semibold hover:bg-gray-800 disabled:opacity-50 transition-colors"
                   style={{ borderRadius: "4px" }}
                 >
-                  {(searchMode === "ref" ? (searchLoading && mode === "search") : (topicLoading && mode === "topic")) ? "..." : "검색"}
+                  {(searchMode === "ref" ? (searchLoading && mode === "search") : (topicLoading && mode === "topic"))
+                    ? "..."
+                    : searchMode === "topic" ? "추천" : "검색"}
                 </button>
               </div>
               {searchHelperShown && (

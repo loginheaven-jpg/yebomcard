@@ -101,6 +101,7 @@ export default function BottomTabBar({
               role="tab"
               aria-selected={isActive}
               aria-label={t.label}
+              data-bookmark-tab={t.id === "bookmark" ? "true" : undefined}
               onClick={() => onTabChange(t.id)}
               className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] transition-colors ${
                 isActive
