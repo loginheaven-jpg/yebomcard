@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import type { BibleVersion } from "@/lib/types";
 import { readRecent, readBookmarks, type Bookmark, type BiblePosition } from "@/lib/bookmark";
 
+type FabPos = "tr" | "br";
+
 interface QuickNavFabProps {
   currentBookCode: string;
   currentChapter: number;
@@ -14,16 +16,20 @@ interface QuickNavFabProps {
   onJump: (bookCode: string, chapter: number, verse: number) => void;
 }
 
-// FAB 위치 — 사용자 요청: 우측 상단 구석 고정 (TR/BR 토글 폐지)
-const FAB_STYLE: React.CSSProperties = { top: "64px", right: "12px" };
+// FAB 위치 — 우측 상단 구석(기본) / 우측 하단 (BottomTabBar 위)
+// 사용자 요청: 더블탭·길게 누르기로 두 위치 사이 토글
+const FAB_POS: Record<FabPos, React.CSSProperties> = {
+  tr: { top: "12px", right: "12px" },     // 헤더 우측 빈 자리 (3열 grid 우측 column)
+  br: { bottom: "80px", right: "12px" },  // BottomTabBar(~60px) 위
+};
 
-// 패널은 FAB 바로 옆 (왼쪽으로 펼침)
+// 패널은 FAB 위치와 무관하게 항상 같은 자리 (헤더 아래)
 const PANEL_POS: React.CSSProperties = {
   position: "fixed",
   top: "64px",
   right: "64px",
-  bottom: "76px",
-  maxHeight: "calc(100dvh - 140px)",
+  bottom: "80px",
+  maxHeight: "calc(100dvh - 144px)",
 };
 
 export default function QuickNavFab({
@@ -32,6 +38,7 @@ export default function QuickNavFab({
   mainVersion,
   onJump,
 }: QuickNavFabProps) {
+  const [pos, setPos] = useState<FabPos>("tr");
   const [open, setOpen] = useState(false);
   const [testament, setTestament] = useState<"old" | "new">("old");
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
@@ -40,10 +47,27 @@ export default function QuickNavFab({
   const [verses, setVerses] = useState<number[]>([]);
   const [recents, setRecents] = useState<(BiblePosition | Bookmark)[]>([]);
 
+  // 위치 토글 (사용자 요청 복원): 길게 누르기(500ms) + 더블 탭(250ms 이내)
+  const longPressTimer = useRef<number | null>(null);
+  const singleTapTimer = useRef<number | null>(null);
+  const lastTapTime = useRef(0);
+  const wasLongPress = useRef(false);
+
   // 컬럼 스크롤 ref (▲▼ 버튼용)
   const bookScrollRef = useRef<HTMLDivElement>(null);
   const chapterScrollRef = useRef<HTMLDivElement>(null);
   const verseScrollRef = useRef<HTMLDivElement>(null);
+
+  // localStorage 위치 로드/저장
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("yebom_quicknav_pos");
+      if (stored === "tr" || stored === "br") setPos(stored);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("yebom_quicknav_pos", pos); } catch {}
+  }, [pos]);
 
   // 최근 위치 모음
   useEffect(() => {
@@ -109,8 +133,61 @@ export default function QuickNavFab({
     return () => { cancelled = true; };
   }, [selectedBook, selectedChapter, mainVersion]);
 
-  // 사용자 요청: FAB 위치 고정(TR) — 토글·길게누르기·더블탭 동작 폐지. 단순 클릭으로 패널 토글.
-  const handleClick = () => setOpen((v) => !v);
+  // 위치 토글 헬퍼 (햅틱 진동 포함)
+  const togglePosShared = () => {
+    setPos((p) => (p === "tr" ? "br" : "tr"));
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try { navigator.vibrate(50); } catch {}
+    }
+  };
+
+  // 길게 누르기 (500ms) → 위치 토글 + 햅틱
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  const handlePointerDown = () => {
+    wasLongPress.current = false;
+    longPressTimer.current = window.setTimeout(() => {
+      wasLongPress.current = true;
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
+      togglePosShared();
+    }, 500);
+  };
+  const handlePointerUp = () => cancelLongPress();
+  const handlePointerLeave = () => cancelLongPress();
+  const handlePointerCancel = () => cancelLongPress();
+
+  const handleClick = () => {
+    // 길게 누르기 후 합성 click 무시
+    if (wasLongPress.current) {
+      wasLongPress.current = false;
+      return;
+    }
+    const now = Date.now();
+    const isDouble = now - lastTapTime.current < 250;
+    if (isDouble) {
+      // 더블 탭 → 위치 토글
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current);
+        singleTapTimer.current = null;
+      }
+      lastTapTime.current = 0;
+      togglePosShared();
+      return;
+    }
+    // 단일 탭 → 250ms 대기 후 panel toggle
+    lastTapTime.current = now;
+    singleTapTimer.current = window.setTimeout(() => {
+      setOpen((v) => !v);
+      singleTapTimer.current = null;
+    }, 250);
+  };
 
   // 0열 최근 항목 탭 → 즉시 점프
   const handleRecentTap = (r: BiblePosition | Bookmark) => {
@@ -142,17 +219,21 @@ export default function QuickNavFab({
 
   return (
     <>
-      {/* FAB — 우측 상단 구석 고정 (사용자 요청) */}
+      {/* FAB — 우측 상단(기본) / 우측 하단 (더블탭·길게누르기로 토글) */}
       <button
         type="button"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerCancel}
         onClick={handleClick}
-        title="성경 빠른 이동"
+        title="성경 빠른 이동 (더블탭 또는 길게 누르면 위치 토글)"
         aria-label="성경 빠른 이동"
         className={`fixed w-11 h-11 rounded-full border-2 shadow-lg active:scale-95 transition-all z-[55] flex items-center justify-center cursor-pointer hover:scale-105 ${
           open ? "border-[var(--amber)] text-white" : "border-[var(--amber)] text-[var(--amber)]"
         }`}
         style={{
-          ...FAB_STYLE,
+          ...FAB_POS[pos],
           backgroundColor: open ? "var(--amber)" : "rgba(255, 255, 255, 0.85)",
         }}
       >
