@@ -6,6 +6,7 @@ import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
 import BottomTabBar, { type ActiveTab } from "@/components/BottomTabBar";
+import SettingsSheet from "@/components/SettingsSheet";
 import { readBookmarks } from "@/lib/bookmark";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
@@ -53,13 +54,15 @@ export default function Home() {
   const [scrapCount, setScrapCount] = useState(0);
   const [showScrap, setShowScrap] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showToolMenu, setShowToolMenu] = useState(false);
+  // 도구함 FAB 제거됨 (Phase 2b SettingsSheet 흡수) — showToolMenu/setShowToolMenu 상태도 함께 제거
   const [showWorship, setShowWorship] = useState(false);
   const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showHymn, setShowHymn] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [bulkEditMode, setBulkEditMode] = useState(false);
   const { showFontSettings, setShowFontSettings } = useFont();
+  const [showSettingsSheet, setShowSettingsSheet] = useState(false);
+  const [fullscreenRequestNonce, setFullscreenRequestNonce] = useState(0);
 
   // ─── Phase 2a 하단 5탭 ───
   const [activeTab, setActiveTab] = useState<ActiveTab | null>(null);
@@ -78,7 +81,7 @@ export default function Home() {
   const handleTabChange = useCallback((tab: ActiveTab) => {
     setActiveTab(tab);
     if (tab === "settings") {
-      setShowFontSettings(true);
+      setShowSettingsSheet(true);
       return;
     }
     setView("search");
@@ -87,7 +90,7 @@ export default function Home() {
       target: tab as "toc" | "search" | "read" | "bookmark",
       nonce: navNonceRef.current,
     });
-  }, [setShowFontSettings]);
+  }, []);
 
   // 관리자 권한 잃으면 편집 모드 자동 해제
   useEffect(() => {
@@ -110,19 +113,6 @@ export default function Home() {
     setView("search");
   });
   useHardwareBack(isAddingMore, () => setIsAddingMore(false));
-
-  // 도구함 외부 클릭 시 닫기
-  const toolMenuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!showToolMenu) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (toolMenuRef.current && !toolMenuRef.current.contains(e.target as Node)) {
-        setShowToolMenu(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [showToolMenu]);
 
   // 루트 종료 방지
   const exitingRef = useRef(false);
@@ -300,6 +290,7 @@ export default function Home() {
           bulkEditMode={bulkEditMode}
           onVerseUpdated={handleVerseUpdated}
           navRequest={navRequest}
+          fullscreenRequestNonce={fullscreenRequestNonce}
         />
       </div>
 
@@ -340,100 +331,8 @@ export default function Home() {
           )}
         </button>
 
-      {/* 도구함 (우하단 — 좌하단 스크랩과 좌우대칭) — Phase 2a BottomTabBar 위로 lift */}
-      <div
-        ref={toolMenuRef}
-        className="fixed right-3 z-[150]"
-        style={{
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
-          marginRight: "env(safe-area-inset-right, 0)",
-        }}
-      >
-        <button
-          onClick={() => setShowToolMenu(!showToolMenu)}
-          className="w-12 h-12 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
-          title="도구함"
-          aria-label="도구함"
-        >
-          <svg className="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
-          </svg>
-        </button>
-        {showToolMenu && (
-          <div className="absolute right-0 bottom-full mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden min-w-[180px]">
-            {/* 사용자 영역 */}
-            {isLoggedIn ? (
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{session?.name ?? "사용자"}</div>
-                  <button
-                    onClick={async () => { setShowToolMenu(false); await logout(); }}
-                    className="text-[10px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-2 py-1 rounded border border-gray-200 dark:border-gray-700 shrink-0"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => { setShowToolMenu(false); window.location.href = "https://saint.yebom.org/login?from=bible"; }}
-                className="w-full px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-900 flex items-center gap-2.5 border-b border-gray-100 dark:border-gray-800"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                </svg>
-                로그인
-              </button>
-            )}
-            <button
-              onClick={() => { setShowToolMenu(false); setShowHymn(true); }}
-              className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center gap-2.5"
-            >
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-              </svg>
-              찬송가
-            </button>
-            <button
-              onClick={() => { setShowToolMenu(false); setShowWorship(true); }}
-              className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center gap-2.5 border-t border-gray-100 dark:border-gray-800"
-            >
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-              예배성경
-            </button>
-            <button
-              onClick={() => { setShowToolMenu(false); setShowCardBuilder(true); }}
-              className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900 flex items-center gap-2.5 border-t border-gray-100 dark:border-gray-800"
-            >
-              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
-              </svg>
-              성경카드
-            </button>
-            {/* 관리자 전용: 편집 모드 토글 */}
-            {adminMode && (
-              <button
-                onClick={() => { setShowToolMenu(false); setBulkEditMode(!bulkEditMode); }}
-                className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2.5 border-t border-gray-100 dark:border-gray-800 ${
-                  bulkEditMode
-                    ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:bg-gray-900"
-                }`}
-              >
-                <svg className={`w-4 h-4 ${bulkEditMode ? "text-amber-600 dark:text-amber-400" : "text-gray-400"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                </svg>
-                <span className="flex-1">편집 모드</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${bulkEditMode ? "bg-amber-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
-                  {bulkEditMode ? "ON" : "OFF"}
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      {/* 도구함 FAB — Phase 2b 에서 하단 5탭 "설정" SettingsSheet 로 흡수 (사용자 #5)
+          (찬송가/예배성경/성경카드/로그인/관리자 편집 모두 설정 시트로 이전) */}
 
       {/* 예배성경 패널 */}
       {showWorship && (
@@ -500,8 +399,30 @@ export default function Home() {
       
       {showFontSettings && <GlobalFontSettings onClose={() => setShowFontSettings(false)} />}
 
-      {/* Phase 2a — 하단 5탭 (검색/목차/읽기/책갈피/설정)
-          전환기: 기존 상단 탭과 공존. Phase 2b 에서 상단 탭 제거 + 시트 통합. */}
+      {/* 통합 설정 시트 — Phase 2b */}
+      {showSettingsSheet && (
+        <SettingsSheet
+          onClose={() => setShowSettingsSheet(false)}
+          userName={session?.name}
+          isLoggedIn={isLoggedIn}
+          onLogin={() => {
+            window.location.href = "https://saint.yebom.org/login?from=bible";
+          }}
+          onLogout={async () => { await logout(); }}
+          adminMode={adminMode}
+          bulkEditMode={bulkEditMode}
+          onToggleBulkEdit={() => setBulkEditMode((v) => !v)}
+          onOpenHymn={() => setShowHymn(true)}
+          onOpenWorship={() => setShowWorship(true)}
+          onOpenCardBuilder={() => setShowCardBuilder(true)}
+          canCreateCard={selectedVerses.length > 0}
+          onOpenFullscreen={() => setFullscreenRequestNonce((n) => n + 1)}
+          canOpenFullscreen={view === "search"}
+          onExit={() => setShowExitConfirm(true)}
+        />
+      )}
+
+      {/* Phase 2a/2b — 하단 5탭 (목차/검색/읽기/책갈피/설정) */}
       {view === "search" && (
         <BottomTabBar
           active={activeTab}

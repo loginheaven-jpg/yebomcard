@@ -46,6 +46,8 @@ interface SearchPanelProps {
   onVerseUpdated?: (updated: BibleVerse) => void;
   /** 하단 5탭에서 들어오는 네비게이션 요청 (Phase 2a) */
   navRequest?: NavRequest;
+  /** SettingsSheet 에서 전체화면 진입 요청 (Phase 2b) — nonce 갱신 시 전체화면 열림 */
+  fullscreenRequestNonce?: number;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -70,6 +72,7 @@ export default function SearchPanel({
   bulkEditMode = false,
   onVerseUpdated,
   navRequest,
+  fullscreenRequestNonce,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading } = useSession();
   const adminMode = isAdmin(session);
@@ -118,7 +121,7 @@ export default function SearchPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const savedScroll = useRef(0);
 
-  const { fontSize, fontKey, setShowFontSettings } = useFont();
+  const { fontSize, fontKey } = useFont();
   const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
 
   // ─── 검색 펼침 토글 + 모드 (본문검색 vs 주제추천) ───
@@ -1207,22 +1210,19 @@ export default function SearchPanel({
 
   const canFullscreen = visibleMain.length > 0;
 
-  // 풀스크린 버튼 (말씀검색 / 주제추천 탭용)
+  // 풀스크린 진입 — Phase 2b 에서 설정 시트로 이동 (사용자 #6)
+  // fontSlider 는 빈 자리 유지 (다른 컨트롤 추가 가능성)
   const fontSlider = (
-    <div className="flex items-center justify-end mb-2 gap-2">
-
-      <button
-        type="button"
-        onClick={() => setShowFullscreen(true)}
-        disabled={!canFullscreen}
-        title="풀스크린 (빔프로젝터 읽기 모드)"
-        aria-label="전체화면"
-        className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 hover:text-gray-800 dark:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-      >
-        전체화면
-      </button>
-    </div>
+    <div className="flex items-center justify-end mb-2 gap-2"></div>
   );
+
+  // SettingsSheet 의 "전체화면(1절씩 보기)" 요청 처리 — fullscreenRequestNonce 변경 시 전체화면 열림
+  useEffect(() => {
+    if (!fullscreenRequestNonce) return;
+    if (visibleMain.length === 0) return;
+    setShowFullscreen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreenRequestNonce]);
 
   return (
     <div className="w-full max-w-[1400px] mx-auto">
@@ -1371,18 +1371,7 @@ export default function SearchPanel({
                 <option key={v} value={v}>{getVersionLabel(v)}</option>
               ))}
             </select>
-            <button
-              onClick={() => setShowFontSettings(true)}
-              title="화면 설정 (글꼴·테마)"
-              aria-label="화면 설정"
-              className="flex items-center justify-center bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ml-1"
-              style={{ width: "44px", height: "30px", borderRadius: "4px" }}
-            >
-              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+            {/* 화면 설정 아이콘 — Phase 2b 에서 하단 5탭 "설정" 으로 흡수 (사용자 #5) */}
           </div>
         </div>
       )}
@@ -1845,7 +1834,7 @@ export default function SearchPanel({
                   </button>
                 </div>
 
-                {/* 우: 읽기 + 전체화면 버튼 */}
+                {/* 우: 읽기 버튼 (전체화면은 Phase 2b 에서 설정 시트로 이동 — 사용자 #6) */}
                 <div className="flex items-center shrink-0 gap-1.5">
                   <TTSButton
                     isPlaying={ttsActiveOnThisChapter}
@@ -1853,16 +1842,6 @@ export default function SearchPanel({
                     disabled={browseVerses.length === 0}
                     onClick={handleTtsToggle}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowFullscreen(true)}
-                    disabled={!canFullscreen}
-                    title="풀스크린 (빔프로젝터 읽기 모드)"
-                    aria-label="전체화면"
-                    className="px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 hover:text-gray-800 dark:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    전체화면
-                  </button>
                 </div>
               </div>
 
