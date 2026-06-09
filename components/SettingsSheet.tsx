@@ -62,10 +62,14 @@ export default function SettingsSheet({
   const { fontSize, setFontSize, fontKey, setFontKey, theme, setTheme } = useFont();
   const tts = useTts();
   const sheetRef = useRef<HTMLDivElement>(null);
+  const currentFont = FONTS.find((f) => f.key === fontKey) ?? FONTS[0];
 
   // Phase 3 — 그립 드래그로 시트 닫기 (dy > 80px)
   const dragStartRef = useRef<{ y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
+
+  // 시트 모드 — full(기본) / fontCompact(본문 보면서 글꼴 조정)
+  const [sheetMode, setSheetMode] = useState<"full" | "fontCompact">("full");
 
   // ESC 키 닫기
   useEffect(() => {
@@ -80,6 +84,72 @@ export default function SettingsSheet({
     typeof process !== "undefined"
       ? process.env.NEXT_PUBLIC_BUILD_ID || "dev"
       : "dev";
+
+  // ── fontCompact 모드 — 본문 그대로 보면서 글꼴/크기 조정 (Kindle 패턴) ──
+  if (sheetMode === "fontCompact") {
+    return (
+      <div
+        className="fixed inset-x-0 bottom-0 z-[120] bg-[var(--paper)] dark:bg-gray-900 border-t border-[var(--line)] dark:border-gray-700 shadow-2xl animate-[slideUp_0.22s_cubic-bezier(.2,.7,.2,1)]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="글꼴 조정"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
+      >
+        <div className="flex items-center justify-between px-4 pt-3 pb-1">
+          <button
+            onClick={() => setSheetMode("full")}
+            className="inline-flex items-center gap-1 text-xs text-[var(--ink-soft)] dark:text-gray-400 hover:text-[var(--ink)] dark:hover:text-gray-200"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            설정으로
+          </button>
+          <span className="text-xs font-semibold text-[var(--ink)] dark:text-gray-100">본문 미리보기 중</span>
+          <button
+            onClick={onClose}
+            className="text-xs font-bold text-[var(--amber-deep)] dark:text-amber-400 px-2 py-0.5 rounded"
+          >
+            완료
+          </button>
+        </div>
+        <div className="px-4 py-2 flex items-center gap-2">
+          <button
+            onClick={() => setFontSize(Math.max(16, fontSize - 2))}
+            aria-label="글자 크기 줄이기"
+            className="w-9 h-9 rounded-lg bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-600 flex items-center justify-center text-[var(--ink)] dark:text-gray-100 hover:brightness-95 active:scale-95"
+          >
+            A−
+          </button>
+          <span className="w-12 text-center text-xs font-mono text-[var(--ink-soft)] dark:text-gray-300">{fontSize}px</span>
+          <button
+            onClick={() => setFontSize(Math.min(60, fontSize + 2))}
+            aria-label="글자 크기 키우기"
+            className="w-9 h-9 rounded-lg bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-600 flex items-center justify-center text-[var(--ink)] dark:text-gray-100 hover:brightness-95 active:scale-95"
+          >
+            A+
+          </button>
+          <div className="flex-1 flex gap-1 overflow-x-auto scrollbar-hide">
+            {FONTS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFontKey(f.key)}
+                className={`shrink-0 px-2.5 py-1.5 text-xs rounded-lg border transition-all whitespace-nowrap ${
+                  fontKey === f.key
+                    ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
+                    : "bg-white dark:bg-gray-800 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
+                }`}
+                style={{ fontFamily: f.css, fontWeight: f.weight }}
+                title={f.label}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -220,7 +290,35 @@ export default function SettingsSheet({
 
           {/* 2. 화면 설정 */}
           <section>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">화면 설정</div>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400">화면 설정</div>
+              <button
+                onClick={() => setSheetMode("fontCompact")}
+                className="text-[11px] font-semibold text-[var(--amber-deep)] dark:text-amber-400 hover:underline inline-flex items-center gap-0.5"
+                title="시트를 압축하고 본문 보면서 글꼴/크기 조정"
+              >
+                본문 보면서 조정
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </button>
+            </div>
+            {/* 미리보기 — 현재 설정 적용된 샘플 절 */}
+            <div className="bg-[var(--paper)] dark:bg-gray-900 border border-[var(--line)] dark:border-gray-700 rounded-xl p-3 mb-3">
+              <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1.5 tracking-wider uppercase">미리보기</div>
+              <div
+                className="text-[var(--ink)] dark:text-gray-100 leading-relaxed"
+                style={{
+                  fontSize: `${fontSize}px`,
+                  fontFamily: currentFont.css,
+                  fontWeight: currentFont.weight,
+                  lineHeight: 1.5,
+                }}
+              >
+                <span className="font-semibold text-[var(--amber)] mr-1.5 text-sm align-baseline">1</span>
+                여호와는 나의 목자시니 내게 부족함이 없으리로다
+              </div>
+            </div>
             <div className="space-y-3">
               {/* 테마 — Phase 3 시스템 추종 옵션 추가 (사용자 Q5=B) */}
               <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">
