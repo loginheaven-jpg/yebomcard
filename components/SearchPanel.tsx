@@ -1172,6 +1172,53 @@ export default function SearchPanel({
   const canPrevChapter = chapterIdx > 0;
   const canNextChapter = chapterIdx < chapters.length - 1;
 
+  // Phase 2c — 좌우 스와이프 장 이동 (사용자 #2)
+  // 활성: 본문 영역 가운데 60% (가장자리 20% 제외 — iOS 가장자리 swipe-back 보호)
+  // 임계: |dx| > 50px, 각도 30° 이내 (|dy/dx| < 0.577)
+  // 비활성: editing/isAddingMore/모달 열림
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const goChapter = useCallback(
+    (delta: -1 | 1) => {
+      if (delta === -1 && canPrevChapter) {
+        setChapter(chapters[chapterIdx - 1]);
+      } else if (delta === 1 && canNextChapter) {
+        setChapter(chapters[chapterIdx + 1]);
+      }
+    },
+    [canPrevChapter, canNextChapter, chapters, chapterIdx],
+  );
+
+  const handleVerseSwipeStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (editingVerseId !== null) return;
+      if (isAddingMore) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const w = window.innerWidth;
+      if (t.clientX < w * 0.2 || t.clientX > w * 0.8) return;
+      swipeStartRef.current = { x: t.clientX, y: t.clientY };
+    },
+    [editingVerseId, isAddingMore],
+  );
+
+  const handleVerseSwipeEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const s = swipeStartRef.current;
+      if (!s) return;
+      swipeStartRef.current = null;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (Math.abs(dx) < 50) return;
+      // 30° 이내 = |dy| < |dx| * tan(30°) ≈ 0.577
+      if (Math.abs(dy) > Math.abs(dx) * 0.577) return;
+      // 좌→우 (dx>0) = 이전 장 / 우→좌 (dx<0) = 다음 장
+      goChapter(dx > 0 ? -1 : 1);
+    },
+    [goChapter],
+  );
+
   // 현재 탭의 표시 구절 (풀스크린 입력용)
   const visibleMain: BibleVerse[] = useMemo(() => {
     if (mode === "search") return searchResults;
@@ -1788,7 +1835,7 @@ export default function SearchPanel({
 
           {/* Step: 절 본문 (리스트) */}
           {browseStep === "verse" && (
-            <div>
+            <div onTouchStart={handleVerseSwipeStart} onTouchEnd={handleVerseSwipeEnd}>
               {/* 헤더: ← 목차로 | ◀ 책이름 장/총장 ▶ | 가━●━가 */}
               <div className="flex items-center justify-between mb-3">
                 {/* 좌: 목차로 */}
