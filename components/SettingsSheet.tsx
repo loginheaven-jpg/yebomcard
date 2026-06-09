@@ -15,7 +15,7 @@
  *  7. 앱 정보 (버전 / 종료)
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { useTts, TTS_SPEEDS, type TtsSpeed } from "@/contexts/TtsContext";
 
@@ -63,6 +63,10 @@ export default function SettingsSheet({
   const tts = useTts();
   const sheetRef = useRef<HTMLDivElement>(null);
 
+  // Phase 3 — 그립 드래그로 시트 닫기 (dy > 80px)
+  const dragStartRef = useRef<{ y: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+
   // ESC 키 닫기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,11 +95,37 @@ export default function SettingsSheet({
         className="absolute inset-x-0 bottom-0 bg-[var(--paper)] dark:bg-gray-900 rounded-t-3xl shadow-2xl overflow-hidden flex flex-col"
         style={{
           maxHeight: "86vh",
-          animation: "slideUp 0.28s cubic-bezier(.2,.7,.2,1)",
+          animation: dragOffset === 0 ? "slideUp 0.28s cubic-bezier(.2,.7,.2,1)" : undefined,
+          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+          transition: dragStartRef.current ? "none" : "transform 0.2s ease-out",
         }}
       >
-        {/* 그립 + 헤더 */}
-        <div className="pt-2 pb-1 flex flex-col items-center shrink-0 border-b border-[var(--line)] dark:border-gray-700">
+        {/* 그립 + 헤더 — 그립 영역 드래그하여 닫기 */}
+        <div
+          className="pt-2 pb-1 flex flex-col items-center shrink-0 border-b border-[var(--line)] dark:border-gray-700 cursor-grab touch-pan-y"
+          onPointerDown={(e) => {
+            dragStartRef.current = { y: e.clientY };
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            const s = dragStartRef.current;
+            if (!s) return;
+            const dy = e.clientY - s.y;
+            if (dy > 0) setDragOffset(dy);
+          }}
+          onPointerUp={() => {
+            const s = dragStartRef.current;
+            dragStartRef.current = null;
+            if (s && dragOffset > 80) {
+              onClose();
+            }
+            setDragOffset(0);
+          }}
+          onPointerCancel={() => {
+            dragStartRef.current = null;
+            setDragOffset(0);
+          }}
+        >
           <div className="w-[38px] h-1 bg-gray-300 dark:bg-gray-600 rounded-full" aria-hidden />
           <div className="w-full flex items-center justify-between px-5 py-2">
             <h2 className="text-base font-bold text-[var(--ink)] dark:text-gray-100">설정</h2>
@@ -141,13 +171,14 @@ export default function SettingsSheet({
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">화면 설정</div>
             <div className="space-y-3">
-              {/* 테마 */}
+              {/* 테마 — Phase 3 시스템 추종 옵션 추가 (사용자 Q5=B) */}
               <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">
                 <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-1.5">화면 테마</div>
                 <div className="flex bg-[var(--paper-2)] dark:bg-gray-700 rounded-lg p-1">
                   <button
                     onClick={() => setTheme("light")}
-                    className={`flex-1 py-1.5 text-sm rounded-md transition-all font-medium ${
+                    aria-pressed={theme === "light"}
+                    className={`flex-1 py-1.5 text-xs rounded-md transition-all font-medium ${
                       theme === "light"
                         ? "bg-white dark:bg-gray-800 text-[var(--ink)] dark:text-gray-100 shadow-sm"
                         : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
@@ -157,7 +188,8 @@ export default function SettingsSheet({
                   </button>
                   <button
                     onClick={() => setTheme("dark")}
-                    className={`flex-1 py-1.5 text-sm rounded-md transition-all font-medium ${
+                    aria-pressed={theme === "dark"}
+                    className={`flex-1 py-1.5 text-xs rounded-md transition-all font-medium ${
                       theme === "dark"
                         ? "bg-gray-800 text-white shadow-sm"
                         : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
@@ -165,10 +197,18 @@ export default function SettingsSheet({
                   >
                     어둡게
                   </button>
+                  <button
+                    onClick={() => setTheme("system")}
+                    aria-pressed={theme === "system"}
+                    className={`flex-1 py-1.5 text-xs rounded-md transition-all font-medium ${
+                      theme === "system"
+                        ? "bg-[var(--amber)] text-white shadow-sm"
+                        : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
+                    }`}
+                  >
+                    시스템
+                  </button>
                 </div>
-                <p className="mt-1.5 text-[10px] text-[var(--ink-faint)] dark:text-gray-500">
-                  시스템 추종은 Phase 3 에서 추가됩니다
-                </p>
               </div>
               {/* 글자 크기 */}
               <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">

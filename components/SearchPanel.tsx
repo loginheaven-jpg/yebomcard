@@ -1041,6 +1041,11 @@ export default function SearchPanel({
 
   // ─── Verse toggle with scroll preservation ───
   function handleToggle(verse: BibleVerse) {
+    // 길게 누르기로 전체화면 진입 직후의 합성 click 무시 (Q1=B)
+    if (longPressedRef.current) {
+      longPressedRef.current = false;
+      return;
+    }
     // 편집 모드 ON (관리자) → 탭 시 토글 대신 편집 진입
     if (bulkEditMode && adminMode) {
       enterEdit(verse);
@@ -1172,11 +1177,17 @@ export default function SearchPanel({
   const canPrevChapter = chapterIdx > 0;
   const canNextChapter = chapterIdx < chapters.length - 1;
 
-  // Phase 2c — 좌우 스와이프 장 이동 (사용자 #2)
-  // 활성: 본문 영역 가운데 60% (가장자리 20% 제외 — iOS 가장자리 swipe-back 보호)
-  // 임계: |dx| > 50px, 각도 30° 이내 (|dy/dx| < 0.577)
+  // Phase 2c + 3 — 좌우 스와이프(장 이동) + 길게 누르기(전체화면) 통합 터치 핸들러
+  // 활성: 본문 영역 가운데 60% (가장자리 20% 제외 — iOS swipe-back 보호)
+  // 임계 스와이프: |dx| > 50px, 각도 30° 이내
+  // 임계 long-press: 500ms 정지, 이동 < 8px
   // 비활성: editing/isAddingMore/모달 열림
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+  // visibleMain 은 아래 useMemo 로 정의 — 핸들러 클로저에서는 ref 로 접근
+  const visibleMainCountRef = useRef(0);
+
   const goChapter = useCallback(
     (delta: -1 | 1) => {
       if (delta === -1 && canPrevChapter) {
@@ -1188,8 +1199,16 @@ export default function SearchPanel({
     [canPrevChapter, canNextChapter, chapters, chapterIdx],
   );
 
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   const handleVerseSwipeStart = useCallback(
     (e: React.TouchEvent) => {
+      longPressedRef.current = false;
       if (editingVerseId !== null) return;
       if (isAddingMore) return;
       const t = e.touches[0];
@@ -1197,26 +1216,51 @@ export default function SearchPanel({
       const w = window.innerWidth;
       if (t.clientX < w * 0.2 || t.clientX > w * 0.8) return;
       swipeStartRef.current = { x: t.clientX, y: t.clientY };
+      // 길게 누르기 타이머 — 500ms 후 전체화면 진입 (Q1=B)
+      cancelLongPress();
+      longPressTimerRef.current = setTimeout(() => {
+        longPressedRef.current = true;
+        if (visibleMainCountRef.current > 0) {
+          setShowFullscreen(true);
+        }
+      }, 500);
     },
-    [editingVerseId, isAddingMore],
+    [editingVerseId, isAddingMore, cancelLongPress],
+  );
+
+  const handleVerseSwipeMove = useCallback(
+    (e: React.TouchEvent) => {
+      const s = swipeStartRef.current;
+      if (!s) return;
+      const t = e.touches[0];
+      if (!t) return;
+      // 8px 이상 이동하면 long-press 가 아님 — 타이머 취소
+      if (Math.abs(t.clientX - s.x) > 8 || Math.abs(t.clientY - s.y) > 8) {
+        cancelLongPress();
+      }
+    },
+    [cancelLongPress],
   );
 
   const handleVerseSwipeEnd = useCallback(
     (e: React.TouchEvent) => {
+      cancelLongPress();
       const s = swipeStartRef.current;
       if (!s) return;
       swipeStartRef.current = null;
+      // long-press 가 발화했으면 swipe 평가 스킵
+      if (longPressedRef.current) {
+        return;
+      }
       const t = e.changedTouches[0];
       if (!t) return;
       const dx = t.clientX - s.x;
       const dy = t.clientY - s.y;
       if (Math.abs(dx) < 50) return;
-      // 30° 이내 = |dy| < |dx| * tan(30°) ≈ 0.577
       if (Math.abs(dy) > Math.abs(dx) * 0.577) return;
-      // 좌→우 (dx>0) = 이전 장 / 우→좌 (dx<0) = 다음 장
       goChapter(dx > 0 ? -1 : 1);
     },
-    [goChapter],
+    [goChapter, cancelLongPress],
   );
 
   // 현재 탭의 표시 구절 (풀스크린 입력용)
@@ -1226,6 +1270,8 @@ export default function SearchPanel({
     if (mode === "topic") return topicResults;
     return [];
   }, [mode, browseStep, searchResults, browseVerses, topicResults]);
+  // 핸들러 클로저(timeout)에서 최신 길이 참조용
+  visibleMainCountRef.current = visibleMain.length;
 
   const visibleAlt: BibleVerse[] = useMemo(() => {
     if (mode === "search") return []; // 말씀검색은 모든 버전 동시 표시 → alt 불필요
@@ -1833,9 +1879,14 @@ export default function SearchPanel({
             </div>
           )}
 
-          {/* Step: 절 본문 (리스트) */}
+          {/* Step: 절 본문 (리스트) — 스와이프 + 길게 누르기 통합 핸들러 */}
           {browseStep === "verse" && (
-            <div onTouchStart={handleVerseSwipeStart} onTouchEnd={handleVerseSwipeEnd}>
+            <div
+              onTouchStart={handleVerseSwipeStart}
+              onTouchMove={handleVerseSwipeMove}
+              onTouchEnd={handleVerseSwipeEnd}
+              onTouchCancel={() => { cancelLongPress(); swipeStartRef.current = null; }}
+            >
               {/* 헤더: ← 목차로 | ◀ 책이름 장/총장 ▶ | 가━●━가 */}
               <div className="flex items-center justify-between mb-3">
                 {/* 좌: 목차로 */}
