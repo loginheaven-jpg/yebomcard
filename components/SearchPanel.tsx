@@ -1411,28 +1411,20 @@ export default function SearchPanel({
           onClose={() => setShowFullscreen(false)}
         />
       )}
-      {/* Header — D안: 브랜드(Yebom/BIBLE) + 셀렉터 + Aa (셀렉터·Aa 동일 30px) */}
+      {/* Header — 좌상단: 아이콘 위, Yebom 아래 (세로 스택). 우측: 셀렉터 + ⇄ + Aa */}
       {!isAddingMore && (
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="text-gray-900 dark:text-gray-100 shrink-0">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex flex-col items-center shrink-0 leading-none">
+            <div className="text-gray-900 dark:text-gray-100">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
               </svg>
             </div>
-            <div className="flex flex-col">
-              <div
-                className="text-gray-400 dark:text-gray-500"
-                style={{ fontSize: "9px", fontWeight: 500, letterSpacing: "1.2px", lineHeight: 1, textAlign: "left" }}
-              >
-                Yebom
-              </div>
-              <div
-                className="italic text-gray-700 dark:text-gray-200 font-[family-name:var(--font-playfair)]"
-                style={{ fontSize: "16px", fontWeight: 400, letterSpacing: "0.4px", lineHeight: 1, marginTop: "3px" }}
-              >
-                BIBLE
-              </div>
+            <div
+              className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)] mt-0.5"
+              style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.4px", lineHeight: 1 }}
+            >
+              Yebom
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -1753,7 +1745,7 @@ export default function SearchPanel({
           {searchByVersion.some((g) => g.verses.length > 0) && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[72vh] lg:max-h-[86vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-150px)] lg:max-h-[calc(100dvh-120px)] overflow-y-auto">
                 {searchByVersion.map((group) => {
                   const has = group.verses.length > 0;
                   return (
@@ -1952,7 +1944,7 @@ export default function SearchPanel({
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[72vh] lg:max-h-[86vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-150px)] lg:max-h-[calc(100dvh-120px)] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : (
@@ -2025,7 +2017,7 @@ export default function SearchPanel({
                 </div>
               ) : (
                 /* 단일 버전 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[72vh] lg:max-h-[86vh] overflow-y-auto">
+                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-150px)] lg:max-h-[calc(100dvh-120px)] overflow-y-auto">
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : browseVerses.length === 0 ? (
@@ -2065,7 +2057,7 @@ export default function SearchPanel({
           {topicResults.length > 0 && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[72vh] lg:max-h-[86vh] overflow-y-auto">
+              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-150px)] lg:max-h-[calc(100dvh-120px)] overflow-y-auto">
                 {topicResults.map((v) => {
                   const alt = parallel ? topicResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse
