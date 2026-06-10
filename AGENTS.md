@@ -2,6 +2,16 @@
 
 > `CLAUDE.md` 가 위임하는 본 파일. AI 개발 도구가 본 저장소에서 동작할 때 따를 기준.
 
+## 📚 문서 진입 경로
+
+| 목적 | 진입 문서 |
+|---|---|
+| 현재 시스템 + 변경 이력 | [architecture.md](architecture.md) (living) |
+| 모든 문서 인덱스 + 유지보수 규칙 | [documents.md](documents.md) (living) |
+| 보류·차기 검토 | [plan.md](plan.md) (living) |
+| 시스템 단면 상세 | [docs/](docs/) |
+| 외부 계약 (SSO/AI/데이터) | 루트 `*_GUIDE.md` |
+
 ---
 
 ## 1. 기본 정책 (memory 반영)
@@ -103,11 +113,10 @@ R2_PUBLIC_BASE
 | GCP Cloud TTS | 한국어/영문 합성음 | [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md) |
 | AI Gateway | 이미지 생성/편집/AI 추천 | [CLIENT_INTEGRATION_GUIDE.md](CLIENT_INTEGRATION_GUIDE.md) |
 
-## 7. 변경 로그 (최근)
+## 7. 변경 로그
 
-상세는 `git log`. 굵직한 단면 변화:
-- **2026-06**: WEB 역본 + Williams 음원 1189장 R2 통합 / 영문 TTS en-US·en-GB / 미니플레이어 single-toggle / useSession race fix / 스크랩 UNIQUE
-- **2026-05**: 5탭 IA 리디자인 Phase 2a~3 / 통합 SettingsSheet / 시스템 다크 / 그립 드래그
-- **2026-04**: AI Gateway 통합 / 카드 빌더 / SSO 도입
-
-후속·보류 항목은 [plan.md](plan.md) 참조.
+본 파일은 **시스템 변경 사항을 직접 누적하지 않는다**. 상세는:
+- 시스템 아키텍처 변경 이력 → [architecture.md](architecture.md) (living)
+- 문서 체계 변경 → [documents.md](documents.md) (living)
+- 보류·차기 검토 → [plan.md](plan.md) (living)
+- commit 단위 변경 → `git log`
