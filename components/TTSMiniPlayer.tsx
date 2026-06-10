@@ -6,11 +6,16 @@
  * status === "idle" 이면 렌더하지 않음.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTts, TTS_SPEEDS, type TtsSpeed } from "@/contexts/TtsContext";
+import { isEnglishVersion } from "@/lib/versions";
 
 export default function TTSMiniPlayer() {
   const tts = useTts();
+  const isEng = useMemo(
+    () => isEnglishVersion(tts.currentTrack?.version ?? ""),
+    [tts.currentTrack?.version],
+  );
   const [speedOpen, setSpeedOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -102,6 +107,26 @@ export default function TTSMiniPlayer() {
             {total > 0 && (
               <span className="text-[10px] text-gray-400 shrink-0">
                 {idx + 1}/{total}
+              </span>
+            )}
+            {tts.engine !== "unknown" && tts.engine !== "real" && (
+              <span
+                className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${
+                  isEng
+                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400"
+                    : "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
+                } ${
+                  tts.isWebSpeechFallback
+                    ? "border border-dashed border-amber-500 dark:border-amber-400"
+                    : ""
+                }`}
+                title={
+                  tts.isWebSpeechFallback
+                    ? (isEng ? "영문 본문 — 브라우저 음성 폴백" : "한글 본문 — 브라우저 음성 폴백")
+                    : (isEng ? "English voice (en-US Chirp3-HD)" : "한국어 voice (ko-KR Chirp3-HD)")
+                }
+              >
+                {isEng ? "ENG" : "KOR"}
               </span>
             )}
             {tts.engine !== "unknown" && (

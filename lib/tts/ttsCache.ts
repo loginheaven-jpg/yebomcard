@@ -8,8 +8,8 @@
  */
 
 const DB_NAME = "yebom_tts_cache";
-// v3: 서버측 Chirp→Neural2 폴백 도입 — 이전 테스트 시 Web Speech 폴백된 음원이 캐싱돼 있을 수 있어 한 번 더 무효화
-const DB_VERSION = 3;
+// v4: 영문 역본 en-US voice 분기 도입 — 이전 ko-KR 로 합성된 KJV/NIrV/GNT/WEB 캐시 무효화 필요
+const DB_VERSION = 4;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
