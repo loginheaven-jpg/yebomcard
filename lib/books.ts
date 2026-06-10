@@ -84,3 +84,20 @@ export const NEW_TESTAMENT = BOOKS.filter((b) => b.testament === "new");
 export function getBookByCode(code: string): BookInfo | undefined {
   return BOOKS.find((b) => b.code === code);
 }
+
+/**
+ * 책 이름(한글/영문/약어)으로 BookInfo 조회.
+ * AI 추천 결과나 사용자 입력의 책명을 표준 book_code 로 변환할 때 사용.
+ * 매칭 우선순위: nameKr → nameEn → abbr → code 자체
+ */
+export function getBookByName(name: string): BookInfo | undefined {
+  if (!name) return undefined;
+  const norm = name.trim();
+  return (
+    BOOKS.find((b) => b.nameKr === norm) ||
+    BOOKS.find((b) => b.nameEn === norm) ||
+    BOOKS.find((b) => b.nameEn.toLowerCase() === norm.toLowerCase()) ||
+    BOOKS.find((b) => b.abbr === norm) ||
+    BOOKS.find((b) => b.code === norm.toLowerCase())
+  );
+}

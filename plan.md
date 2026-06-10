@@ -48,13 +48,13 @@ WEB 적재 직후 즉시 적용. KJV/NIrV/GNT/WEB 모두 en-US-Chirp3-HD voice �
 
 **예상 작업량** ~3시간 (옵션 A) / 데이터 재적재 (옵션 B)
 
-### D. AI 추천 — WEB 호환 (보류)
+### ~~D. AI 추천 — WEB 호환~~ — 완료 (2026-06-11)
 
-`/api/ai/recommend` 가 책명 한글 매칭(`book_name='시편'`) 기준. mainVersion=web 일 때 영문 book_name(`Psalms`) 와 어긋남 → 검색 0건.
+SearchPanel 의 topic 조회 로직을 `book_name` → `book_code` 매칭으로 변경. AI 가 한글 책명 반환해도 `getBookByName()` 으로 BookInfo 조회 → `book.code` 로 DB 조회. 모든 7개 version 일괄 호환.
 
-**해결**: 응답 매칭을 book_code 기준으로 변경 (모든 버전 자동 호환).
+`getBookByName(name)` 신규 ([lib/books.ts](lib/books.ts)) — 한글/영문/약어/code 모두 인식.
 
-**예상 작업량** ~30분
+mainVersion=kjv 에서 "사도행전" 추천 → "act" 변환 → KJV 본문 정상 표시. 책명 매핑 실패 시에는 별도 에러 메시지로 진단 가능.
 
 ### E. KJV 데살로니가전·후 보충 (별건, 보류)
 

@@ -13,6 +13,13 @@
 
 ## 📜 변경 이력 (최신 위)
 
+### 2026-06-11 — AI 주제 추천 모든 version 호환
+- 증상: mainVersion=KJV 에서 "추천된 구절을 DB에서 찾을 수 없습니다" 에러
+- 원인: AI 가 한국어 책명("사도행전")만 반환 → SearchPanel 이 `book_name='사도행전'` 으로 KJV(`book_name='Acts'`) 조회 → 0건
+- 수정: `lib/books.ts` 에 `getBookByName(name)` 신규 (한글/영문/약어/code 모두 인식). SearchPanel topic 조회를 `book_code` 매칭으로 변경
+- 결과: KJV/NIrV/GNT/WEB 등 영문 mainVersion 에서도 주제 추천 정상 동작
+- plan.md D 항목 완료 처리
+
 ### 2026-06-11 — 문서 체계 재정비
 - architecture.md 를 living document 로 재구성. 변경 이력 누적 시작
 - [documents.md](documents.md) 신규 — 문서 체계 단일 인덱스

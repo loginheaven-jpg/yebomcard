@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode } from "@/lib/books";
+import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
@@ -1033,28 +1033,37 @@ export default function SearchPanel({
       };
       setTopicRecommendations(recommendations);
 
-      const versePromises = recommendations.map((rec) =>
-        supabase
+      // AI 가 반환한 책명(한글/영문)을 book_code 로 변환 → 모든 version 호환 조회
+      const versePromises = recommendations.map((rec) => {
+        const book = getBookByName(rec.book);
+        if (!book) return Promise.resolve({ data: null, _unmapped: rec.book } as { data: BibleVerse | null; _unmapped?: string });
+        return supabase
           .from("bible_verses")
           .select("*")
           .eq("version", mainVersion)
-          .eq("book_name", rec.book)
+          .eq("book_code", book.code)
           .eq("chapter", rec.chapter)
           .eq("verse", rec.verse)
           .single()
-      );
+          .then((res) => ({ data: res.data as BibleVerse | null }));
+      });
       const verseResults = await Promise.all(versePromises);
 
       const found: BibleVerse[] = [];
+      const unmapped: string[] = [];
       for (const res of verseResults) {
-        if (res.data) {
-          found.push(res.data as BibleVerse);
-        }
+        if (res.data) found.push(res.data);
+        else if ((res as { _unmapped?: string })._unmapped) unmapped.push((res as { _unmapped?: string })._unmapped!);
       }
 
       setTopicResults(found);
       if (found.length === 0) {
-        setTopicError("추천된 구절을 DB에서 찾을 수 없습니다");
+        if (unmapped.length > 0) {
+          console.warn("[topic-recommend] 책명 매핑 실패:", unmapped);
+          setTopicError("AI 가 추천한 책명을 인식하지 못했습니다");
+        } else {
+          setTopicError("추천 결과를 본문과 매칭하지 못했습니다");
+        }
       }
     } catch {
       setTopicError("추천 중 오류가 발생했습니다");
