@@ -457,15 +457,43 @@ export default function SettingsSheet({
                   ))}
                 </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[var(--ink)] dark:text-gray-100">합성 음성</span>
-                <button
-                  onClick={() => tts.setVoice(tts.voice === "female" ? "male" : "female")}
-                  className="px-3 py-1 text-xs font-bold rounded-full border border-[var(--line)] dark:border-gray-600 text-[var(--ink-soft)] dark:text-gray-200 hover:border-[var(--amber)] hover:text-[var(--amber)]"
-                  title="녹음 음원 모드일 때는 무시됩니다"
-                >
-                  {tts.voice === "female" ? "여성" : "남성"}
-                </button>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-[var(--ink)] dark:text-gray-100 shrink-0">합성 음성</span>
+                <div className="flex gap-1" role="group" aria-label="합성 음성 선택">
+                  {(["female", "male"] as const).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => tts.setVoice(v)}
+                      title="녹음 음원 모드일 때는 무시됩니다"
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
+                        tts.voice === v
+                          ? "bg-[var(--amber)] text-white border-[var(--amber)]"
+                          : "border-[var(--line)] dark:border-gray-600 text-[var(--ink-soft)] dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)]"
+                      }`}
+                    >
+                      {v === "female" ? "여성" : "남성"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-[var(--ink)] dark:text-gray-100 shrink-0">영문 음성</span>
+                <div className="flex gap-1" role="group" aria-label="영문 발음 선택">
+                  {(["us", "gb"] as const).map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => tts.setEnglishAccent(a)}
+                      title="영문 역본(KJV/NIrV/GNT/WEB) 재생 시 적용"
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
+                        tts.englishAccent === a
+                          ? "bg-[var(--amber)] text-white border-[var(--amber)]"
+                          : "border-[var(--line)] dark:border-gray-600 text-[var(--ink-soft)] dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)]"
+                      }`}
+                    >
+                      {a === "us" ? "미국식" : "영국식"}
+                    </button>
+                  ))}
+                </div>
               </div>
               <label className="flex items-center justify-between gap-2 cursor-pointer">
                 <span className="text-sm text-[var(--ink)] dark:text-gray-100">자동 다음 장 진행</span>

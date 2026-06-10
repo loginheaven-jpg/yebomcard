@@ -29,6 +29,7 @@ import {
 import {
   fetchCloudTtsAudio,
   type TTSVoice,
+  type TTSAccent,
 } from "@/lib/tts/cloudTtsClient";
 import { isEnglishVersion } from "@/lib/versions";
 import {
@@ -152,6 +153,8 @@ interface TtsContextValue {
   autoNext: boolean;
   readVerseNumber: boolean;
   isWebSpeechFallback: boolean;
+  /** 영문 발음 — 영문 역본 TTS 시에만 적용 ("us"|"gb") */
+  englishAccent: TTSAccent;
   /** 마지막으로 재생된 트랙의 엔진 (UI 표시용) */
   engine: TtsEngine;
   /** 서버가 실제 사용한 voice 이름 (예: ko-KR-Chirp3-HD-Aoede) */
@@ -165,6 +168,7 @@ interface TtsContextValue {
   setSpeed: (s: TtsSpeed) => void;
   setAutoNext: (b: boolean) => void;
   setReadVerseNumber: (b: boolean) => void;
+  setEnglishAccent: (a: TTSAccent) => void;
 }
 
 function classifyEngine(voiceName: string): TtsEngine {
@@ -182,6 +186,7 @@ const LS = {
   speed: "yebom_tts_speed",
   autoNext: "yebom_tts_auto_next",
   readVerseNumber: "yebom_tts_read_verse_number",
+  englishAccent: "yebom_tts_english_accent",
 } as const;
 
 function readStorage<T>(key: string, fallback: T, parse: (s: string) => T): T {
@@ -214,6 +219,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<TtsTrack | null>(null);
   const [engine, setEngine] = useState<TtsEngine>("unknown");
   const [engineVoice, setEngineVoice] = useState("");
+  const [englishAccent, setEnglishAccentState] = useState<TTSAccent>("us");
+  const englishAccentRef = useRef<TTSAccent>("us");
 
   const queueRef = useRef<TtsTrack[]>([]);
   const indexRef = useRef(-1);
@@ -248,6 +255,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     setReadVerseNumberState(
       readStorage<boolean>(LS.readVerseNumber, false, (s) => s === "1"),
     );
+    const acc = readStorage<TTSAccent>(LS.englishAccent, "us", (s) =>
+      s === "gb" ? "gb" : "us",
+    );
+    setEnglishAccentState(acc);
+    englishAccentRef.current = acc;
   }, []);
 
   useEffect(() => {
@@ -303,6 +315,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const setReadVerseNumber = useCallback((b: boolean) => {
     setReadVerseNumberState(b);
     writeStorage(LS.readVerseNumber, b ? "1" : "0");
+  }, []);
+  const setEnglishAccent = useCallback((a: TTSAccent) => {
+    setEnglishAccentState(a);
+    englishAccentRef.current = a;
+    writeStorage(LS.englishAccent, a);
   }, []);
 
   const playIndex = useCallback(
@@ -423,6 +440,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             voice: v,
             speed: sp,
             lang: isEng ? "en" : "ko",
+            accent: englishAccentRef.current,
             signal: ctrl.signal,
           });
           if (playGenRef.current !== gen) return;
@@ -603,6 +621,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       autoNext,
       readVerseNumber,
       isWebSpeechFallback,
+      englishAccent,
       engine,
       engineVoice,
       start,
@@ -614,6 +633,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
+      setEnglishAccent,
     }),
     [
       status,
@@ -625,6 +645,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       autoNext,
       readVerseNumber,
       isWebSpeechFallback,
+      englishAccent,
       engine,
       engineVoice,
       start,
@@ -636,6 +657,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
+      setEnglishAccent,
     ],
   );
 

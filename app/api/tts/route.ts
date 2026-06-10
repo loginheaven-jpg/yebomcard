@@ -88,7 +88,7 @@ async function getAccessToken(): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, speed, voice, lang, pitch, volumeGainDb } = await req.json();
+    const { text, speed, voice, lang, accent, pitch, volumeGainDb } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -102,12 +102,17 @@ export async function POST(req: NextRequest) {
 
     const isMale = voice === "male";
     const isEng = lang === "en";
-    const languageCode = isEng ? "en-US" : "ko-KR";
+    const isGb = isEng && accent === "gb";
+    const languageCode = isEng ? (isGb ? "en-GB" : "en-US") : "ko-KR";
     // Chirp 3 HD voices 1순위, 실패 시 Neural2 로 자동 폴백 — 항상 Cloud TTS 음원 반환 보장
     const candidates = isEng
-      ? (isMale
-          ? ["en-US-Chirp3-HD-Charon", "en-US-Neural2-D"]
-          : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"])
+      ? (isGb
+          ? (isMale
+              ? ["en-GB-Chirp3-HD-Charon", "en-GB-Neural2-B"]
+              : ["en-GB-Chirp3-HD-Aoede", "en-GB-Neural2-A"])
+          : (isMale
+              ? ["en-US-Chirp3-HD-Charon", "en-US-Neural2-D"]
+              : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"]))
       : (isMale
           ? ["ko-KR-Chirp3-HD-Charon", "ko-KR-Neural2-C"]
           : ["ko-KR-Chirp3-HD-Aoede", "ko-KR-Neural2-A"]);

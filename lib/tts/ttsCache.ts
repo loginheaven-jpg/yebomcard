@@ -8,8 +8,8 @@
  */
 
 const DB_NAME = "yebom_tts_cache";
-// v4: 영문 역본 en-US voice 분기 도입 — 이전 ko-KR 로 합성된 KJV/NIrV/GNT/WEB 캐시 무효화 필요
-const DB_VERSION = 4;
+// v5: 영문 발음 미국식/영국식 분기 도입 — accent 차이로 같은 캐시 키여도 음원 달라야 함
+const DB_VERSION = 5;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
