@@ -441,7 +441,7 @@ export default function SettingsSheet({
             <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-3">
               <div>
                 <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-1.5">재생 속도</div>
-                <div className="grid grid-cols-5 gap-1">
+                <div className="grid grid-cols-6 gap-1">
                   {TTS_SPEEDS.map((s) => (
                     <button
                       key={s}

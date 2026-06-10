@@ -43,8 +43,8 @@ import {
 import { lookupChapterAudio } from "@/lib/bibleAudio";
 
 export type TtsStatus = "idle" | "loading" | "speaking" | "paused";
-export type TtsSpeed = 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
-export const TTS_SPEEDS: TtsSpeed[] = [1.0, 1.15, 1.5, 1.75, 2.0];
+export type TtsSpeed = 0.85 | 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
+export const TTS_SPEEDS: TtsSpeed[] = [0.85, 1.0, 1.15, 1.5, 1.75, 2.0];
 
 export interface TtsTrack {
   text: string;
