@@ -400,6 +400,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
 
       const v = voiceRef.current;
       const sp = speedRef.current;
+      const isAnnouncement = track.verse === 0;
+      const isEng = isEnglishVersion(track.version);
       const cacheKey = makeCacheKey({
         version: track.version,
         bookCode: track.bookCode,
@@ -407,10 +409,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         verse: track.verse,
         voice: v,
         speed: sp,
+        accent: isEng ? englishAccentRef.current : "ko",
       });
 
-      const isAnnouncement = track.verse === 0;
-      const isEng = isEnglishVersion(track.version);
       const playableText =
         !isAnnouncement && readVerseNumberRef.current
           ? (isEng

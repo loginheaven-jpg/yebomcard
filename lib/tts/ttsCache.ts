@@ -45,10 +45,13 @@ export interface TtsCacheKey {
   verse: number;
   voice: "female" | "male";
   speed: number;
+  /** 영문 accent — "us"|"gb". 한국어 트랙은 "ko" 고정. */
+  accent?: "us" | "gb" | "ko";
 }
 
 export function makeCacheKey(k: TtsCacheKey): string {
-  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${k.voice}-${k.speed}`;
+  const acc = k.accent ?? "us";
+  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${k.voice}-${k.speed}-${acc}`;
 }
 
 export interface CachedAudio {

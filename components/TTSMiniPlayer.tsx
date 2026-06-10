@@ -109,49 +109,48 @@ export default function TTSMiniPlayer() {
                 {idx + 1}/{total}
               </span>
             )}
-            {tts.engine !== "unknown" && tts.engine !== "real" && (
-              <span
-                className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${
-                  isEng
-                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400"
-                    : "bg-slate-100 text-slate-700 dark:bg-slate-800/60 dark:text-slate-300"
-                } ${
-                  tts.isWebSpeechFallback
-                    ? "border border-dashed border-amber-500 dark:border-amber-400"
-                    : ""
-                }`}
-                title={
-                  tts.isWebSpeechFallback
-                    ? (isEng ? "영문 본문 — 브라우저 음성 폴백" : "한글 본문 — 브라우저 음성 폴백")
-                    : (isEng ? "English voice (en-US Chirp3-HD)" : "한국어 voice (ko-KR Chirp3-HD)")
-                }
-              >
-                {isEng ? "ENG" : "KOR"}
-              </span>
-            )}
-            {tts.engine !== "unknown" && (
-              <span
-                className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${
-                  tts.engine === "real"
-                    ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
-                    : tts.engine === "chirp"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                      : tts.engine === "neural2" || tts.engine === "wavenet"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                        : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                }`}
-                title={tts.engineVoice || tts.engine}
-              >
-                {tts.engine === "real"
-                  ? "녹음"
-                  : tts.engine === "chirp"
-                    ? "Chirp"
-                    : tts.engine === "neural2"
-                      ? "N2"
-                      : tts.engine === "wavenet"
-                        ? "Wave"
-                        : "Web"}
-              </span>
+            {tts.engine !== "unknown" && (() => {
+              const isReal = tts.engine === "real";
+              const isWeb = tts.engine === "webspeech";
+              // AI = Chirp/Neural2/Wavenet 통합 (사용자 인지: "AI 합성음")
+              const isAi = tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet";
+              const label = isReal ? "녹음" : isWeb ? "Web" : "AI";
+              const bg = isReal
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+                : isWeb
+                  ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400";
+              const border = tts.isWebSpeechFallback
+                ? "border border-dashed border-amber-500 dark:border-amber-400"
+                : "";
+              return (
+                <span
+                  className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${bg} ${border}`}
+                  title={tts.engineVoice || tts.engine}
+                >
+                  {label}
+                </span>
+              );
+            })()}
+            {/* 영문 본문 + AI 합성 시 → 발음 인터랙티브 토글 (mp3 녹음/WebSpeech 시 숨김) */}
+            {isEng && (tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet") && (
+              <div className="flex gap-0.5 shrink-0" role="group" aria-label="영문 발음 토글">
+                {(["us", "gb"] as const).map((a) => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); tts.setEnglishAccent(a); }}
+                    className={`text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded transition-colors ${
+                      tts.englishAccent === a
+                        ? "bg-[var(--amber)] text-white"
+                        : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    }`}
+                    title={a === "us" ? "미국식 발음 (en-US)" : "영국식 발음 (en-GB)"}
+                  >
+                    {a === "us" ? "US" : "UK"}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
           <div className="mt-1 h-[3px] rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
