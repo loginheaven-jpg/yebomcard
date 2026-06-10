@@ -38,7 +38,7 @@ export async function GET() {
   return NextResponse.json({ scraps: data || [] });
 }
 
-// POST: 스크랩 추가
+// POST: 스크랩 추가 — 중복 방지를 위해 SELECT-then-UPDATE/INSERT (UNIQUE constraint 가 있든 없든 동작)
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -48,49 +48,53 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { book_code, chapter, verse_start, verse_end, version, reference, preview, image_url } = body;
 
-  // RPC 대신 직접 supabaseAdmin을 사용하여 scraps 테이블에 저장 (upsert 방식을 사용하여 중복 방지)
-  const { error } = await supabaseAdmin.from("scraps").upsert(
-    {
-      user_id: session.user_id,
-      user_name: session.name,
-      book_code,
-      chapter,
-      verse_start,
-      verse_end,
-      version,
-      reference,
-      preview,
-      image_url: image_url || null,
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id, book_code, chapter, verse_start, version", ignoreDuplicates: false }
-  ).select("id").single();
-  
-  // 만약 고유 키(unique constraint) 에러가 발생한다면, 단순 insert 후 에러 무시 처리
-  if (error && error.code === '23505') {
-    // Unique violation (이미 스크랩됨)
-    return NextResponse.json({ success: true });
-  } else if (error && error.code !== '23505') {
-    // onConflict 옵션이 동작하지 않는 경우를 대비한 단순 insert 폴백
-    const { error: insertError } = await supabaseAdmin.from("scraps").insert({
-      user_id: session.user_id,
-      user_name: session.name,
-      book_code,
-      chapter,
-      verse_start,
-      verse_end,
-      version,
-      reference,
-      preview,
-      image_url: image_url || null,
-    });
-    
-    if (insertError && insertError.code !== '23505') {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+  // 같은 (user_id, book_code, chapter, verse_start, version) 가 이미 있는지 확인
+  const { data: existing } = await supabaseAdmin
+    .from("scraps")
+    .select("id")
+    .eq("user_id", session.user_id)
+    .eq("book_code", book_code)
+    .eq("chapter", chapter)
+    .eq("verse_start", verse_start)
+    .eq("version", version)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) {
+    // 기존 row UPDATE — verse_end, reference, preview, image_url, created_at 갱신
+    const { error: updateError } = await supabaseAdmin
+      .from("scraps")
+      .update({
+        verse_end,
+        reference,
+        preview,
+        image_url: image_url || null,
+        created_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, updated: true });
   }
 
+  // 신규 INSERT
+  const { error: insertError } = await supabaseAdmin.from("scraps").insert({
+    user_id: session.user_id,
+    user_name: session.name,
+    book_code,
+    chapter,
+    verse_start,
+    verse_end,
+    version,
+    reference,
+    preview,
+    image_url: image_url || null,
+  });
+
+  if (insertError && insertError.code !== "23505") {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }
 

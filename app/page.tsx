@@ -229,6 +229,8 @@ export default function Home() {
   }, [showToast]);
 
   // 스크랩 목록에서 항목 선택 (version, bookCode, chapter, verseStart, verseEnd)
+  // 스크랩의 version 으로 mainVersion 도 동기화 — 절 추가 시 같은 version 으로 selectedVerses 가
+  // 유지되어 저장 시 중복 row 생성 방지 (다른 version 으로 저장되면 UNIQUE 키 달라 새 row 됨)
   const handleSelectScrap = useCallback(async (
     version: string, bookCode: string, chapter: number, verseStart: number, verseEnd: number
   ) => {
@@ -248,6 +250,7 @@ export default function Home() {
 
     if (data && data.length > 0) {
       setSelectedVerses(data as BibleVerse[]);
+      setMainVersion(version as BibleVersion);
       setView("display");
     }
   }, []);
