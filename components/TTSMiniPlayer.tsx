@@ -55,7 +55,7 @@ export default function TTSMiniPlayer() {
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)",
       }}
     >
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg backdrop-blur px-2.5 py-2 flex items-center gap-2">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg backdrop-blur px-2.5 py-2 flex items-center gap-1.5">
         {/* 재생/일시정지 */}
         <button
           type="button"
@@ -98,7 +98,7 @@ export default function TTSMiniPlayer() {
           )}
         </button>
 
-        {/* ref + progress + engine badge */}
+        {/* ref + progress */}
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-1.5">
             <span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">
@@ -109,49 +109,6 @@ export default function TTSMiniPlayer() {
                 {idx + 1}/{total}
               </span>
             )}
-            {tts.engine !== "unknown" && (() => {
-              const isReal = tts.engine === "real";
-              const isWeb = tts.engine === "webspeech";
-              // AI = Chirp/Neural2/Wavenet 통합 (사용자 인지: "AI 합성음")
-              const isAi = tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet";
-              const label = isReal ? "녹음" : isWeb ? "Web" : "AI";
-              const bg = isReal
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
-                : isWeb
-                  ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400";
-              const border = tts.isWebSpeechFallback
-                ? "border border-dashed border-amber-500 dark:border-amber-400"
-                : "";
-              return (
-                <span
-                  className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${bg} ${border}`}
-                  title={tts.engineVoice || tts.engine}
-                >
-                  {label}
-                </span>
-              );
-            })()}
-            {/* 영문 본문 + AI 합성 시 → 발음 인터랙티브 토글 (mp3 녹음/WebSpeech 시 숨김) */}
-            {isEng && (tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet") && (
-              <div className="flex gap-0.5 shrink-0" role="group" aria-label="영문 발음 토글">
-                {(["us", "gb"] as const).map((a) => (
-                  <button
-                    key={a}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); tts.setEnglishAccent(a); }}
-                    className={`text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded transition-colors ${
-                      tts.englishAccent === a
-                        ? "bg-[var(--amber)] text-white"
-                        : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
-                    }`}
-                    title={a === "us" ? "미국식 발음 (en-US)" : "영국식 발음 (en-GB)"}
-                  >
-                    {a === "us" ? "US" : "UK"}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           <div className="mt-1 h-[3px] rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
             <div
@@ -160,6 +117,29 @@ export default function TTSMiniPlayer() {
             />
           </div>
         </div>
+
+        {/* 엔진 라벨 — 순수 표시 (non-clickable) */}
+        {tts.engine !== "unknown" && (() => {
+          const isReal = tts.engine === "real";
+          const isWeb = tts.engine === "webspeech";
+          const label = isReal ? "녹음" : isWeb ? "Web" : "AI";
+          const bg = isReal
+            ? "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
+            : isWeb
+              ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
+              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400";
+          const border = tts.isWebSpeechFallback
+            ? "border border-dashed border-amber-500 dark:border-amber-400"
+            : "";
+          return (
+            <span
+              className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${bg} ${border}`}
+              title={tts.engineVoice || tts.engine}
+            >
+              {label}
+            </span>
+          );
+        })()}
 
         {/* 속도 */}
         <div className="relative shrink-0">
@@ -171,7 +151,7 @@ export default function TTSMiniPlayer() {
             }}
             aria-label="재생 속도 선택"
             aria-expanded={speedOpen}
-            className="px-2 py-1 text-[11px] font-mono font-bold text-gray-700 dark:text-gray-200 hover:text-[var(--amber)] dark:hover:text-amber-400 transition-colors"
+            className="px-3 py-1.5 text-[12px] font-mono font-bold text-gray-700 dark:text-gray-200 rounded-md border border-gray-200 dark:border-gray-700 hover:text-[var(--amber)] hover:border-[var(--amber)] dark:hover:text-amber-400 dark:hover:border-amber-400 transition-colors"
           >
             {tts.speed === 1.0 ? "1x" : `${tts.speed}x`}
           </button>
@@ -198,16 +178,26 @@ export default function TTSMiniPlayer() {
           )}
         </div>
 
-        {/* 음성 — 음원 모드(사람 녹음)에선 단일 성우 고정이라 토글 숨김 */}
-        {!isAudioMode && (
+        {/* 발음 토글 (single) — 영문 + AI 합성 시만. 탭 → 즉시 다른 발음으로 전환 */}
+        {isEng && (tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet") && (
           <button
             type="button"
-            onClick={() =>
-              tts.setVoice(tts.voice === "female" ? "male" : "female")
-            }
+            onClick={() => tts.setEnglishAccent(tts.englishAccent === "us" ? "gb" : "us")}
+            aria-label={`발음: ${tts.englishAccent === "us" ? "미국식" : "영국식"}, 전환`}
+            title={`현재: ${tts.englishAccent === "us" ? "미국식 (en-US)" : "영국식 (en-GB)"} — 탭하여 전환`}
+            className="shrink-0 px-3 py-1.5 text-[11px] font-bold text-[var(--amber-deep)] dark:text-amber-400 bg-[var(--amber-tint)] dark:bg-amber-950/30 rounded-md border border-[var(--amber)]/40 hover:bg-[var(--amber)]/15 active:scale-95 transition-all"
+          >
+            {tts.englishAccent === "us" ? "미국식" : "영국식"}
+          </button>
+        )}
+        {/* 음성 토글 (single) — 녹음/WebSpeech/unknown 시 숨김 */}
+        {!isAudioMode && tts.engine !== "webspeech" && tts.engine !== "unknown" && (
+          <button
+            type="button"
+            onClick={() => tts.setVoice(tts.voice === "female" ? "male" : "female")}
             aria-label={`음성: ${tts.voice === "female" ? "여성" : "남성"}, 전환`}
-            title={`음성: ${tts.voice === "female" ? "여성" : "남성"}`}
-            className="shrink-0 w-7 h-7 rounded-full border border-gray-200 dark:border-gray-700 text-[11px] font-bold text-gray-600 dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)] dark:hover:text-amber-400 transition-colors"
+            title={`현재: ${tts.voice === "female" ? "여성" : "남성"} — 탭하여 전환`}
+            className="shrink-0 px-3 py-1.5 text-[11px] font-bold text-gray-700 dark:text-gray-200 rounded-md border border-gray-200 dark:border-gray-700 hover:border-[var(--amber)] hover:text-[var(--amber)] dark:hover:text-amber-400 active:scale-95 transition-all"
           >
             {tts.voice === "female" ? "여" : "남"}
           </button>
