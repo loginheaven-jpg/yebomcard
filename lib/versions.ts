@@ -1,5 +1,10 @@
 import { BibleVersion } from "./types";
 
+/** 영문 역본 여부 — TTS voice 선택·언어 분기에 사용 */
+export function isEnglishVersion(v: string): boolean {
+  return v === "kjv" || v === "nirv" || v === "gnt" || v === "web";
+}
+
 export function getVersionLabel(v: BibleVersion | "none"): string {
   if (v === "none") return "대역";
   switch (v) {

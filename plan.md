@@ -23,17 +23,13 @@ WEB(World English Bible) 31,098절 적재 완료(또는 적재 진행 중). 후�
 
 **예상 작업량** 음원 확보 후 ~30분 (시편 시범 → 전체 batch)
 
-### B. 영문 TTS voice 분기 (보류 — 우선순위 낮음)
+### ~~B. 영문 TTS voice 분기~~ — 완료 (2026-06-10, 커밋 별건)
 
-현재 KJV/NIrV/GNT/WEB 모두 ko-KR Chirp3-HD voice 로 영문 합성 → 발음 어색.
-
-**도입 트리거**: 영문 본문 청취 사용자 비율 측정 후 결정. WEB 음원 적재 완료 시 자동 우회되므로 우선순위 낮음.
-
-**옵션**:
-- `/api/tts/route.ts` 에 voice 분기 추가: ENGLISH_VERSIONS 인 경우 en-US-... voice 사용
-- 또는 영문 mainVersion 시 TTS 버튼 비활성
-
-**예상 작업량** ~2시간
+WEB 적재 직후 즉시 적용. KJV/NIrV/GNT/WEB 모두 en-US-Chirp3-HD voice 로 자동 분기.
+- `/api/tts/route.ts` `lang` 필드 수용 (ko/en) + languageCode·voice candidate 분기
+- `TtsContext` 가 `track.version` 으로 자동 판정 (`isEnglishVersion`)
+- 장 시작 announcement: "Psalms chapter 23" / 절 prefix: "Verse 16."
+- WebSpeech 폴백은 여전히 ko-KR — 폴백 빈도 낮아 별건 보류
 
 ### C. 시편 표제(superscription) 절 매칭 보정 (보류)
 

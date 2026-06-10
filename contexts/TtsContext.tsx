@@ -30,6 +30,7 @@ import {
   fetchCloudTtsAudio,
   type TTSVoice,
 } from "@/lib/tts/cloudTtsClient";
+import { isEnglishVersion } from "@/lib/versions";
 import {
   getCachedAudio,
   putCachedAudio,
@@ -73,9 +74,12 @@ function injectChapterAnnouncements(tracks: TtsTrack[]): TtsTrack[] {
     }
     const key = `${t.bookCode}-${t.chapter}`;
     if (key !== prevKey) {
+      const announceText = isEnglishVersion(t.version)
+        ? `${t.bookName} chapter ${t.chapter}`
+        : `${t.bookName} ${t.chapter}장`;
       out.push({
-        text: `${t.bookName} ${t.chapter}장`,
-        ref: `${t.bookName} ${t.chapter}장`,
+        text: announceText,
+        ref: announceText,
         version: t.version,
         bookCode: t.bookCode,
         bookName: t.bookName,
@@ -389,9 +393,12 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       });
 
       const isAnnouncement = track.verse === 0;
+      const isEng = isEnglishVersion(track.version);
       const playableText =
         !isAnnouncement && readVerseNumberRef.current
-          ? `${track.verse}절. ${track.text}`
+          ? (isEng
+              ? `Verse ${track.verse}. ${track.text}`
+              : `${track.verse}절. ${track.text}`)
           : track.text;
 
       let blob: Blob | null = null;
@@ -415,6 +422,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             text: playableText,
             voice: v,
             speed: sp,
+            lang: isEng ? "en" : "ko",
             signal: ctrl.signal,
           });
           if (playGenRef.current !== gen) return;

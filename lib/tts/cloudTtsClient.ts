@@ -5,11 +5,14 @@
  */
 
 export type TTSVoice = "female" | "male";
+export type TTSLang = "ko" | "en";
 
 export interface CloudTtsParams {
   text: string;
   voice: TTSVoice;
   speed: number;
+  /** 언어 분기 — 기본 "ko". 영문 역본(KJV/NIrV/GNT/WEB) 호출 시 "en" 전달 */
+  lang?: TTSLang;
   signal?: AbortSignal;
 }
 
@@ -27,6 +30,7 @@ export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<CloudTtsRes
       text: p.text,
       voice: p.voice,
       speed: p.speed,
+      lang: p.lang ?? "ko",
     }),
     signal: p.signal,
   });
