@@ -24,7 +24,7 @@ const MAIN_VERSION_KEY = "yebom_main_version";
 const SUB_VERSION_KEY = "yebom_sub_version";
 
 export default function Home() {
-  const { session, requireAuth, isLoggedIn, logout } = useSession();
+  const { session, requireAuth, isLoggedIn, loading: sessionLoading, logout } = useSession();
   const adminMode = isAdmin(session);
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
@@ -207,6 +207,7 @@ export default function Home() {
   }, []);
 
   const handleCreateCard = useCallback(async () => {
+    if (sessionLoading) { showToast("로그인 확인 중..."); return; }
     if (!requireAuth()) return;
     if (selectedVerses.length > 0) {
       await addScrapToServer(selectedVerses, mainVersion);
@@ -215,7 +216,7 @@ export default function Home() {
       showToast("스크랩에 저장되었습니다");
     }
     setView("card");
-  }, [selectedVerses, mainVersion, showToast, requireAuth]);
+  }, [selectedVerses, mainVersion, showToast, requireAuth, sessionLoading]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
@@ -294,7 +295,10 @@ export default function Home() {
           onVerseUpdated={handleVerseUpdated}
           navRequest={navRequest}
           fullscreenRequestNonce={fullscreenRequestNonce}
-          onOpenScrap={() => { if (requireAuth()) setShowScrap(true); }}
+          onOpenScrap={() => {
+            if (sessionLoading) { showToast("로그인 확인 중..."); return; }
+            if (requireAuth()) setShowScrap(true);
+          }}
           scrapCount={scrapCount}
         />
       </div>
