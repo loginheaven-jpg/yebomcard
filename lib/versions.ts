@@ -9,6 +9,7 @@ export function getVersionLabel(v: BibleVersion | "none"): string {
     case "kjv": return "KJV";
     case "nirv": return "NIrV";
     case "gnt": return "GNT";
+    case "web": return "WEB";
     default: return v;
   }
 }

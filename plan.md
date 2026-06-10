@@ -5,6 +5,73 @@
 
 ---
 
+## WEB 역본 후속 — 음원 통합 + 부가 정합 (대기, 2026-06-10)
+
+WEB(World English Bible) 31,098절 적재 완료(또는 적재 진행 중). 후속 정합 항목들.
+
+### A. WEB 음원 통합 (대기 — 음원 미확보)
+
+**현재 상태**: 사용자가 WEB 음원을 확보하는 대로 장 단위 음원(현 통독성경/개역개정 패턴) 으로 통합 예정.
+
+**도입 트리거**: 음원 파일 확보 + Supabase Storage 적재 가능 상태
+
+**작업 내용**:
+1. `bible-audio` Storage 버킷에 `web/<book_code>/<NNN>.mp3` 업로드 (upload-bible-audio.mjs 재사용, `--version web` 지정)
+2. `bible_audio` 테이블에 (version='web', book_code, chapter, audio_url) 매핑 적재
+3. 코드 변경 0줄 — `TtsContext.transformWithChapterAudio` 가 이미 version 무관하게 동작 (lookupChapterAudio 가 매핑 있으면 mp3 우선)
+4. 미니플레이어 "녹음" 배지 자동 적용
+
+**예상 작업량** 음원 확보 후 ~30분 (시편 시범 → 전체 batch)
+
+### B. 영문 TTS voice 분기 (보류 — 우선순위 낮음)
+
+현재 KJV/NIrV/GNT/WEB 모두 ko-KR Chirp3-HD voice 로 영문 합성 → 발음 어색.
+
+**도입 트리거**: 영문 본문 청취 사용자 비율 측정 후 결정. WEB 음원 적재 완료 시 자동 우회되므로 우선순위 낮음.
+
+**옵션**:
+- `/api/tts/route.ts` 에 voice 분기 추가: ENGLISH_VERSIONS 인 경우 en-US-... voice 사용
+- 또는 영문 mainVersion 시 TTS 버튼 비활성
+
+**예상 작업량** ~2시간
+
+### C. 시편 표제(superscription) 절 매칭 보정 (보류)
+
+**문제**: WEB(Classic)은 히브리어 전통에 따라 시편 표제를 1절로 셈. KJV/nkrv는 표제를 절로 안 셈. 병기 모드에서 시 51:1 같은 절이 한국어(기도) vs WEB(표제) 어긋남.
+
+**도입 트리거**: 사용자 피드백 누적 후 결정. 영향 절 ~116편의 1절 위주.
+
+**옵션**:
+- A. 표제 자동 매칭 보정 (UI 측 verse offset)
+- B. WEBU 에디션(표제 미카운트) 으로 재적재
+- C. 그대로 유지 (학계 표준)
+
+**예상 작업량** ~3시간 (옵션 A) / 데이터 재적재 (옵션 B)
+
+### D. AI 추천 — WEB 호환 (보류)
+
+`/api/ai/recommend` 가 책명 한글 매칭(`book_name='시편'`) 기준. mainVersion=web 일 때 영문 book_name(`Psalms`) 와 어긋남 → 검색 0건.
+
+**해결**: 응답 매칭을 book_code 기준으로 변경 (모든 버전 자동 호환).
+
+**예상 작업량** ~30분
+
+### E. KJV 데살로니가전·후 보충 (별건, 보류)
+
+KJV 64권/66권 적재 — `1th`/`2th` 약 135절 누락. WEB 적재 후 병기 모드에서 KJV 측 빈칸 노출.
+
+**해결**: KJV 원본에서 데살로니가전·후 본문 추출 후 별도 import
+
+**예상 작업량** ~30분
+
+### F. WEBU 에디션 (LORD 표기) 재수급 (보류, 선택)
+
+현재 WEB Classic(Yahweh 표기). 일부 사용자는 영어 전통 LORD 표기 선호.
+
+**도입 트리거**: 사용자 명시 요청 시. WEBU 에디션 별도 확보 + DELETE WHERE version='web' + 재import.
+
+---
+
 ## 음원 호스팅 이전 — Supabase → Cloudflare R2 (보류, 트래픽 임계 도달 시)
 
 **현재 상태**

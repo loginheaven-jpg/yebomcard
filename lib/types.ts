@@ -19,7 +19,7 @@ export interface BilingualVerse {
 export type SearchMode = "search" | "chapter" | "topic";
 
 export type KoreanVersion = "nkrv" | "rnksv" | "easy";
-export type EnglishVersion = "kjv" | "nirv" | "gnt";
+export type EnglishVersion = "kjv" | "nirv" | "gnt" | "web";
 export type BibleVersion = KoreanVersion | EnglishVersion;
 
 export type ViewMode = "search" | "display" | "card" | "scrap";

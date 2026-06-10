@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# data import artifacts (1회 적재용 — repo 비대화 방지)
+web_verses.csv
+web_report.txt
+upload-audio-failures.log
+.tmp-*/

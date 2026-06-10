@@ -917,7 +917,7 @@ export default function FullscreenReader({
                     }}
                   style={{ background: "transparent", border: `1px solid ${vars.ctrlBorder}`, color: vars.muted, borderRadius: 999, padding: "4px 8px", fontSize: 12, outline: "none" }}
                 >
-                  {(["kjv", "nirv", "gnt"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
+                  {(["web", "kjv", "nirv", "gnt"] as const).map(v => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                 </select>
               )}
             </div>
