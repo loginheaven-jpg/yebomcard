@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>도구 아이콘 시안 — 8가지</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', -apple-system, sans-serif;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  padding: 40px 20px 60px;
+  min-height: 100vh;
+}
+h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.subtitle { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 32px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px 16px 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: relative;
+}
+.card.current {
+  border: 2px solid #b8860b;
+}
+.card.current::after {
+  content: "현재";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #b8860b;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+.fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+  margin-bottom: 12px;
+}
+.fab svg { width: 22px; height: 22px; }
+.label { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+.desc { font-size: 11px; color: #6b7280; line-height: 1.5; }
+.recommend { color: #b8860b; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>도구 아이콘 시안 — 8가지</h1>
+<div class="subtitle">메뉴: 찬송가 · 예배성경 · 성경카드 · 편집 모드</div>
+
+<div class="grid">
+
+  <!-- A. 2x2 그리드 (현재) -->
+  <div class="card current">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+      </svg>
+    </div>
+    <div class="label">A. 2×2 그리드</div>
+    <div class="desc">앱 모음 의미. 모던하고 중성적.<br>도구 느낌은 약함.</div>
+  </div>
+
+  <!-- B. Wrench+Screwdriver -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+      </svg>
+    </div>
+    <div class="label">B. 렌치+드라이버 <span class="recommend">★</span></div>
+    <div class="desc">"도구" 직역. 가장 도구다움.<br>약간 마초적이나 명확.</div>
+  </div>
+
+  <!-- C. Wrench (단일) -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.503 9.128a2.121 2.121 0 01-3-3l9.128-7.503c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
+      </svg>
+    </div>
+    <div class="label">C. 렌치 (단일)</div>
+    <div class="desc">간결한 도구 상징.<br>설정과 약간 겹치는 인상.</div>
+  </div>
+
+  <!-- D. Toolbox (briefcase + handle) -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.16 2.16 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
+      </svg>
+    </div>
+    <div class="label">D. 도구함 (가방)</div>
+    <div class="desc">"도구함" 직역. 매우 명확.<br>비즈니스 인상 가능.</div>
+  </div>
+
+  <!-- E. Hammer -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+      </svg>
+    </div>
+    <div class="label">E. 막대그래프</div>
+    <div class="desc">통계/대시보드 느낌.<br>도구 의미 약함.</div>
+  </div>
+
+  <!-- F. Sparkles -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+      </svg>
+    </div>
+    <div class="label">F. 반짝임 (Sparkles)</div>
+    <div class="desc">"기능 모음" 느낌. AI/마법.<br>도구 직접성은 낮음.</div>
+  </div>
+
+  <!-- G. Adjustments (sliders horizontal) -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+      </svg>
+    </div>
+    <div class="label">G. 슬라이더 (조정)</div>
+    <div class="desc">설정/조절 의미.<br>화면 설정 ⚙와 겹침.</div>
+  </div>
+
+  <!-- H. Plus + apps (대시보드 +) -->
+  <div class="card">
+    <div class="fab">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z" />
+      </svg>
+    </div>
+    <div class="label">H. 그리드+추가</div>
+    <div class="desc">앱 그리드에 "+" 추가.<br>확장 가능한 느낌.</div>
+  </div>
+
+</div>
+
+<div style="max-width: 800px; margin: 40px auto 0; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+  <div style="font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px;">추천</div>
+  <div style="font-size: 12px; color: #4b5563; line-height: 1.7;">
+    <b>★ B (렌치+드라이버)</b> — 도구 의미 가장 강렬, 메뉴 = 작업 도구임을 명확히 표현<br>
+    <b>D (도구함 가방)</b> — "도구함"이라는 메뉴 이름과 직접 매칭, 의미 가장 정확<br>
+    <b>A (2×2 그리드, 현재)</b> — 모던하지만 도구 느낌 약함<br><br>
+    <b>피해야 할 옵션:</b><br>
+    G (슬라이더) — 헤더 ⚙와 의미 중복<br>
+    F (반짝임) — 도구라기보다 AI/마법<br>
+    E (막대) — 통계/그래프로 오인
+  </div>
+</div>
+
+</body>
+</html>

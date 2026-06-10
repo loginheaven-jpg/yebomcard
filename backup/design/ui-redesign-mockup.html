@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>예봄성경 — 본문 공간 확장 UI 시안</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+    background: #f3f4f6;
+    margin: 0;
+    padding: 24px;
+    color: #1f2937;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { color: #6b7280; margin: 0 0 24px; font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    max-width: 1400px;
+  }
+  .scenario {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .scenario h2 { font-size: 14px; margin: 0 0 4px; color: #111827; }
+  .scenario .desc { font-size: 11px; color: #6b7280; margin: 0 0 10px; line-height: 1.5; }
+  .scenario .height-tag {
+    display: inline-block;
+    background: #fef3c7;
+    color: #78350f;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .scenario.recommended .height-tag { background: #d1fae5; color: #065f46; }
+
+  /* Mobile mockup */
+  .phone {
+    width: 100%;
+    max-width: 360px;
+    height: 640px;
+    background: #f9fafb;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    margin: 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .top { background: white; border-bottom: 1px solid #f3f4f6; }
+  .body-area {
+    flex: 1;
+    background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+    border-top: 2px dashed #fbbf24;
+    overflow: hidden;
+    position: relative;
+  }
+  .body-area::before {
+    content: "성경 본문 표시 영역";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #f59e0b;
+    background: #fef3c7;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .verse {
+    padding: 32px 16px 16px;
+    font-size: 15px;
+    line-height: 1.9;
+    color: #1f2937;
+    word-break: keep-all;
+  }
+  .verse .ref { font-size: 12px; color: #6b7280; margin-top: 8px; }
+
+  /* Common UI bits */
+  .row { display: flex; align-items: center; gap: 8px; }
+  .center { text-align: center; }
+  .pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: #f3f4f6;
+    color: #4b5563;
+    border: none;
+    cursor: pointer;
+  }
+  .pill.active { background: #111827; color: white; }
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    color: #4b5563;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .input-search {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 12px;
+    outline: none;
+  }
+  .btn-primary {
+    padding: 8px 14px;
+    background: #111827;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 8px 0;
+    font-size: 12px;
+    color: #6b7280;
+    border-bottom: 2px solid transparent;
+    flex: 1;
+    text-align: center;
+    cursor: pointer;
+  }
+  .tab.active { color: #111827; border-color: #111827; font-weight: 600; }
+  .tab-row { display: flex; border-bottom: 1px solid #e5e7eb; }
+  .seg {
+    display: inline-flex;
+    background: #f3f4f6;
+    border-radius: 999px;
+    padding: 2px;
+    gap: 0;
+  }
+  .seg button {
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    border-radius: 999px;
+    font-size: 11px;
+    color: #6b7280;
+    cursor: pointer;
+  }
+  .seg button.active { background: white; color: #111827; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+  /* Scenario A — Current */
+  .a-icon-box {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #374151, #111827);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    margin-bottom: 8px;
+  }
+  .a-title { font-size: 18px; font-weight: 700; margin: 0; }
+  .a-subtitle { font-size: 10px; color: #9ca3af; margin-top: 2px; letter-spacing: 0.1em; }
+
+  /* Scenario B — Compact unified header */
+  .b-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+  .b-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .b-brand-icon {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #374151, #111827);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+  }
+  .b-brand-title { font-size: 13px; font-weight: 700; }
+  .b-tools { display: flex; gap: 4px; }
+  .b-tool { width: 28px; height: 28px; border-radius: 999px; background: transparent; border: none; color: #4b5563; cursor: pointer; }
+  .b-tool:hover { background: #f3f4f6; }
+
+  /* Scenario C — Sticky compact bar */
+  .c-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: white;
+  }
+  .c-input-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: #f3f4f6;
+    border-radius: 999px;
+    padding: 4px 4px 4px 10px;
+    gap: 6px;
+  }
+  .c-input-wrap input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    padding: 4px 0;
+  }
+  .c-input-wrap .ver-mini {
+    background: white;
+    color: #111827;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .c-input-wrap .go {
+    background: #111827;
+    color: white;
+    border: none;
+    width: 24px; height: 24px;
+    border-radius: 999px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .c-mode-row { display: flex; gap: 4px; padding: 0 12px 8px; align-items: center; justify-content: space-between; }
+
+  /* Scenario D — Floating */
+  .d-float {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border: 1px solid rgba(0,0,0,0.04);
+    padding: 8px;
+    z-index: 10;
+  }
+  .d-float .row1 {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .d-body {
+    flex: 1;
+    background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+    overflow: hidden;
+    position: relative;
+  }
+  .d-body .verse { padding: 80px 16px 16px; }
+
+  .annot {
+    font-size: 10px;
+    color: #6b7280;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: #f9fafb;
+    border-radius: 4px;
+    line-height: 1.5;
+  }
+  .meta-pill {
+    display: inline-block;
+    background: #eff6ff;
+    color: #1e40af;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 500;
+    margin-right: 4px;
+  }
+  .meta-pill.warn { background: #fef3c7; color: #78350f; }
+  .meta-pill.ok { background: #d1fae5; color: #065f46; }
+</style>
+</head>
+<body>
+
+<h1>예봄성경 — 상단 영역 압축 시안</h1>
+<p class="lead">목표: 본문 표시 영역 확보. 노란 점선 = 본문 시작점. 4가지 방향을 비교합니다.</p>
+
+<div class="grid">
+
+<!-- ─────────── A. 현재 상태 ─────────── -->
+<div class="scenario">
+  <span class="height-tag">현재 — 상단 ~356px</span>
+  <h2>A. 현재 (참고용)</h2>
+  <div class="desc">큰 그라데이션 아이콘 + 타이틀 + 부제 + 버전 셀렉터 2개 + 탭 3개 + 검색 입력</div>
+
+  <div class="phone">
+    <div class="top">
+      <!-- Header -->
+      <div class="center" style="padding: 24px 16px 16px;">
+        <div class="a-icon-box">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+        </div>
+        <div class="a-title">예봄성경</div>
+        <div class="a-subtitle">YEBOM BIBLE CARD</div>
+      </div>
+      <!-- Version selectors -->
+      <div class="center" style="padding: 0 16px 12px;">
+        <div class="row" style="justify-content: center;">
+          <select class="pill" style="padding: 6px 12px;"><option>개역개정</option></select>
+          <select class="pill" style="padding: 6px 12px;"><option>대역</option></select>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div class="tab-row">
+        <div class="tab active">말씀 검색</div>
+        <div class="tab">장절 선택</div>
+        <div class="tab">주제 추천</div>
+      </div>
+      <!-- Search input -->
+      <div style="padding: 12px;">
+        <div class="row">
+          <input class="input-search" placeholder="창1:1 또는 사랑 평안">
+          <button class="btn-primary">검색</button>
+        </div>
+        <div style="font-size: 10px; color: #9ca3af; margin-top: 6px;">장절(창1:1-3) 또는 단어(사랑 믿음)</div>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse" style="font-size: 13px;">
+        본문이 여기서 시작.<br>화면 높이의 약 45%만 본문에 사용 가능.
+      </div>
+    </div>
+  </div>
+  <div class="annot">
+    <span class="meta-pill warn">상단 점유 50%</span>
+    아이콘+타이틀+부제 영역 크게, 버전과 탭이 중복적으로 공간 차지.
+  </div>
+</div>
+
+<!-- ─────────── B. 컴팩트 헤더 ─────────── -->
+<div class="scenario">
+  <span class="height-tag">개선 — 상단 ~180px</span>
+  <h2>B. 컴팩트 통합 헤더</h2>
+  <div class="desc">아이콘+타이틀을 한 줄로 축소, 부제 제거. 우측에 도구 아이콘. 버전은 셀렉터 → 작은 segment.</div>
+
+  <div class="phone">
+    <div class="top">
+      <!-- Compact header -->
+      <div class="b-header">
+        <div class="b-brand">
+          <div class="b-brand-icon">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+          </div>
+          <div class="b-brand-title">예봄성경</div>
+        </div>
+        <div class="b-tools">
+          <button class="b-tool" title="스크랩">🔖</button>
+          <button class="b-tool" title="도구함">⚙</button>
+        </div>
+      </div>
+      <!-- Tabs -->
+      <div class="tab-row">
+        <div class="tab active" style="padding: 6px 0; font-size: 11px;">말씀 검색</div>
+        <div class="tab" style="padding: 6px 0; font-size: 11px;">장절 선택</div>
+        <div class="tab" style="padding: 6px 0; font-size: 11px;">주제 추천</div>
+      </div>
+      <!-- Search + version inline -->
+      <div style="padding: 8px 12px;">
+        <div class="row">
+          <div class="seg">
+            <button class="active">개역개정</button>
+            <button>새번역</button>
+            <button>병기</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 6px;">
+          <input class="input-search" placeholder="창1:1 또는 사랑 평안">
+          <button class="btn-primary">검색</button>
+        </div>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse" style="font-size: 14px;">
+        하나님이 세상을 이처럼 사랑하사<br>
+        독생자를 주셨으니 이는 그를<br>
+        믿는 자마다 멸망하지 않고<br>
+        영생을 얻게 하려 하심이라
+        <div class="ref">요한복음 3장 16절</div>
+      </div>
+    </div>
+  </div>
+  <div class="annot">
+    <span class="meta-pill ok">상단 점유 28%</span>
+    <span class="meta-pill">~50% 절감</span>
+    가장 자연스럽고 적용 위험 적음. 부제 "Yebom Bible Card"는 onboarding/about에만 표시.
+  </div>
+</div>
+
+<!-- ─────────── C. 검색 우선 (sticky bar) ─────────── -->
+<div class="scenario recommended">
+  <span class="height-tag">개선 — 상단 ~140px</span>
+  <h2>C. 검색 우선 (sticky bar) ⭐</h2>
+  <div class="desc">검색 입력을 메인 entry로. 버전을 검색 칩 안에 통합. 모드는 작은 segment. 본문에 가장 많은 공간.</div>
+
+  <div class="phone">
+    <div class="top">
+      <!-- Single sticky bar -->
+      <div class="b-header" style="padding: 8px 12px 4px;">
+        <div class="b-brand">
+          <div class="b-brand-icon" style="width: 22px; height: 22px;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+          </div>
+          <div class="b-brand-title" style="font-size: 12px;">예봄성경</div>
+        </div>
+        <div class="b-tools">
+          <button class="b-tool" title="스크랩">🔖</button>
+          <button class="b-tool" title="도구함">⚙</button>
+        </div>
+      </div>
+      <!-- Unified search bar with version chip -->
+      <div class="c-bar">
+        <div class="c-input-wrap">
+          <button class="ver-mini">개역</button>
+          <input placeholder="창1:1 또는 단어 검색…">
+          <button class="go">→</button>
+        </div>
+      </div>
+      <!-- Mode selector -->
+      <div class="c-mode-row">
+        <div class="seg" style="padding: 1px;">
+          <button class="active" style="padding: 3px 8px;">검색</button>
+          <button style="padding: 3px 8px;">장절</button>
+          <button style="padding: 3px 8px;">주제</button>
+        </div>
+        <button class="pill" style="font-size: 10px; padding: 3px 10px;">병기 ⊕</button>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse" style="font-size: 14px; padding-top: 32px;">
+        하나님이 세상을 이처럼 사랑하사<br>
+        독생자를 주셨으니 이는 그를<br>
+        믿는 자마다 멸망하지 않고<br>
+        영생을 얻게 하려 하심이라.<br><br>
+        하나님이 그 아들을 세상에<br>
+        보내신 것은 세상을 심판하려<br>
+        하심이 아니요…
+        <div class="ref">요한복음 3장 16-17절</div>
+      </div>
+    </div>
+  </div>
+  <div class="annot">
+    <span class="meta-pill ok">상단 점유 22%</span>
+    <span class="meta-pill ok">~60% 절감</span>
+    검색 + 버전 + 모드를 한 영역에 통합. 모바일 친화적. 도구함/스크랩은 우상단으로 정리.
+  </div>
+</div>
+
+<!-- ─────────── D. 떠있는 헤더 (immersive) ─────────── -->
+<div class="scenario">
+  <span class="height-tag">개선 — 상단 0px (overlay)</span>
+  <h2>D. Floating Overlay (immersive)</h2>
+  <div class="desc">헤더를 본문 위에 떠있게. 본문 영역 = 화면 100%. 스크롤 시 자동 fade. 가장 공격적.</div>
+
+  <div class="phone">
+    <div class="d-body">
+      <div class="d-float">
+        <div class="row1">
+          <div class="b-brand-icon" style="width: 22px; height: 22px;">
+            <svg width="12" height="12" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2"/></svg>
+          </div>
+          <div class="c-input-wrap" style="background: #f3f4f6;">
+            <button class="ver-mini">개역</button>
+            <input placeholder="검색…">
+            <button class="go">→</button>
+          </div>
+          <button class="icon-btn" style="width: 28px; height: 28px;">⚙</button>
+        </div>
+      </div>
+      <div class="verse">
+        하나님이 세상을 이처럼 사랑하사<br>
+        독생자를 주셨으니 이는 그를<br>
+        믿는 자마다 멸망하지 않고<br>
+        영생을 얻게 하려 하심이라.<br><br>
+        하나님이 그 아들을 세상에<br>
+        보내신 것은 세상을 심판하려<br>
+        하심이 아니요 그로 말미암아<br>
+        세상이 구원을 받게 하려<br>
+        하심이라…
+        <div class="ref">요한복음 3장 16-17절</div>
+      </div>
+    </div>
+  </div>
+  <div class="annot">
+    <span class="meta-pill ok">상단 점유 0%</span>
+    <span class="meta-pill warn">탭 누락</span>
+    본문 100% 노출. 다만 모드 전환(검색/장절/주제)을 어디에 둘지 별도 결정 필요.
+  </div>
+</div>
+
+</div>
+
+<div style="max-width: 800px; margin: 32px auto 0;">
+  <h2 style="font-size: 16px;">제 추천: <span style="color: #065f46;">C 시안 (검색 우선 sticky bar)</span></h2>
+  <p style="font-size: 13px; color: #4b5563; line-height: 1.7;">
+    <strong>이유</strong>:
+  </p>
+  <ul style="font-size: 13px; color: #4b5563; line-height: 1.8;">
+    <li><b>본문 점유율 78%</b>로 충분히 확보 (현재 50%)</li>
+    <li>검색이 메인 entry라는 메시지가 명확</li>
+    <li>버전을 검색 칩 안에 두어 "어느 버전으로 검색하는지" 직관적</li>
+    <li>모드(검색/장절/주제)는 작은 segment로 충분 — 자주 바꾸는 영역이 아님</li>
+    <li>병기 토글은 별도 chip으로 분리해 명확성 유지</li>
+    <li>적용 위험 낮음 — 기존 동작 그대로, 시각만 압축</li>
+  </ul>
+  <p style="font-size: 13px; color: #4b5563; margin-top: 16px;">
+    <strong>구현 시 고려</strong>: 장절 선택 모드의 "목차로/책 선택" 등은 본문 영역 안에서 처리하거나 모드 진입 시에만 추가 행 표시.
+  </p>
+</div>
+
+</body>
+</html>

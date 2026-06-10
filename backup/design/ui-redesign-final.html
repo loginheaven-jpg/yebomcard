@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>예봄성경 — 최종 UI 시안 (S+책갈피)</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+    background: #f3f4f6;
+    margin: 0;
+    padding: 24px;
+    color: #1f2937;
+  }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lead { color: #6b7280; margin: 0 0 16px; font-size: 13px; line-height: 1.6; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 24px;
+    max-width: 1500px;
+  }
+  .scenario {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .scenario h2 { font-size: 15px; margin: 0 0 4px; color: #111827; }
+  .scenario .desc { font-size: 11px; color: #6b7280; margin: 0 0 12px; line-height: 1.6; }
+  .scenario.recommended {
+    box-shadow: 0 0 0 2px #10b981, 0 4px 12px rgba(16,185,129,0.15);
+  }
+  .badge {
+    background: #10b981; color: white; font-size: 9px;
+    padding: 2px 6px; border-radius: 3px; font-weight: 600;
+    margin-left: 4px;
+  }
+  .height-tag {
+    display: inline-block;
+    background: #d1fae5; color: #065f46;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  /* Phone */
+  .phone {
+    width: 100%;
+    max-width: 380px;
+    height: 720px;
+    background: #f9fafb;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    margin: 0 auto;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .top {
+    background: white;
+    border-bottom: 1px solid #f3f4f6;
+    flex-shrink: 0;
+  }
+  .body-area {
+    flex: 1;
+    background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+    border-top: 2px dashed #fbbf24;
+    overflow: hidden;
+    position: relative;
+  }
+  .body-area::before {
+    content: "본문 영역";
+    position: absolute; top: 8px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px; color: #f59e0b;
+    background: #fef3c7;
+    padding: 2px 8px; border-radius: 4px;
+    z-index: 5;
+  }
+  .verse {
+    padding: 32px 16px 16px;
+    font-size: 14px; line-height: 1.95; color: #1f2937;
+    word-break: keep-all;
+  }
+  .verse .ref { font-size: 11px; color: #6b7280; margin-top: 6px; margin-bottom: 14px; }
+  .fab-scrap {
+    position: absolute; left: 12px; bottom: 12px;
+    width: 36px; height: 36px;
+    background: white; border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    display: flex; align-items: center; justify-content: center;
+    color: #4b5563;
+  }
+
+  .row { display: flex; align-items: center; gap: 6px; }
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 999px;
+    background: #f9fafb; border: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: center;
+    color: #374151; font-size: 13px;
+    flex-shrink: 0;
+  }
+  .input-search {
+    flex: 1;
+    padding: 7px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 11px; outline: none;
+    background: white;
+    color: #1f2937;
+  }
+  .input-search::placeholder { color: #9ca3af; }
+  .ver-select {
+    padding: 5px 8px 5px 10px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    border-radius: 999px;
+    font-size: 11px; font-weight: 500;
+    color: #1f2937; cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 10px;
+    padding-right: 22px;
+  }
+  .ver-select.main {
+    background-color: #111827; color: white;
+    border-color: #111827;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white' stroke-width='2'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  }
+  .swap-icon { color: #9ca3af; font-size: 11px; }
+  .brand-icon {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #374151, #111827);
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    color: white; flex-shrink: 0;
+  }
+  .brand-name {
+    font-size: 13px; font-weight: 700;
+    font-family: "Noto Serif KR", serif;
+  }
+
+  /* Action buttons (검색 우측) */
+  .action-btn {
+    padding: 7px 11px;
+    background: #111827;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .action-btn.alt {
+    background: white;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  /* 목차/책갈피 행 */
+  .nav-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 0 12px 10px;
+  }
+  .nav-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+  }
+  .nav-card:hover { background: #f9fafb; border-color: #d1d5db; }
+  .nav-card .ico {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+  .nav-card .ico.toc { background: #ddd6fe; color: #5b21b6; }
+  .nav-card .ico.bm { background: #fef3c7; color: #78350f; }
+  .nav-card .info { min-width: 0; flex: 1; }
+  .nav-card .title { font-size: 12px; font-weight: 600; color: #111827; }
+  .nav-card .sub {
+    font-size: 10px; color: #6b7280;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .nav-card.disabled { opacity: 0.5; }
+  .nav-card.disabled .sub { font-style: italic; }
+
+  .annot {
+    font-size: 11px; color: #4b5563;
+    margin-top: 12px; padding: 10px;
+    background: #f9fafb; border-radius: 6px;
+    line-height: 1.65;
+  }
+  .annot b { color: #111827; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #4b5563;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #f0fdf4;
+    border-left: 3px solid #10b981;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>예봄성경 — 최종 UI 시안</h1>
+<p class="lead">사용자 제안 (S안 + 책갈피) 반영. 모드 탭 폐기 → 행동 직접화. 성경목차/책갈피 동일 비중 분리.</p>
+
+<div class="grid">
+
+<!-- ─────────── 시안 1: 첫 방문 (책갈피 비활성) ─────────── -->
+<div class="scenario recommended">
+  <span class="height-tag">상단 ~190px</span>
+  <h2>1. 첫 방문 시 <span class="badge">최종</span></h2>
+  <div class="desc">책갈피가 비어 있는 상태. 사용자에게 어떤 화면이 보이는지.</div>
+
+  <div class="phone">
+    <div class="top">
+      <!-- Header -->
+      <div style="display: flex; align-items: center; padding: 8px 12px;">
+        <div class="row" style="gap: 6px;">
+          <div class="brand-icon">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+          </div>
+          <div class="brand-name">예봄성경</div>
+        </div>
+        <div class="row" style="margin-left: 8px; gap: 4px;">
+          <select class="ver-select main"><option>개역</option></select>
+          <span class="swap-icon">⇄</span>
+          <select class="ver-select"><option>대역</option></select>
+        </div>
+        <div class="row" style="margin-left: auto; gap: 4px;">
+          <button class="icon-btn"><b style="font-family: serif;">T</b></button>
+          <button class="icon-btn">⚙</button>
+        </div>
+      </div>
+      <!-- Search row with two action buttons -->
+      <div style="padding: 4px 12px 8px;">
+        <div class="row">
+          <input class="input-search" placeholder="본문: 창1:1, 두려워 말라 · 주제: 감사, 위로, 새해…">
+          <button class="action-btn">본문검색</button>
+          <button class="action-btn alt">주제추천</button>
+        </div>
+      </div>
+      <!-- 성경목차 / 책갈피 -->
+      <div class="nav-row">
+        <button class="nav-card">
+          <div class="ico toc">📚</div>
+          <div class="info">
+            <div class="title">성경목차</div>
+            <div class="sub">책 선택부터 시작</div>
+          </div>
+        </button>
+        <button class="nav-card disabled">
+          <div class="ico bm">🔖</div>
+          <div class="info">
+            <div class="title">책갈피</div>
+            <div class="sub">아직 기록이 없어요</div>
+          </div>
+        </button>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse">
+        <div style="font-size: 10px; color: #9ca3af; margin-bottom: 8px; letter-spacing: 0.05em;">시작하려면 위에서 검색하거나 성경목차를 선택하세요</div>
+        <div style="text-align: center; padding: 60px 20px; color: #d1d5db; font-size: 13px;">
+          ✦
+        </div>
+      </div>
+      <div class="fab-scrap">🔖</div>
+    </div>
+  </div>
+  <div class="annot">
+    <b>구성 요소</b>:
+    <ul style="margin: 6px 0 0; padding-left: 18px; line-height: 1.7;">
+      <li>줄 1: 브랜드 + 버전 셀렉터(주/대역) + 폰트 + 도구함</li>
+      <li>줄 2: 검색 입력 + [본문검색] [주제추천] 버튼</li>
+      <li>줄 3: [📚 성경목차] [🔖 책갈피] (50:50)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ─────────── 시안 2: 책갈피 활성화 상태 ─────────── -->
+<div class="scenario">
+  <span class="height-tag">상단 ~190px</span>
+  <h2>2. 책갈피 활성화</h2>
+  <div class="desc">사용자가 시편 23편을 읽다가 닫고 다시 들어왔을 때.</div>
+
+  <div class="phone">
+    <div class="top">
+      <!-- Header (동일) -->
+      <div style="display: flex; align-items: center; padding: 8px 12px;">
+        <div class="row" style="gap: 6px;">
+          <div class="brand-icon">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+          </div>
+          <div class="brand-name">예봄성경</div>
+        </div>
+        <div class="row" style="margin-left: 8px; gap: 4px;">
+          <select class="ver-select main"><option>개역</option></select>
+          <span class="swap-icon">⇄</span>
+          <select class="ver-select"><option>대역</option></select>
+        </div>
+        <div class="row" style="margin-left: auto; gap: 4px;">
+          <button class="icon-btn"><b style="font-family: serif;">T</b></button>
+          <button class="icon-btn">⚙</button>
+        </div>
+      </div>
+      <div style="padding: 4px 12px 8px;">
+        <div class="row">
+          <input class="input-search" placeholder="본문: 창1:1, 두려워 말라 · 주제: 감사, 위로, 새해…">
+          <button class="action-btn">본문검색</button>
+          <button class="action-btn alt">주제추천</button>
+        </div>
+      </div>
+      <!-- 책갈피에 위치 표시 -->
+      <div class="nav-row">
+        <button class="nav-card">
+          <div class="ico toc">📚</div>
+          <div class="info">
+            <div class="title">성경목차</div>
+            <div class="sub">책 선택부터 시작</div>
+          </div>
+        </button>
+        <button class="nav-card" style="border-color: #f59e0b; background: #fffbeb;">
+          <div class="ico bm">🔖</div>
+          <div class="info">
+            <div class="title">책갈피</div>
+            <div class="sub" style="color: #92400e;">시편 23장 · 5분 전</div>
+          </div>
+        </button>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse">
+        <div style="text-align: center; padding: 60px 20px; color: #d1d5db; font-size: 13px;">
+          책갈피 클릭 시 ↓<br>
+          시편 23편으로 즉시 이동
+        </div>
+      </div>
+      <div class="fab-scrap">🔖</div>
+    </div>
+  </div>
+  <div class="annot">
+    <b>책갈피 강조 효과</b>: 활성화 시 노란 톤으로 강조 + <b>마지막 위치 + 시간</b>을 부제에 표시. 사용자가 어디까지 읽었는지 한눈에. 클릭하면 본문으로 점프.
+  </div>
+</div>
+
+<!-- ─────────── 시안 3: 본문 읽는 중 ─────────── -->
+<div class="scenario">
+  <span class="height-tag">상단 ~190px</span>
+  <h2>3. 본문 읽는 중 (자동 저장)</h2>
+  <div class="desc">사용자가 시편 23편을 읽고 있는 상태. 책갈피가 자동 갱신 중.</div>
+
+  <div class="phone">
+    <div class="top">
+      <div style="display: flex; align-items: center; padding: 8px 12px;">
+        <div class="row" style="gap: 6px;">
+          <div class="brand-icon">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 6v14m0-14a8 8 0 00-9-2v14a8 8 0 019 2m0-14a8 8 0 019-2v14a8 8 0 00-9 2"/></svg>
+          </div>
+          <div class="brand-name">예봄성경</div>
+        </div>
+        <div class="row" style="margin-left: 8px; gap: 4px;">
+          <select class="ver-select main"><option>개역</option></select>
+          <span class="swap-icon">⇄</span>
+          <select class="ver-select"><option>대역</option></select>
+        </div>
+        <div class="row" style="margin-left: auto; gap: 4px;">
+          <button class="icon-btn"><b style="font-family: serif;">T</b></button>
+          <button class="icon-btn">⚙</button>
+        </div>
+      </div>
+      <div style="padding: 4px 12px 8px;">
+        <div class="row">
+          <input class="input-search" placeholder="본문: 창1:1, 두려워 말라 · 주제: 감사, 위로, 새해…">
+          <button class="action-btn">본문검색</button>
+          <button class="action-btn alt">주제추천</button>
+        </div>
+      </div>
+      <div class="nav-row">
+        <button class="nav-card">
+          <div class="ico toc">📚</div>
+          <div class="info">
+            <div class="title">성경목차</div>
+            <div class="sub">시편 ▸ 23 ▸ 1절</div>
+          </div>
+        </button>
+        <button class="nav-card" style="border-color: #f59e0b; background: #fffbeb;">
+          <div class="ico bm">🔖</div>
+          <div class="info">
+            <div class="title">책갈피</div>
+            <div class="sub" style="color: #92400e;">시편 23 · 방금</div>
+          </div>
+        </button>
+      </div>
+    </div>
+    <div class="body-area">
+      <div class="verse">
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">시편 23편</div>
+        <span style="color: #9ca3af; font-size: 11px; vertical-align: super;">1</span> 여호와는 나의 목자시니<br>
+        내게 부족함이 없으리로다<br><br>
+        <span style="color: #9ca3af; font-size: 11px; vertical-align: super;">2</span> 그가 나를 푸른 풀밭에<br>
+        누이시며 쉴 만한 물 가로<br>
+        인도하시는도다<br><br>
+        <span style="color: #9ca3af; font-size: 11px; vertical-align: super;">3</span> 내 영혼을 소생시키시고<br>
+        자기 이름을 위하여 의의 길로<br>
+        인도하시는도다
+      </div>
+      <div class="fab-scrap">🔖</div>
+    </div>
+  </div>
+  <div class="annot">
+    <b>자동 저장</b>: 본문 진입 후 3초 머물면 자동으로 책갈피 갱신. 사용자는 의식할 필요 없음.<br>
+    <b>성경목차 부제</b>: 현재 위치도 표시되어 컨텍스트 보존 (시편 ▸ 23 ▸ 1절).
+  </div>
+</div>
+
+</div>
+
+<!-- 동작 흐름 -->
+<div style="max-width: 900px; margin: 32px auto 0;">
+  <h2 style="font-size: 16px;">사용 흐름</h2>
+
+  <div class="flow">
+    <span><b>① 첫 방문</b></span>
+    <span style="color: #9ca3af;">→</span>
+    <span>책갈피 회색 ("아직 기록 없어요")</span>
+  </div>
+  <div class="flow">
+    <span><b>② 성경목차 → 시편 23편 진입</b></span>
+    <span style="color: #9ca3af;">→</span>
+    <span>3초 후 자동 저장 → 책갈피 활성화 (노란 톤)</span>
+  </div>
+  <div class="flow">
+    <span><b>③ 다음날 재방문</b></span>
+    <span style="color: #9ca3af;">→</span>
+    <span>책갈피 클릭 → 시편 23편으로 즉시 이동</span>
+  </div>
+  <div class="flow">
+    <span><b>④ 시편 51편으로 이동</b></span>
+    <span style="color: #9ca3af;">→</span>
+    <span>책갈피 자동 갱신 (시편 51 · 방금)</span>
+  </div>
+
+  <h2 style="font-size: 16px; margin-top: 24px;">기술 구현</h2>
+  <div style="background: #f9fafb; border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.7;">
+    <b>저장 위치</b>: <code>localStorage["yebom_bookmark"]</code><br>
+    <b>구조</b>:<br>
+    <pre style="background: white; padding: 8px; border-radius: 4px; font-size: 11px; margin: 6px 0; overflow-x: auto;">{
+  "book_code": "psa",
+  "book_name": "시편",
+  "book_abbr": "시",
+  "chapter": 23,
+  "verse": 1,
+  "version": "nkrv",
+  "savedAt": 1730878800000
+}</pre>
+    <b>저장 트리거</b>: 본문 화면(SearchPanel chapter 모드의 verse 단계) 진입 후 3초 setTimeout<br>
+    <b>읽기</b>: 첫 화면 마운트 시 localStorage 조회 → 책갈피 카드의 부제에 표시<br>
+    <b>점프</b>: 책갈피 클릭 → 저장된 book/chapter로 setBookCode/setChapter
+  </div>
+
+  <h2 style="font-size: 16px; margin-top: 24px;">변경 요약</h2>
+  <table style="font-size: 12px; border-collapse: collapse; width: 100%; margin-top: 8px;">
+    <thead>
+      <tr style="background: #f3f4f6;">
+        <th style="padding: 8px; text-align: left;">파일</th>
+        <th style="padding: 8px; text-align: left;">변경</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid #f3f4f6;">
+        <td style="padding: 8px;"><code>lib/versions.ts</code></td>
+        <td style="padding: 8px;">"개역개정" → "개역"</td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f3f4f6;">
+        <td style="padding: 8px;"><code>components/SearchPanel.tsx</code></td>
+        <td style="padding: 8px;">
+          • 헤더 1줄 통합 (브랜드+버전+T+⚙)<br>
+          • 모드 탭 3개 → 검색 input + [본문검색][주제추천] 두 버튼<br>
+          • [📚 성경목차] [🔖 책갈피] 행 추가<br>
+          • placeholder 통합: "본문: 창1:1, 두려워 말라 · 주제: 감사, 위로…"<br>
+          • 자동 책갈피 저장 로직 (chapter mode verse 단계 3초 setTimeout)
+        </td>
+      </tr>
+      <tr style="border-bottom: 1px solid #f3f4f6;">
+        <td style="padding: 8px;"><code>app/page.tsx</code></td>
+        <td style="padding: 8px;">우상단 T/⚙ 위치는 SearchPanel 헤더로 이전 또는 유지 검토</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px;"><code>lib/bookmark.ts</code> (신규)</td>
+        <td style="padding: 8px;">책갈피 read/save/clear 헬퍼 함수</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

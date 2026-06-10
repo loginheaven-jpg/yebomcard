@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>퀵네비 FAB v2 — TR ↔ BR 우측 토글</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', -apple-system, sans-serif;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #1a1a2e;
+  padding: 32px 16px 56px;
+  min-height: 100vh;
+}
+h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.subtitle { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
+
+.grid { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; max-width: 1100px; margin: 0 auto; }
+.col-wrap { width: 360px; }
+.col-label { text-align: center; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.col-label .badge { display: inline-block; font-size: 9px; padding: 2px 6px; border-radius: 3px; margin-left: 4px; vertical-align: 2px; letter-spacing: 0.4px; background: #b8860b; color: white; }
+.col-desc { text-align: center; font-size: 11px; color: #6b7280; line-height: 1.5; margin-bottom: 14px; min-height: 32px; }
+
+.phone {
+  width: 360px; height: 680px;
+  background: #f8f9fa;
+  border-radius: 28px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+/* 헤더 영역 (간소화) */
+.hdr-stub {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 12px 8px;
+}
+.brand-stub { display: flex; align-items: center; gap: 6px; }
+.brand-stub .ico { color: #1a1a2e; }
+.brand-stub .ico svg { width: 22px; height: 22px; }
+.brand-stub .text { display: flex; flex-direction: column; line-height: 1; }
+.brand-stub .yb { font-family: 'Inter', sans-serif; font-size: 9px; color: #9ca3af; letter-spacing: 1.2px; }
+.brand-stub .bi { font-family: 'Playfair Display', serif; font-style: italic; font-size: 15px; color: #374151; margin-top: 3px; }
+.hdr-right { display: flex; align-items: center; gap: 4px; }
+.ver-pill { height: 28px; padding: 0 14px 0 8px; border: none; border-radius: 4px; font-size: 10px; font-weight: 600; background-repeat: no-repeat; background-position: right 5px center; background-size: 7px; }
+.ver-pill.main { background-color: #111827; color: white; width: 60px; }
+.ver-pill.sub { background-color: white; color: #1a1a2e; border: 1px solid #d1d5db; width: 50px; }
+.set-btn { width: 36px; height: 28px; border: 1px solid #d1d5db; background: white; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #374151; }
+.set-btn svg { width: 14px; height: 14px; }
+
+.act-stub {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 4px; padding: 4px 12px 8px;
+}
+.act-stub button {
+  height: 34px; font-size: 10px; font-weight: 600;
+  border: 1px solid #d1d5db; background: white; border-radius: 4px;
+}
+
+.read-stub {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 12px 6px;
+  font-size: 11px; color: #6b7280;
+}
+
+.body-bg {
+  margin: 0 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  height: 440px;
+  font-size: 11px; line-height: 1.7;
+  color: #4b5563;
+  overflow: hidden;
+}
+.body-bg .vnum { color: #9ca3af; font-weight: 600; margin-right: 4px; }
+.body-bg .v { padding: 3px 0; border-bottom: 1px solid #f9fafb; }
+
+/* === QuickNav FAB (두 위치) === */
+.qfab {
+  position: absolute;
+  right: 12px;
+  width: 44px; height: 44px;
+  background: white;
+  border: 2px solid #b8860b;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.22);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.qfab svg { width: 22px; height: 22px; color: #b8860b; }
+.qfab .arrow {
+  position: absolute; top: -3px; right: -3px;
+  width: 14px; height: 14px;
+  background: #b8860b;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  font-size: 8px;
+}
+.qfab-tr { top: 138px; }    /* 우상단 — '전체화면' 버튼 바로 아래 (10px 여유) */
+.qfab-br { bottom: 76px; }  /* 우하단 — 도구함 FAB 위 여유 */
+
+/* 열린 FAB (골드 fill) */
+.qfab-open {
+  background: #b8860b;
+  border-color: #b8860b;
+}
+.qfab-open svg { color: white; }
+.qfab-open .arrow { background: white; color: #b8860b; }
+
+/* === 컬럼 패널: 좌측으로 펼침 (FAB 안쪽 방향) === */
+/* 상하 모두 앱 경계에서 최소 12px 여유 확보 */
+.qpanel {
+  position: absolute;
+  right: 64px;  /* FAB 좌측에 인접 */
+  z-index: 49;
+  display: flex;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.18);
+  width: 226px;
+  overflow: hidden;
+}
+/* FAB 위치(TR/BR)에 관계없이 패널은 항상 같은 위치에 표시 — 전체화면 버튼 바로 아래 */
+.qpanel-tr,
+.qpanel-br {
+  top: 138px;
+  bottom: 12px;
+  max-height: 60vh;
+}
+
+.qcol {
+  display: flex; flex-direction: column;
+  border-left: 1px solid #f3f4f6;
+  min-width: 0;
+}
+.qcol:first-child { border-left: none; }
+.qcol-hdr {
+  font-size: 8px; font-weight: 700; color: #9ca3af;
+  text-align: center; padding: 4px 0;
+  background: #f8f9fa;
+  letter-spacing: 0.5px;
+}
+.qcol-scroll { flex: 1; overflow: hidden; }
+.qarrow {
+  height: 14px;
+  background: #f8f9fa;
+  border: none;
+  font-size: 8px;
+  color: #9ca3af;
+}
+.qitem {
+  padding: 5px 2px;
+  text-align: center;
+  font-size: 10px;
+  color: #4b5563;
+  border-bottom: 1px solid #f9fafb;
+  white-space: nowrap;
+}
+.qitem.active { background: #111827; color: white; font-weight: 700; }
+.qitem.recent { color: #b8860b; font-weight: 600; }
+
+.recent-col { background: #fefdf8; width: 38px; }
+.kr-col { width: 32px; }
+.bk-col { width: 52px; }
+.ch-col { width: 52px; }
+.vs-col { width: 52px; }
+
+/* === 기존 좌하·우하 FAB (배경 참조용) === */
+.fab {
+  position: absolute;
+  bottom: 12px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #d1d5db;
+  display: flex; align-items: center; justify-content: center;
+  color: #4b5563;
+}
+.fab svg { width: 18px; height: 18px; }
+.fab-left { left: 12px; }
+.fab-right { right: 12px; }
+.fab-badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 17px; height: 17px;
+  background: #b8860b; color: white;
+  border-radius: 9px;
+  font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+
+.note {
+  position: absolute;
+  font-size: 9px;
+  color: #b8860b;
+  font-weight: 700;
+  background: white;
+  border: 1px solid #b8860b;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  z-index: 60;
+}
+
+</style>
+</head>
+<body>
+
+<h1>퀵네비 FAB v2 — 우측 두 위치 토글 (TR ↔ BR)</h1>
+<div class="subtitle">
+  좌상단 의미 없음 (컬럼 동시 펼침) → 우측 두 위치로 단순화<br>
+  길게 누르기 500ms → 반대 위치로 점프 + 햅틱
+</div>
+
+<div class="grid">
+
+  <!-- A. 우상단 위치 + 패널 펼침 -->
+  <div class="col-wrap">
+    <div class="col-label">A. 우상단 (TR) <span class="badge">기본</span></div>
+    <div class="col-desc">기본 위치. 본문 중간 약간 위.<br>패널은 좌측으로 펼침.</div>
+    <div class="phone">
+      <div class="hdr-stub">
+        <div class="brand-stub">
+          <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>
+          <div class="text"><div class="yb">Yebom</div><div class="bi">BIBLE</div></div>
+        </div>
+        <div class="hdr-right">
+          <select class="ver-pill main"><option>새번역</option></select>
+          <select class="ver-pill sub"><option>개역</option></select>
+          <button class="set-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        </div>
+      </div>
+      <div class="act-stub">
+        <button>성경목차</button><button>본문검색</button><button>주제추천</button><button>책갈피</button>
+      </div>
+      <div class="read-stub"><span>잠언 <b style="color:#111;font-size:13px">23</b>/31장</span><span style="border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:10px">전체화면</span></div>
+      <div class="body-bg">
+        <div class="v"><span class="vnum">22</span>너를 낳은 아비에게 청종하고...</div>
+        <div class="v"><span class="vnum">23</span>진리를 사되 팔지는 말며...</div>
+        <div class="v"><span class="vnum">24</span>의인의 아비는 크게 즐거울...</div>
+        <div class="v"><span class="vnum">25</span>네 부모를 즐겁게 하며...</div>
+      </div>
+
+      <!-- 우상단 FAB (펼침) -->
+      <div class="qfab qfab-open qfab-tr">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+        <span class="arrow">◂</span>
+      </div>
+
+      <!-- 좌측으로 펼친 패널 -->
+      <div class="qpanel qpanel-tr">
+        <div class="qcol recent-col">
+          <div class="qcol-hdr">최근</div>
+          <div class="qcol-scroll">
+            <div class="qitem recent">잠23</div>
+            <div class="qitem recent">시119</div>
+            <div class="qitem recent">요3:16</div>
+          </div>
+        </div>
+        <div class="qcol kr-col">
+          <div class="qcol-hdr">권</div>
+          <div class="qcol-scroll">
+            <div class="qitem active">구</div>
+            <div class="qitem">신</div>
+          </div>
+        </div>
+        <div class="qcol bk-col">
+          <div class="qcol-hdr">책</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">시</div>
+            <div class="qitem active">잠</div>
+            <div class="qitem">전</div>
+            <div class="qitem">아</div>
+            <div class="qitem">사</div>
+            <div class="qitem">렘</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+        <div class="qcol ch-col">
+          <div class="qcol-hdr">장</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">21</div>
+            <div class="qitem">22</div>
+            <div class="qitem active">23</div>
+            <div class="qitem">24</div>
+            <div class="qitem">25</div>
+            <div class="qitem">26</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+        <div class="qcol vs-col">
+          <div class="qcol-hdr">절</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">21</div>
+            <div class="qitem active">22</div>
+            <div class="qitem">23</div>
+            <div class="qitem">24</div>
+            <div class="qitem">25</div>
+            <div class="qitem">26</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+      </div>
+
+      <div class="fab fab-left"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg><span class="fab-badge">24</span></div>
+      <div class="fab fab-right"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437"/></svg></div>
+    </div>
+  </div>
+
+  <!-- B. 우하단 위치 + 패널 펼침 -->
+  <div class="col-wrap">
+    <div class="col-label">B. 우하단 (BR)</div>
+    <div class="col-desc">길게 누르기로 토글된 위치.<br>도구함 FAB 위에 자리.</div>
+    <div class="phone">
+      <div class="hdr-stub">
+        <div class="brand-stub">
+          <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>
+          <div class="text"><div class="yb">Yebom</div><div class="bi">BIBLE</div></div>
+        </div>
+        <div class="hdr-right">
+          <select class="ver-pill main"><option>새번역</option></select>
+          <select class="ver-pill sub"><option>개역</option></select>
+          <button class="set-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        </div>
+      </div>
+      <div class="act-stub">
+        <button>성경목차</button><button>본문검색</button><button>주제추천</button><button>책갈피</button>
+      </div>
+      <div class="read-stub"><span>잠언 <b style="color:#111;font-size:13px">23</b>/31장</span><span style="border:1px solid #d1d5db;border-radius:4px;padding:2px 6px;font-size:10px">전체화면</span></div>
+      <div class="body-bg">
+        <div class="v"><span class="vnum">22</span>너를 낳은 아비에게 청종하고...</div>
+        <div class="v"><span class="vnum">23</span>진리를 사되 팔지는 말며...</div>
+        <div class="v"><span class="vnum">24</span>의인의 아비는 크게 즐거울...</div>
+        <div class="v"><span class="vnum">25</span>네 부모를 즐겁게 하며...</div>
+      </div>
+
+      <!-- 우하단 FAB (펼침) -->
+      <div class="qfab qfab-open qfab-br">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+        <span class="arrow">◂</span>
+      </div>
+
+      <!-- 좌측으로 펼친 패널 -->
+      <div class="qpanel qpanel-br">
+        <div class="qcol recent-col">
+          <div class="qcol-hdr">최근</div>
+          <div class="qcol-scroll">
+            <div class="qitem recent">잠23</div>
+            <div class="qitem recent">시119</div>
+            <div class="qitem recent">요3:16</div>
+          </div>
+        </div>
+        <div class="qcol kr-col">
+          <div class="qcol-hdr">권</div>
+          <div class="qcol-scroll">
+            <div class="qitem active">구</div>
+            <div class="qitem">신</div>
+          </div>
+        </div>
+        <div class="qcol bk-col">
+          <div class="qcol-hdr">책</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">시</div>
+            <div class="qitem active">잠</div>
+            <div class="qitem">전</div>
+            <div class="qitem">아</div>
+            <div class="qitem">사</div>
+            <div class="qitem">렘</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+        <div class="qcol ch-col">
+          <div class="qcol-hdr">장</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">21</div>
+            <div class="qitem">22</div>
+            <div class="qitem active">23</div>
+            <div class="qitem">24</div>
+            <div class="qitem">25</div>
+            <div class="qitem">26</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+        <div class="qcol vs-col">
+          <div class="qcol-hdr">절</div>
+          <button class="qarrow">▲</button>
+          <div class="qcol-scroll">
+            <div class="qitem">21</div>
+            <div class="qitem active">22</div>
+            <div class="qitem">23</div>
+            <div class="qitem">24</div>
+            <div class="qitem">25</div>
+            <div class="qitem">26</div>
+          </div>
+          <button class="qarrow">▼</button>
+        </div>
+      </div>
+
+      <div class="fab fab-left"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg><span class="fab-badge">24</span></div>
+      <div class="fab fab-right"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437"/></svg></div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width: 800px; margin: 40px auto 0; padding: 22px 28px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); font-size: 12px; color: #4b5563; line-height: 1.8;">
+  <div style="font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px;">최종 명세</div>
+  <ul style="padding-left: 18px;">
+    <li><b>FAB 위치 2곳</b>: 우상 (top: 138px) ↔ 우하 (bottom: 76px). 길게 누르기로 토글.</li>
+    <li><b>패널 위치 고정</b>: FAB 위치와 무관하게 <b>항상 top: 138 / right: 64</b>에서 펼침 (전체화면 버튼 바로 아래). 사용자 인지 일관성.</li>
+    <li><b>패널 크기</b>: <b>max-height 60vh</b>로 제한. 상하 양쪽 앱 경계에서 최소 12px 여유.</li>
+    <li><b>토글</b>: 길게 누르기 500ms → 반대편으로 점프 + 햅틱 진동(50ms). pointermove 추적 없음 → 모바일 안정적.</li>
+    <li><b>탭 동작</b>: 단순 탭 → 패널 토글 (열기/닫기). 길게 누르지 않으면 위치 변경 없음.</li>
+    <li><b>컬럼 펼침 방향</b>: FAB의 좌측 (안쪽 방향). FAB가 TR이면 우상 우측에서 좌측으로, BR이면 우하에서 좌측으로.</li>
+    <li><b>FAB 표시</b>: 닫혀있을 때 골드 테두리 + 작은 ▸ 배지 / 열렸을 때 골드 fill + ◂ (펼침 방향 힌트).</li>
+    <li><b>위치 영속</b>: localStorage `yebom_quicknav_pos` = `"tr" | "br"`.</li>
+    <li><b>컬럼</b>: 최근 38 / 권 32 / 책 52 / 장 52 / 절 52 = 총 226px. 본문 우측 1/3 정도만 가려짐.</li>
+    <li><b>제거</b>: 자유 드래그·4코너 가이드 점·pointermove 핸들러 — 코드 ~45줄 감소.</li>
+  </ul>
+</div>
+
+</body>
+</html>

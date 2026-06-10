@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>퀵 네비 FAB 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #1a1a2e;
+  padding: 32px 16px 56px;
+  min-height: 100vh;
+}
+h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.subtitle { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+
+.grid { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; max-width: 1300px; margin: 0 auto; }
+.col { width: 380px; }
+.col-label { text-align: center; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.col-label .badge { display: inline-block; font-size: 9px; padding: 2px 6px; background: #b8860b; color: white; border-radius: 3px; margin-left: 4px; vertical-align: 2px; letter-spacing: 0.4px; }
+.col-desc { text-align: center; font-size: 11px; color: #6b7280; line-height: 1.5; margin-bottom: 14px; min-height: 32px; }
+
+.phone {
+  width: 380px; height: 760px;
+  background: #f8f9fa;
+  border-radius: 28px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+/* === 헤더 === */
+.hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 14px 8px;
+}
+.brand { display: flex; align-items: center; gap: 9px; }
+.brand-icon svg { width: 24px; height: 24px; color: #1a1a2e; }
+.brand-logo { display: flex; flex-direction: column; line-height: 1; }
+.b-yebom {
+  font-family: 'Inter', sans-serif; font-size: 9px; font-weight: 500;
+  color: #9ca3af; letter-spacing: 1.2px; text-align: left;
+}
+.b-bible {
+  font-family: 'Playfair Display', serif; font-style: italic;
+  font-size: 16px; font-weight: 400; color: #374151;
+  letter-spacing: 0.4px; margin-top: 3px;
+}
+.hdr-right { display: flex; align-items: center; gap: 4px; }
+.ver-pill {
+  height: 30px; width: 78px;
+  padding: 0 18px 0 10px;
+  border: none; border-radius: 4px; cursor: pointer; appearance: none;
+  font-size: 11px; font-weight: 600;
+  background-repeat: no-repeat; background-position: right 7px center; background-size: 8px;
+  text-align: center;
+}
+.ver-pill.main {
+  background-color: #111827; color: white;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E");
+}
+.ver-pill.sub {
+  background-color: white; color: #1a1a2e; border: 1px solid #d1d5db;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E");
+}
+.swap-tiny {
+  width: 26px; height: 30px;
+  background: none; border: none; cursor: pointer;
+  color: #374151; font-size: 13px; font-weight: 600; border-radius: 4px;
+}
+.settings-btn {
+  width: 44px; height: 30px; margin-left: 4px;
+  background: white; border: 1px solid #d1d5db; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  color: #374151; cursor: pointer;
+}
+.settings-btn svg { width: 18px; height: 18px; }
+
+/* === 액션 버튼 4개 === */
+.actions {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 4px; padding: 0 14px 8px;
+}
+.act {
+  height: 40px;
+  border: 1px solid #d1d5db; background: white;
+  border-radius: 4px;
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 3px;
+  cursor: pointer;
+}
+.act svg { width: 13px; height: 13px; color: #6b7280; }
+
+/* === 본문 박스 === */
+.body-box {
+  margin: 0 14px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px; line-height: 1.7;
+  height: 510px;
+  overflow-y: hidden;
+}
+.read-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 14px 6px;
+}
+.book-name { font-size: 13px; color: #4b5563; }
+.ch-num { font-size: 17px; font-weight: 700; color: #1a1a2e; margin: 0 2px; }
+.ch-total { font-size: 11px; color: #9ca3af; }
+.ch-arrow { background: none; border: none; padding: 2px; color: #9ca3af; cursor: pointer; }
+.read-pos { display: flex; align-items: center; gap: 3px; }
+.full-btn {
+  width: 30px; height: 30px;
+  border: 1px solid #d1d5db; border-radius: 4px;
+  background: white; color: #6b7280;
+  display: flex; align-items: center; justify-content: center;
+}
+.full-btn svg { width: 16px; height: 16px; }
+
+.verse { padding: 5px 0; border-bottom: 1px solid #f3f4f6; }
+.verse:last-child { border: none; }
+.vnum { color: #9ca3af; font-weight: 600; margin-right: 6px; font-family: 'Inter', sans-serif; }
+
+/* === 퀵네비 FAB === */
+.qfab {
+  position: absolute;
+  top: 110px; left: 18px;
+  width: 44px; height: 44px;
+  background: white;
+  border: 2px solid #b8860b;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(184, 134, 11, 0.18);
+  display: flex; align-items: center; justify-content: center;
+  cursor: grab;
+  z-index: 50;
+}
+.qfab svg { width: 22px; height: 22px; color: #b8860b; }
+.qfab .arrow {
+  position: absolute; top: -3px; right: -3px;
+  width: 14px; height: 14px;
+  background: #b8860b;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  font-size: 8px;
+}
+
+/* === 퀵네비 컬럼 패널 === */
+.qpanel {
+  position: absolute;
+  top: 110px; left: 70px;
+  display: flex;
+  z-index: 40;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,0.12));
+}
+.qcol {
+  width: 60px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-right: none;
+  height: 460px;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.qcol:first-child { border-radius: 6px 0 0 6px; }
+.qcol:last-child { border-right: 1px solid #e5e7eb; border-radius: 0 6px 6px 0; }
+.qcol-hdr {
+  font-size: 9px; font-weight: 700; color: #9ca3af;
+  text-align: center; padding: 6px 0;
+  border-bottom: 1px solid #f3f4f6;
+  background: #f8f9fa;
+  letter-spacing: 0.5px;
+  position: sticky; top: 0;
+}
+.qitem {
+  padding: 7px 4px;
+  text-align: center;
+  font-size: 11px;
+  color: #4b5563;
+  cursor: pointer;
+  border-bottom: 1px solid #f9fafb;
+}
+.qitem:hover { background: #f3f4f6; }
+.qitem.active {
+  background: #111827;
+  color: white;
+  font-weight: 700;
+}
+.qitem.recent { color: #b8860b; font-weight: 600; }
+
+/* === 첫번째 컬럼: 최근 0열 === */
+.qcol.recent-col { width: 56px; background: #fefdf8; }
+
+/* === 입력 단축 === */
+.q-quick-input {
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #f8f9fa;
+}
+.q-quick-input input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  outline: none;
+  background: white;
+}
+
+/* === FAB 좌하단 스크랩 + 우하단 도구 (기존) === */
+.fab {
+  position: absolute;
+  bottom: 12px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  display: flex; align-items: center; justify-content: center;
+  color: #4b5563;
+}
+.fab svg { width: 18px; height: 18px; }
+.fab-left { left: 12px; }
+.fab-right { right: 12px; }
+.fab-badge {
+  position: absolute; top: -4px; right: -4px;
+  min-width: 17px; height: 17px;
+  background: #b8860b; color: white;
+  border-radius: 9px;
+  font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+
+/* === 코너 가이드 점 (드래그 모드) === */
+.snap-guide {
+  position: absolute;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(184, 134, 11, 0.35);
+  pointer-events: none;
+}
+
+/* === annotation === */
+.note {
+  position: absolute;
+  font-size: 10px;
+  color: #b8860b;
+  font-weight: 600;
+  background: white;
+  border: 1px solid #b8860b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+</style>
+</head>
+<body>
+
+<h1>퀵 네비 FAB — 최종 시안</h1>
+<div class="subtitle">좌상단 기본 · 드래그로 4코너 스냅 · 종속 컬럼 + 최근 0열 + 숫자 단축</div>
+
+<div class="grid">
+
+  <!-- A: 닫힌 상태 (FAB만) -->
+  <div class="col">
+    <div class="col-label">A. 평상시 (닫힘)</div>
+    <div class="col-desc">FAB 좌상단 골드 테두리.<br>본문 위 가볍게 떠있음.</div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="brand">
+          <div class="brand-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>
+          <div class="brand-logo">
+            <div class="b-yebom">Yebom</div>
+            <div class="b-bible">BIBLE</div>
+          </div>
+        </div>
+        <div class="hdr-right">
+          <select class="ver-pill main"><option>새번역</option></select>
+          <button class="swap-tiny">⇄</button>
+          <select class="ver-pill sub"><option>개역</option></select>
+          <button class="settings-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>성경목차</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607Z"/></svg>본문검색</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>주제추천</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>책갈피</button>
+      </div>
+      <div class="read-nav">
+        <div class="read-pos">
+          <button class="ch-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg></button>
+          <span class="book-name">시편</span>
+          <span class="ch-num">119</span>
+          <span class="ch-total">/150장</span>
+          <button class="ch-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg></button>
+        </div>
+        <button class="full-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg></button>
+      </div>
+      <div class="body-box">
+        <div class="verse"><span class="vnum">105</span> 주의 말씀은 내 발에 등이요 내 길에 빛이니이다</div>
+        <div class="verse"><span class="vnum">106</span> 주의 의로운 규례들을 지키기로 맹세하고 굳게 정하였나이다</div>
+        <div class="verse"><span class="vnum">107</span> 나의 고난이 매우 심하오니 여호와여 주의 말씀대로 나를 살아나게 하소서</div>
+        <div class="verse"><span class="vnum">108</span> 여호와여 구하오니 내 입이 드리는 자원제물을 받으시고 주의 공의를 내게 가르치소서</div>
+        <div class="verse"><span class="vnum">109</span> 나의 생명이 항상 위기에 있사오나 나는 주의 법을 잊지 아니하나이다</div>
+        <div class="verse"><span class="vnum">110</span> 악인들이 나를 해하려고 올무를 놓았사오나 나는 주의 법도들에서 떠나지 아니하였나이다</div>
+        <div class="verse"><span class="vnum">111</span> 주의 증거들로 내가 영원히 나의 기업을 삼았사오니 이는 내 마음의 즐거움이 됨이니이다</div>
+        <div class="verse"><span class="vnum">112</span> 내가 주의 율례들을 영원히 행하려고 내 마음을 기울였나이다</div>
+      </div>
+
+      <!-- 닫힌 FAB만 표시 -->
+      <div class="qfab" title="퀵 네비">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+        </svg>
+        <span class="arrow">▸</span>
+      </div>
+
+      <div class="fab fab-left">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>
+        <span class="fab-badge">3</span>
+      </div>
+      <div class="fab fab-right">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- B: 펼친 상태 (모든 컬럼) -->
+  <div class="col">
+    <div class="col-label">B. 탭 후 펼침 <span class="badge">메인 시안</span></div>
+    <div class="col-desc">최근 0열 + 구약/신약 + 책 + 장 + 절.<br>상단 숫자 단축 입력 포함.</div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="brand">
+          <div class="brand-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>
+          <div class="brand-logo">
+            <div class="b-yebom">Yebom</div>
+            <div class="b-bible">BIBLE</div>
+          </div>
+        </div>
+        <div class="hdr-right">
+          <select class="ver-pill main"><option>새번역</option></select>
+          <button class="swap-tiny">⇄</button>
+          <select class="ver-pill sub"><option>개역</option></select>
+          <button class="settings-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>성경목차</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607Z"/></svg>본문검색</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>주제추천</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>책갈피</button>
+      </div>
+      <div class="read-nav">
+        <div class="read-pos">
+          <button class="ch-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg></button>
+          <span class="book-name">시편</span>
+          <span class="ch-num">119</span>
+          <span class="ch-total">/150장</span>
+          <button class="ch-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5"/></svg></button>
+        </div>
+        <button class="full-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg></button>
+      </div>
+      <div class="body-box">
+        <div class="verse"><span class="vnum">105</span> 주의 말씀은 내 발에 등이요 내 길에 빛이니이다</div>
+        <div class="verse"><span class="vnum">106</span> 주의 의로운 규례들을 지키기로 맹세하고 굳게 정하였나이다</div>
+        <div class="verse"><span class="vnum">107</span> 나의 고난이 매우 심하오니 여호와여 주의 말씀대로 나를 살아나게 하소서</div>
+        <div class="verse"><span class="vnum">108</span> 여호와여 구하오니 내 입이 드리는 자원제물을...</div>
+        <div class="verse"><span class="vnum">109</span> 나의 생명이 항상 위기에 있사오나 나는 주의 법을...</div>
+        <div class="verse"><span class="vnum">110</span> 악인들이 나를 해하려고 올무를 놓았사오나...</div>
+        <div class="verse"><span class="vnum">111</span> 주의 증거들로 내가 영원히...</div>
+        <div class="verse"><span class="vnum">112</span> 내가 주의 율례들을 영원히 행하려고...</div>
+      </div>
+
+      <!-- 펼친 FAB -->
+      <div class="qfab" style="background: #b8860b; border-color: #b8860b;">
+        <svg fill="none" stroke="white" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 18 18 6M18 6H8.25M18 6v9.75"/>
+        </svg>
+      </div>
+
+      <!-- 펼침 컬럼 패널 -->
+      <div class="qpanel">
+        <!-- 0열: 최근 -->
+        <div class="qcol recent-col">
+          <div class="qcol-hdr">최근</div>
+          <div class="qitem recent">시 119</div>
+          <div class="qitem recent">요 3:16</div>
+          <div class="qitem recent">롬 8:28</div>
+          <div class="qitem recent">창 1:1</div>
+        </div>
+        <!-- 1열: 구약/신약 -->
+        <div class="qcol" style="width: 42px;">
+          <div class="q-quick-input"><input type="text" placeholder="요3:16" /></div>
+          <div class="qitem active">구약</div>
+          <div class="qitem">신약</div>
+        </div>
+        <!-- 2열: 책 -->
+        <div class="qcol">
+          <div class="qcol-hdr">책</div>
+          <div class="qitem">창</div>
+          <div class="qitem">출</div>
+          <div class="qitem">레</div>
+          <div class="qitem">민</div>
+          <div class="qitem">신</div>
+          <div class="qitem">수</div>
+          <div class="qitem">삿</div>
+          <div class="qitem">룻</div>
+          <div class="qitem">삼상</div>
+          <div class="qitem">삼하</div>
+          <div class="qitem">왕상</div>
+          <div class="qitem">왕하</div>
+          <div class="qitem active">시</div>
+          <div class="qitem">잠</div>
+          <div class="qitem">전</div>
+          <div class="qitem">아</div>
+          <div class="qitem">사</div>
+        </div>
+        <!-- 3열: 장 -->
+        <div class="qcol">
+          <div class="qcol-hdr">장</div>
+          <div class="qitem">1</div>
+          <div class="qitem">2</div>
+          <div class="qitem">···</div>
+          <div class="qitem">117</div>
+          <div class="qitem">118</div>
+          <div class="qitem active">119</div>
+          <div class="qitem">120</div>
+          <div class="qitem">121</div>
+          <div class="qitem">···</div>
+          <div class="qitem">150</div>
+        </div>
+        <!-- 4열: 절 -->
+        <div class="qcol">
+          <div class="qcol-hdr">절</div>
+          <div class="qitem">103</div>
+          <div class="qitem">104</div>
+          <div class="qitem active">105</div>
+          <div class="qitem">106</div>
+          <div class="qitem">107</div>
+          <div class="qitem">108</div>
+          <div class="qitem">···</div>
+          <div class="qitem">176</div>
+        </div>
+      </div>
+
+      <div class="fab fab-left">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>
+        <span class="fab-badge">3</span>
+      </div>
+      <div class="fab fab-right">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- C: 드래그 중 -->
+  <div class="col">
+    <div class="col-label">C. 드래그 중 (스냅 가이드)</div>
+    <div class="col-desc">길게 누르기 → 드래그.<br>4모서리 후보점 표시.</div>
+    <div class="phone">
+      <div class="hdr">
+        <div class="brand">
+          <div class="brand-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>
+          <div class="brand-logo">
+            <div class="b-yebom">Yebom</div>
+            <div class="b-bible">BIBLE</div>
+          </div>
+        </div>
+        <div class="hdr-right">
+          <select class="ver-pill main"><option>새번역</option></select>
+          <button class="swap-tiny">⇄</button>
+          <select class="ver-pill sub"><option>개역</option></select>
+          <button class="settings-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a6.759 6.759 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.542-.56.94-1.11.94h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>성경목차</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607Z"/></svg>본문검색</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>주제추천</button>
+        <button class="act"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>책갈피</button>
+      </div>
+      <div class="read-nav">
+        <div class="read-pos">
+          <button class="ch-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5"/></svg></button>
+          <span class="book-name">시편</span>
+          <span class="ch-num">119</span>
+          <span class="ch-total">/150장</span>
+        </div>
+        <button class="full-btn"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg></button>
+      </div>
+      <div class="body-box" style="opacity: 0.4;">
+        <div class="verse"><span class="vnum">105</span> 주의 말씀은 내 발에 등이요...</div>
+        <div class="verse"><span class="vnum">106</span> 주의 의로운 규례들을 지키기로...</div>
+        <div class="verse"><span class="vnum">107</span> 나의 고난이 매우 심하오니...</div>
+        <div class="verse"><span class="vnum">108</span> 여호와여 구하오니...</div>
+      </div>
+
+      <!-- 드래그 중 FAB (반투명) -->
+      <div class="qfab" style="top: 320px; left: 160px; opacity: 0.6; cursor: grabbing; box-shadow: 0 12px 24px rgba(184, 134, 11, 0.3);">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+        </svg>
+      </div>
+
+      <!-- 코너 가이드 점 4개 -->
+      <span class="snap-guide" style="top: 110px; left: 32px;"></span>
+      <span class="snap-guide" style="top: 110px; right: 32px;"></span>
+      <span class="snap-guide" style="bottom: 100px; left: 32px;"></span>
+      <span class="snap-guide" style="bottom: 100px; right: 32px;"></span>
+
+      <div class="fab fab-left">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.562.562 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>
+        <span class="fab-badge">3</span>
+      </div>
+      <div class="fab fab-right">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437"/></svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width: 900px; margin: 40px auto 0; padding: 24px 28px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); font-size: 12px; color: #4b5563; line-height: 1.8;">
+  <div style="font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px;">디자인 결정</div>
+  <ul style="padding-left: 18px;">
+    <li><b>FAB 위치</b>: 기본 좌상단(`top-3 left-3`). 책 아이콘 + 골드(#B8860B) 테두리로 다른 FAB(스크랩·도구함)와 시각적 구분.</li>
+    <li><b>드래그 인터랙션</b>: 길게 누르기(500ms) → 끌어서 4모서리 자석 스냅. 드래그 중 본문 dim + 가이드 점 4개. 위치 localStorage 저장.</li>
+    <li><b>탭 시 펼침</b>: FAB 위치 기준 안쪽 방향으로 패널 슬라이드. 좌상단이면 우측+아래로, 우상단이면 좌측+아래로.</li>
+    <li><b>컬럼 구조</b>: <b>최근(0열)</b> → 구약/신약 → 책 → 장 → 절. 0열 상단에 숫자 단축 입력란 (`요3:16` 직타).</li>
+    <li><b>컬럼 너비</b>: 모바일 ~220px (5개 컬럼 합), 본문 좌측 일부만 가림. 각 컬럼 세로 스크롤.</li>
+    <li><b>최종 선택</b>: 절 탭 → 패널 닫힘 + `mode="chapter" browseStep="verse"` 진입 + 해당 절 자동 스크롤.</li>
+    <li><b>닫기</b>: 외부 영역 탭 / 다시 FAB 탭 / ESC / 하드웨어 백.</li>
+  </ul>
+</div>
+
+</body>
+</html>

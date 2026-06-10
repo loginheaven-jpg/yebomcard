@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>퀵네비 모바일 — C안 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', -apple-system, sans-serif;
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #1a1a2e;
+  padding: 32px 16px 56px;
+  min-height: 100vh;
+}
+h1 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+.subtitle { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+
+.grid { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; max-width: 1300px; margin: 0 auto; }
+.col-wrap { width: 360px; }
+.col-label { text-align: center; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.col-label .badge { display: inline-block; font-size: 9px; padding: 2px 6px; border-radius: 3px; margin-left: 4px; vertical-align: 2px; letter-spacing: 0.4px; }
+.col-label .pros { background: #16a34a; color: white; }
+.col-label .recommend { background: #b8860b; color: white; }
+.col-desc { text-align: center; font-size: 11px; color: #6b7280; line-height: 1.5; margin-bottom: 14px; min-height: 32px; }
+
+.phone {
+  width: 360px; height: 640px;
+  background: #f8f9fa;
+  border-radius: 28px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+/* 헤더 영역 (간소화) */
+.hdr-stub {
+  background: white;
+  height: 50px;
+  display: flex; align-items: center; padding: 0 12px;
+  font-family: 'Playfair Display', serif; font-style: italic;
+  font-size: 14px; color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+}
+.act-stub {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 4px; padding: 6px 12px 8px;
+  background: white;
+}
+.act-stub button {
+  height: 32px; font-size: 10px; font-weight: 600;
+  border: 1px solid #d1d5db; background: white; border-radius: 4px;
+}
+.read-stub {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 12px;
+  font-size: 11px; color: #6b7280;
+}
+
+.body-bg {
+  margin: 4px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  height: 440px;
+  font-size: 11px; line-height: 1.7;
+  color: #4b5563;
+  overflow: hidden;
+}
+.body-bg .vnum { color: #9ca3af; font-weight: 600; margin-right: 4px; }
+.body-bg .v { padding: 3px 0; border-bottom: 1px solid #f9fafb; }
+
+/* === 퀵네비 FAB === */
+.qfab {
+  position: absolute;
+  top: 60px; left: 14px;
+  width: 40px; height: 40px;
+  background: #b8860b;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.qfab svg { width: 20px; height: 20px; color: white; }
+
+/* === C1: 5 컬럼 모두 표시 === */
+.panel-full {
+  position: absolute;
+  top: 60px; left: 60px; right: 14px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.15);
+  z-index: 40;
+  display: flex;
+  height: 460px;
+  overflow: hidden;
+}
+.col-c1 {
+  flex: 1;
+  border-left: 1px solid #f3f4f6;
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.col-c1:first-child { border-left: none; }
+.col-hdr-mini {
+  font-size: 8px; font-weight: 700; color: #9ca3af;
+  text-align: center; padding: 4px 0;
+  background: #f8f9fa;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.col-c1 .scroll {
+  flex: 1;
+  overflow: hidden;
+}
+.col-c1 .arrow-btn {
+  height: 14px;
+  background: #f8f9fa;
+  border: none;
+  font-size: 8px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+.qitem {
+  padding: 5px 2px;
+  text-align: center;
+  font-size: 10px;
+  color: #4b5563;
+  border-bottom: 1px solid #f9fafb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qitem.active { background: #111827; color: white; font-weight: 700; }
+.qitem.recent { color: #b8860b; font-weight: 600; }
+
+/* === C2: 슬라이드 (2컬럼만) === */
+.panel-slide {
+  position: absolute;
+  top: 60px; left: 60px;
+  width: 140px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.15);
+  z-index: 40;
+  display: flex;
+  height: 460px;
+  overflow: hidden;
+}
+.col-c2 {
+  flex: 1;
+  border-left: 1px solid #f3f4f6;
+  display: flex; flex-direction: column;
+  min-width: 0;
+}
+.col-c2:first-child { border-left: none; }
+.col-c2 .scroll { flex: 1; overflow: hidden; }
+.col-c2 .arrow-btn {
+  height: 16px;
+  background: #f8f9fa;
+  border: none;
+  font-size: 9px;
+  color: #9ca3af;
+}
+.breadcrumb {
+  position: absolute;
+  top: 60px; left: 60px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 41;
+  transform: translateY(-100%);
+  margin-top: -4px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+}
+.breadcrumb .chev { color: #d1d5db; }
+.breadcrumb .now { font-weight: 700; color: #111827; }
+
+.slide-back {
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  transform: translateY(-50%);
+  width: 26px; height: 32px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #6b7280;
+  z-index: 42;
+}
+
+/* === C3: 컴팩트 5컬럼 (모두 표시 + 좁은 폭) === */
+.panel-compact {
+  position: absolute;
+  top: 60px; left: 60px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0,0,0,0.15);
+  z-index: 40;
+  display: flex;
+  height: 460px;
+  width: 232px;
+  overflow: hidden;
+}
+.panel-compact .col-c1 { font-size: 9px; }
+.panel-compact .qitem { font-size: 9px; padding: 4px 1px; }
+.panel-compact .col-hdr-mini { font-size: 7px; }
+
+</style>
+</head>
+<body>
+
+<h1>퀵네비 — 모바일 컬럼 표시 방식 (C안)</h1>
+<div class="subtitle">360px 모바일 화면 기준. FAB 좌상단 + 본문 가려짐 정도 비교</div>
+
+<div class="grid">
+
+  <!-- C1: 5컬럼 모두 표시 -->
+  <div class="col-wrap">
+    <div class="col-label">C1. 5컬럼 모두 표시</div>
+    <div class="col-desc">패널이 본문 거의 다 덮음.<br>모든 정보 한눈에.</div>
+    <div class="phone">
+      <div class="hdr-stub">Yebom <i>BIBLE</i></div>
+      <div class="act-stub">
+        <button>성경목차</button><button>본문검색</button><button>주제추천</button><button>책갈피</button>
+      </div>
+      <div class="read-stub">시편 <b style="color:#111;font-size:13px">119</b> /150장</div>
+      <div class="body-bg">
+        <div class="v"><span class="vnum">105</span>주의 말씀은 내 발에 등이요...</div>
+        <div class="v"><span class="vnum">106</span>주의 의로운 규례들을...</div>
+        <div class="v"><span class="vnum">107</span>나의 고난이 매우 심하오니...</div>
+        <div class="v"><span class="vnum">108</span>여호와여 구하오니...</div>
+      </div>
+      <div class="qfab"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M18 6H8.25M18 6v9.75"/></svg></div>
+
+      <div class="panel-full">
+        <!-- 최근 -->
+        <div class="col-c1" style="background:#fefdf8">
+          <div class="col-hdr-mini">최근</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem recent">시119</div>
+            <div class="qitem recent">요3:16</div>
+            <div class="qitem recent">롬8:28</div>
+            <div class="qitem recent">창1:1</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <!-- 구약/신약 -->
+        <div class="col-c1">
+          <div class="col-hdr-mini">권</div>
+          <div class="scroll">
+            <div class="qitem active">구약</div>
+            <div class="qitem">신약</div>
+          </div>
+        </div>
+        <!-- 책 -->
+        <div class="col-c1">
+          <div class="col-hdr-mini">책</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">창</div>
+            <div class="qitem">출</div>
+            <div class="qitem">레</div>
+            <div class="qitem">민</div>
+            <div class="qitem">신</div>
+            <div class="qitem active">시</div>
+            <div class="qitem">잠</div>
+            <div class="qitem">전</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <!-- 장 -->
+        <div class="col-c1">
+          <div class="col-hdr-mini">장</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">117</div>
+            <div class="qitem">118</div>
+            <div class="qitem active">119</div>
+            <div class="qitem">120</div>
+            <div class="qitem">121</div>
+            <div class="qitem">122</div>
+            <div class="qitem">123</div>
+            <div class="qitem">124</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <!-- 절 -->
+        <div class="col-c1">
+          <div class="col-hdr-mini">절</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">103</div>
+            <div class="qitem">104</div>
+            <div class="qitem active">105</div>
+            <div class="qitem">106</div>
+            <div class="qitem">107</div>
+            <div class="qitem">108</div>
+            <div class="qitem">109</div>
+            <div class="qitem">110</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C2: 슬라이드 (2컬럼만) -->
+  <div class="col-wrap">
+    <div class="col-label">C2. 슬라이드 (2컬럼) <span class="badge pros">본문 보임</span></div>
+    <div class="col-desc">현재 단계 ±1 컬럼만 표시.<br>상단 breadcrumb으로 경로 표시.</div>
+    <div class="phone">
+      <div class="hdr-stub">Yebom <i>BIBLE</i></div>
+      <div class="act-stub">
+        <button>성경목차</button><button>본문검색</button><button>주제추천</button><button>책갈피</button>
+      </div>
+      <div class="read-stub">시편 <b style="color:#111;font-size:13px">119</b> /150장</div>
+      <div class="body-bg">
+        <div class="v"><span class="vnum">105</span>주의 말씀은 내 발에 등이요 내 길에 빛이니이다</div>
+        <div class="v"><span class="vnum">106</span>주의 의로운 규례들을 지키기로 맹세하고 굳게 정하였나이다</div>
+        <div class="v"><span class="vnum">107</span>나의 고난이 매우 심하오니 여호와여 주의 말씀대로 나를 살아나게 하소서</div>
+        <div class="v"><span class="vnum">108</span>여호와여 구하오니 내 입이 드리는 자원제물을 받으시고...</div>
+        <div class="v"><span class="vnum">109</span>나의 생명이 항상 위기에 있사오나 나는 주의 법을 잊지 아니하나이다</div>
+        <div class="v"><span class="vnum">110</span>악인들이 나를 해하려고 올무를 놓았사오나 나는 주의 법도들에서 떠나지 아니하였나이다</div>
+        <div class="v"><span class="vnum">111</span>주의 증거들로 내가 영원히...</div>
+      </div>
+      <div class="qfab"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M18 6H8.25M18 6v9.75"/></svg></div>
+
+      <div class="breadcrumb">
+        <span>구약</span><span class="chev">▸</span>
+        <span class="now">시</span><span class="chev">▸</span>
+        <span style="color:#9ca3af">장</span>
+      </div>
+
+      <div class="panel-slide">
+        <button class="slide-back">‹</button>
+        <!-- 현재: 책 -->
+        <div class="col-c2">
+          <div class="col-hdr-mini">책</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">창</div>
+            <div class="qitem">출</div>
+            <div class="qitem">레</div>
+            <div class="qitem">민</div>
+            <div class="qitem active">시</div>
+            <div class="qitem">잠</div>
+            <div class="qitem">전</div>
+            <div class="qitem">아</div>
+            <div class="qitem">사</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <!-- 다음: 장 -->
+        <div class="col-c2">
+          <div class="col-hdr-mini">장</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">115</div>
+            <div class="qitem">116</div>
+            <div class="qitem">117</div>
+            <div class="qitem">118</div>
+            <div class="qitem active">119</div>
+            <div class="qitem">120</div>
+            <div class="qitem">121</div>
+            <div class="qitem">122</div>
+            <div class="qitem">123</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C3: 컴팩트 5컬럼 -->
+  <div class="col-wrap">
+    <div class="col-label">C3. 컴팩트 5컬럼 <span class="badge recommend">권장</span></div>
+    <div class="col-desc">5컬럼 모두 표시하되 좁은 폭.<br>본문 우측 1/3 보임.</div>
+    <div class="phone">
+      <div class="hdr-stub">Yebom <i>BIBLE</i></div>
+      <div class="act-stub">
+        <button>성경목차</button><button>본문검색</button><button>주제추천</button><button>책갈피</button>
+      </div>
+      <div class="read-stub">시편 <b style="color:#111;font-size:13px">119</b> /150장</div>
+      <div class="body-bg">
+        <div class="v"><span class="vnum">105</span>주의 말씀은 내 발에 등이요 내 길에 빛이니이다</div>
+        <div class="v"><span class="vnum">106</span>주의 의로운 규례들을 지키기로 맹세하고 굳게 정하였나이다</div>
+        <div class="v"><span class="vnum">107</span>나의 고난이 매우 심하오니...</div>
+        <div class="v"><span class="vnum">108</span>여호와여 구하오니...</div>
+        <div class="v"><span class="vnum">109</span>나의 생명이...</div>
+        <div class="v"><span class="vnum">110</span>악인들이...</div>
+      </div>
+      <div class="qfab"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M18 6H8.25M18 6v9.75"/></svg></div>
+
+      <div class="panel-compact">
+        <div class="col-c1" style="background:#fefdf8; width:38px">
+          <div class="col-hdr-mini">최근</div>
+          <div class="scroll">
+            <div class="qitem recent">시119</div>
+            <div class="qitem recent">요3:16</div>
+            <div class="qitem recent">롬8</div>
+          </div>
+        </div>
+        <div class="col-c1" style="width:32px">
+          <div class="col-hdr-mini">권</div>
+          <div class="scroll">
+            <div class="qitem active">구</div>
+            <div class="qitem">신</div>
+          </div>
+        </div>
+        <div class="col-c1">
+          <div class="col-hdr-mini">책</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">창</div>
+            <div class="qitem">출</div>
+            <div class="qitem">레</div>
+            <div class="qitem">민</div>
+            <div class="qitem active">시</div>
+            <div class="qitem">잠</div>
+            <div class="qitem">전</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <div class="col-c1">
+          <div class="col-hdr-mini">장</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">117</div>
+            <div class="qitem">118</div>
+            <div class="qitem active">119</div>
+            <div class="qitem">120</div>
+            <div class="qitem">121</div>
+            <div class="qitem">122</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+        <div class="col-c1">
+          <div class="col-hdr-mini">절</div>
+          <button class="arrow-btn">▲</button>
+          <div class="scroll">
+            <div class="qitem">103</div>
+            <div class="qitem">104</div>
+            <div class="qitem active">105</div>
+            <div class="qitem">106</div>
+            <div class="qitem">107</div>
+            <div class="qitem">108</div>
+          </div>
+          <button class="arrow-btn">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width: 900px; margin: 40px auto 0; padding: 24px 28px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); font-size: 12px; color: #4b5563; line-height: 1.8;">
+  <div style="font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px;">비교 정리</div>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+    <thead>
+      <tr style="background: #f3f4f6; text-align: left;">
+        <th style="padding: 8px;">방식</th>
+        <th style="padding: 8px;">본문 가시</th>
+        <th style="padding: 8px;">한눈 정보</th>
+        <th style="padding: 8px;">탭 수</th>
+        <th style="padding: 8px;">백트래킹</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-top: 1px solid #e5e7eb;">
+        <td style="padding: 8px;"><b>C1</b> 5컬럼 모두</td>
+        <td style="padding: 8px;">✗ 거의 가림</td>
+        <td style="padding: 8px;">◎ 전 단계 가시</td>
+        <td style="padding: 8px;">4 탭</td>
+        <td style="padding: 8px;">◎ 직접 이전 컬럼 탭</td>
+      </tr>
+      <tr style="border-top: 1px solid #e5e7eb;">
+        <td style="padding: 8px;"><b>C2</b> 슬라이드 2컬럼</td>
+        <td style="padding: 8px;">◎ 거의 다 보임</td>
+        <td style="padding: 8px;">△ 현재 ±1만</td>
+        <td style="padding: 8px;">4 탭 + 뒤로</td>
+        <td style="padding: 8px;">○ ‹ 버튼 / breadcrumb</td>
+      </tr>
+      <tr style="border-top: 1px solid #e5e7eb; background: #fef9e7;">
+        <td style="padding: 8px;"><b>C3</b> 컴팩트 5컬럼 ★</td>
+        <td style="padding: 8px;">○ 우측 1/3 보임</td>
+        <td style="padding: 8px;">○ 모두 가시 (좁음)</td>
+        <td style="padding: 8px;">4 탭</td>
+        <td style="padding: 8px;">◎ 직접 이전 컬럼 탭</td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="margin-top: 14px;"><b>추천: C3</b> — 5컬럼 모두 보이되 폭을 좁혀(38/32/52/52/52 = 226px) 본문 우측이 약간 보임. 백트래킹 직관적(상위 컬럼 클릭=재선택), breadcrumb 불필요. 본문 컨텍스트 부분적으로 유지.</p>
+  <p style="margin-top: 8px;"><b>C2 선택 시 trade-off</b>: 본문은 잘 보이지만 한 번에 2컬럼만 → "어디까지 왔지?" 인지 부담 + 뒤로 버튼 한 단계 추가.</p>
+</div>
+
+</body>
+</html>

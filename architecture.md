@@ -1,8 +1,37 @@
-# architecture.md — 예봄카드 (Yebom Card) 시스템 설계서
+# architecture.md — 예봄성경/카드 시스템 설계서
 
-> **최종 수정**: 2026-05-06  
-> **버전**: 0.4.0  
-> **상태**: Phase 1 MVP 및 핵심 확장 기능 완료
+> **최종 수정**: 2026-06-11  
+> **버전**: 0.5.0  
+> **상태**: Phase 2a~3 리디자인 완료 + WEB 역본/음원 통합 완료
+
+---
+
+## ⚠️ 최신 단면은 docs/ 우선 참조
+
+본 문서는 v0.4.0 기준의 메인 설계서이며 일부 섹션이 구체 디테일을 포함한다.
+**2026-06 이후 도입된 핵심 변경은 다음 문서들에서 단일 소스로 관리**:
+
+| 영역 | 문서 |
+|---|---|
+| 코딩 규칙·아키텍처 요약 | [AGENTS.md](AGENTS.md) |
+| TTS 엔진/캐시/발음 정책 | [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md) |
+| 5탭 IA + 통합 SettingsSheet | [docs/IA_5TAB.md](docs/IA_5TAB.md) |
+| Supabase 스키마 + 동기화 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) |
+| 보류·차기 검토 | [plan.md](plan.md) |
+
+본 문서의 다음 섹션은 v0.4.0 기준 그대로 유지 — 외부 계약·핵심 비전 이해용.
+
+---
+
+## v0.5.0 변경 요약
+
+- **하단 5탭 IA** 도입 (BottomTabBar) + 통합 SettingsSheet — 다수 FAB 제거 ([docs/IA_5TAB.md](docs/IA_5TAB.md))
+- **WEB 역본** 31,098절 적재 + Williams 영문 음원 1189장 (Cloudflare R2) ([docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md), [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md))
+- **영문 TTS** en-US/en-GB accent 분기 + voice 분기 (캐시 키 v5)
+- **미니플레이어** single-toggle 패턴 (발음·음성 즉시 전환) + 0.7x 속도 추가
+- **시스템 다크 추종** (FontContext) + 그립 드래그 시트 + 길게 누름→전체화면
+- **스크랩 UNIQUE** constraint + version 동기화 정책 — 중복 row 차단
+- **useSession race fix** — loading 가드 + bfcache 복원 시 재검증
 
 ---
 

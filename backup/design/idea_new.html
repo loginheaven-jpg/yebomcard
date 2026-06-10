@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>예봄 성경읽기 — 신규 디자인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+
+  :root{
+    --canvas:#DBD5C8;
+    --canvas-2:#D0C9BA;
+    --ink:#2B2A26;
+    --ink-soft:#6E675B;
+    --ink-faint:#938B7C;
+    --paper:#FBF9F4;
+    --paper-2:#F4EFE4;
+    --line:#EBE5D8;
+    --line-soft:#F1ECE1;
+    --muted:#8C8475;
+    --amber:#B97E2C;
+    --amber-bright:#E0A23C;
+    --amber-tint:#F6EBD6;
+    --amber-deep:#8E5E18;
+    --bad:#C0563E;
+    --bad-tint:#F6E4DE;
+    --radius:30px;
+    --shadow:0 24px 60px -18px rgba(53,44,28,.45), 0 4px 14px -6px rgba(53,44,28,.25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+
+  html{-webkit-text-size-adjust:100%;}
+
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #E7E2D6 0%, transparent 60%),
+      radial-gradient(900px 500px at 0% 100%, #CFC8B8 0%, transparent 55%),
+      var(--canvas);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:clamp(24px,5vw,72px) clamp(16px,4vw,48px) 96px;
+  }
+
+  .phone{
+    width:344px;max-width:100%;height:712px;border-radius:var(--radius);
+    background:#15140F;padding:11px;box-shadow:var(--shadow);position:relative;flex:none;
+  }
+  .screen{
+    position:relative;width:100%;height:100%;border-radius:21px;overflow:hidden;
+    background:var(--paper);display:flex;flex-direction:column;
+  }
+  .statusbar{
+    height:30px;flex:none;display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;font-size:12px;font-weight:600;color:var(--ink);
+    background:var(--paper);position:relative;z-index:5;
+  }
+  .statusbar .dots{display:flex;gap:4px;align-items:center;}
+  .statusbar .sig{display:flex;gap:2px;align-items:flex-end;}
+  .statusbar .sig i{width:3px;background:var(--ink);border-radius:1px;display:block;}
+  .statusbar .sig i:nth-child(1){height:5px;}
+  .statusbar .sig i:nth-child(2){height:7px;}
+  .statusbar .sig i:nth-child(3){height:9px;}
+  .statusbar .sig i:nth-child(4){height:11px;}
+  .batt{width:22px;height:11px;border:1.4px solid var(--ink);border-radius:3px;position:relative;}
+  .batt::after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:5px;background:var(--ink);border-radius:0 1px 1px 0;}
+  .batt::before{content:"";position:absolute;left:1.5px;top:1.5px;bottom:1.5px;width:70%;background:var(--ink);border-radius:1px;}
+
+  /* generic icon button */
+  .ico{display:inline-flex;align-items:center;justify-content:center;color:var(--ink);}
+  .ico svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* =====================================================
+     AFTER  (improved, interactive)
+     ===================================================== */
+  .a-screen{background:var(--paper);}
+
+  /* app bar */
+  .a-top{
+    flex:none;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;
+    padding:7px 12px 9px;background:var(--paper);position:relative;z-index:6;
+  }
+  .a-top .side{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--ink);}
+  .a-top .side:active{background:var(--paper-2);}
+  .a-top .side svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.7;fill:none;}
+  /* corner logo: 책 모양 + 아래 Yebom */
+  .a-logo{display:flex;flex-direction:column;align-items:center;gap:1px;width:42px;color:var(--ink);user-select:none;}
+  .a-logo .bk{width:25px;height:25px;stroke:currentColor;stroke-width:1.5;fill:none;}
+  .a-logo span{font-family:'Playfair Display',serif;font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1;}
+  .a-stack{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .a-navrow{display:flex;align-items:center;justify-content:center;gap:2px;}
+  /* 번역쌍 줄: 본문 위계를 그대로 흉내냄 (main 굵게 / sub 회색) */
+  .a-transrow{display:flex;align-items:center;justify-content:center;gap:9px;}
+  .tchip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border-radius:999px;background:var(--paper-2);cursor:pointer;white-space:nowrap;}
+  .tchip:active{background:var(--amber-tint);}
+  .tchip .car{width:11px;height:11px;stroke:var(--amber);stroke-width:2.4;fill:none;}
+  .tchip.main{font-family:'Noto Serif KR',serif;font-weight:700;font-size:13.5px;color:var(--ink);}
+  .tchip.sub{font-family:'Noto Sans KR',sans-serif;font-weight:400;font-size:13px;color:var(--muted);}
+  .tswap{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--amber);background:var(--amber-tint);cursor:pointer;flex:none;transition:transform .15s;}
+  .tswap:active{transform:rotate(180deg) scale(.9);}
+  .tswap svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+  .a-transrow.solo .tswap,.a-transrow.solo .tchip.sub{display:none;}
+  .a-arw{width:30px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);border-radius:9px;}
+  .a-arw:active{background:var(--paper-2);color:var(--ink);}
+  .a-arw svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
+  .a-title{
+    display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+    font-family:'Noto Serif KR',serif;font-weight:600;font-size:18px;color:var(--ink);
+    padding:5px 12px;border-radius:11px;white-space:nowrap;
+  }
+  .a-title:active{background:var(--paper-2);}
+  .a-title .car{width:14px;height:14px;stroke:var(--amber);stroke-width:2.4;fill:none;transition:transform .25s;}
+  .a-title.open .car{transform:rotate(180deg);}
+
+  /* progress strip */
+  .a-prog{flex:none;height:3px;background:var(--paper-2);position:relative;}
+  .a-prog .fill{position:absolute;left:0;top:0;bottom:0;width:12.9%;background:linear-gradient(90deg,var(--amber),var(--amber-bright));border-radius:0 2px 2px 0;}
+
+  /* reading column */
+  .a-read{flex:1;overflow:hidden;background:var(--paper);position:relative;}
+  .a-read .inner{padding:24px 22px 120px;}/* big bottom pad → nothing hides under bar */
+
+  /* 절: main(주) + sub(보조). 스왑하면 역할이 뒤집히고, 절 번호는 늘 주 번역줄에 붙는다 */
+  .v{display:flex;flex-direction:column;margin-bottom:21px;}
+  .vmain{order:1;font-family:'Noto Serif KR',serif;font-weight:500;font-size:16.5px;color:var(--ink);line-height:1.92;letter-spacing:-.005em;}
+  .vsub{order:2;font-family:'Noto Sans KR',sans-serif;font-weight:400;font-size:13.5px;color:var(--muted);line-height:1.74;margin-top:7px;padding-left:13px;border-left:2px solid var(--line);}
+  .vn{font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:11px;color:var(--amber);vertical-align:.32em;margin-right:5px;letter-spacing:0;}
+  .vsub .vn{display:none;}
+  /* 스왑: sub가 주, main이 보조 */
+  .swapped .vmain{order:2;font-family:'Noto Sans KR',sans-serif;font-weight:400;font-size:13.5px;color:var(--muted);line-height:1.74;margin-top:7px;padding-left:13px;border-left:2px solid var(--line);letter-spacing:0;}
+  .swapped .vsub{order:1;font-family:'Noto Serif KR',serif;font-weight:500;font-size:16.5px;color:var(--ink);line-height:1.92;margin-top:0;padding-left:0;border-left:none;}
+  .swapped .vmain .vn{display:none;}
+  .swapped .vsub .vn{display:inline;}
+  /* 동시보기 끄면 보조줄만 숨김 */
+  .no-sub .vsub{display:none;}
+  .no-sub.swapped .vsub{display:block;}
+  .no-sub.swapped .vmain{display:none;}
+
+  /* floating audio mini-player (read-aloud has a home) */
+  .a-audio{
+    position:absolute;left:16px;right:16px;bottom:16px;z-index:7;
+    background:rgba(43,42,38,.94);backdrop-filter:blur(8px);border-radius:16px;
+    padding:11px 14px;display:flex;align-items:center;gap:12px;color:#fff;
+    box-shadow:0 12px 30px -10px rgba(40,33,20,.6);
+    transform:translateY(140%);opacity:0;transition:transform .32s cubic-bezier(.2,.7,.2,1),opacity .32s;
+  }
+  .a-audio.show{transform:translateY(0);opacity:1;}
+  .a-audio .pp{width:34px;height:34px;border-radius:50%;background:var(--amber-bright);display:flex;align-items:center;justify-content:center;flex:none;}
+  .a-audio .pp svg{width:15px;height:15px;fill:#2B2A26;stroke:none;}
+  .a-audio .meta{flex:1;min-width:0;}
+  .a-audio .meta .t1{font-size:12.5px;font-weight:600;}
+  .a-audio .meta .t2{font-size:10.5px;color:#cabfa8;margin-top:1px;}
+  .a-audio .x{color:#cabfa8;flex:none;}
+  .a-audio .x svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
+  .a-audio .wave{display:flex;gap:2px;align-items:center;height:18px;flex:none;}
+  .a-audio .wave i{width:2.5px;background:var(--amber-bright);border-radius:2px;animation:wv 1s ease-in-out infinite;}
+  .a-audio .wave i:nth-child(1){height:7px;animation-delay:0s;}
+  .a-audio .wave i:nth-child(2){height:14px;animation-delay:.15s;}
+  .a-audio .wave i:nth-child(3){height:9px;animation-delay:.3s;}
+  .a-audio .wave i:nth-child(4){height:16px;animation-delay:.1s;}
+  @keyframes wv{0%,100%{transform:scaleY(.5);}50%{transform:scaleY(1);}}
+
+  /* bottom tab bar */
+  .a-tabbar{
+    flex:none;display:flex;background:var(--paper);
+    border-top:1px solid var(--line);padding:7px 6px 9px;position:relative;z-index:6;
+  }
+  .a-tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    color:var(--ink-faint);position:relative;padding:4px 0;cursor:pointer;
+  }
+  .a-tab svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.7;fill:none;}
+  .a-tab span{font-size:10.5px;font-weight:500;letter-spacing:-.01em;}
+  .a-tab.on{color:var(--amber-deep);}
+  .a-tab.on span{font-weight:700;}
+  .a-tab .bdg{
+    position:absolute;top:0;right:50%;margin-right:-22px;
+    background:var(--amber-bright);color:#fff;font-size:9px;font-weight:700;
+    min-width:16px;height:16px;padding:0 4px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  }
+
+  /* chapter picker sheet (overlay inside phone) */
+  .a-scrim{
+    position:absolute;inset:0;background:rgba(30,26,18,.42);z-index:8;
+    opacity:0;pointer-events:none;transition:opacity .28s;
+  }
+  .a-scrim.show{opacity:1;pointer-events:auto;}
+  .a-sheet{
+    position:absolute;left:0;right:0;bottom:0;z-index:9;background:var(--paper);
+    border-radius:22px 22px 0 0;padding:8px 0 20px;max-height:74%;display:flex;flex-direction:column;
+    transform:translateY(102%);transition:transform .34s cubic-bezier(.2,.7,.2,1);
+    box-shadow:0 -16px 40px -12px rgba(40,33,20,.4);
+  }
+  .a-sheet.show{transform:translateY(0);}
+  .a-sheet .grip{width:38px;height:4px;border-radius:2px;background:#d8d0c0;margin:8px auto 6px;}
+  .a-sheet .shead{display:flex;align-items:center;justify-content:space-between;padding:8px 20px 12px;}
+  .a-sheet .shead .bk{
+    font-family:'Noto Serif KR',serif;font-weight:700;font-size:17px;display:flex;align-items:center;gap:6px;color:var(--ink);
+  }
+  .a-sheet .shead .bk svg{width:15px;height:15px;stroke:var(--amber);stroke-width:2.2;fill:none;}
+  .a-sheet .shead .cls{color:var(--ink-faint);}
+  .a-sheet .shead .cls svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none;}
+  .a-grid{padding:4px 16px 8px;overflow:hidden;}
+  .a-glabel{font-size:11px;font-weight:700;color:var(--ink-faint);letter-spacing:.06em;padding:4px 4px 10px;}
+  .a-chips{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+  .a-chip{
+    aspect-ratio:1;border-radius:11px;background:var(--paper-2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .a-chip:active{background:var(--amber-tint);}
+  .a-chip.cur{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .a-chip.cur:active{background:var(--ink);}
+
+  /* translation picker sheet */
+  .tsegs{display:flex;gap:6px;padding:2px 18px 12px;}
+  .tseg{flex:1;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:600;color:var(--ink-soft);background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:9px 0;cursor:pointer;}
+  .tseg.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .tlist{padding:0 16px 4px;display:flex;flex-direction:column;gap:7px;overflow:hidden;}
+  .topt{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-radius:12px;background:var(--paper-2);border:1px solid var(--line);font-size:14.5px;color:var(--ink);cursor:pointer;}
+  .topt:active{background:var(--amber-tint);}
+  .topt.sel{border-color:var(--amber);background:var(--amber-tint);font-weight:600;}
+  .topt.off{opacity:.42;cursor:default;}
+  .topt.off:active{background:var(--paper-2);}
+  .topt .ck{width:18px;height:18px;stroke:var(--amber);stroke-width:2.6;fill:none;opacity:0;}
+  .topt.sel .ck{opacity:1;}
+  .tdual{display:flex;align-items:center;justify-content:space-between;margin:12px 18px 4px;padding:13px 15px;border-radius:12px;background:var(--paper-2);border:1px solid var(--line);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;}
+  .sw{width:44px;height:26px;border-radius:999px;background:#cfc7b7;position:relative;transition:background .2s;flex:none;}
+  .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .sw.on{background:var(--amber);}
+  .sw.on i{transform:translateX(18px);}
+
+  /* tab-content stub (non-reading tabs) */
+  .a-stub{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;color:var(--ink-faint);}
+  .a-stub .cir{width:64px;height:64px;border-radius:50%;background:var(--amber-tint);display:flex;align-items:center;justify-content:center;}
+  .a-stub .cir svg{width:28px;height:28px;stroke:var(--amber);stroke-width:1.6;fill:none;}
+  .a-stub h4{font-family:'Noto Serif KR',serif;font-size:18px;color:var(--ink);font-weight:600;}
+  .a-stub p{font-size:13px;max-width:24ch;line-height:1.6;}
+  .a-segs{display:flex;gap:6px;margin-top:4px;}
+  .a-segs .sg{font-size:12px;font-weight:600;color:var(--ink-soft);background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;}
+  .a-segs .sg.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  
+  /* ── standalone: 폰 단독 중앙 배치 ── */
+  .phone{margin:0 auto;}
+</style>
+</head>
+<body>
+<div class="phone">
+          <div class="screen a-screen">
+            <div class="statusbar">
+              <span>9:41</span>
+              <span class="dots">
+                <span class="sig"><i></i><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <!-- top: 로고 · (장 네비 + 번역쌍) · 오디오 -->
+            <div class="a-top">
+              <div class="a-logo" aria-label="Yebom">
+                <svg class="bk" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.4 4 4.4c-.6 0-1 .4-1 .9V18c0 .5.4.9 1 .9 3 0 6 .6 8 2 2-1.4 5-2 8-2 .6 0 1-.4 1-.9V5.3c0-.5-.4-.9-1-.9-3 0-6 .6-8 2.1z"/><path d="M12 6.5V20"/></svg>
+                <span>Yebom</span>
+              </div>
+              <div class="a-stack">
+                <div class="a-navrow">
+                  <div class="a-arw" aria-label="이전 장"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></div>
+                  <div class="a-title" id="chapTitle" role="button" aria-haspopup="true">
+                    잠언 4장
+                    <svg class="car" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                  <div class="a-arw" aria-label="다음 장"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></div>
+                </div>
+                <div class="a-transrow" id="transRow">
+                  <div class="tchip main" id="chipMain" role="button" aria-label="주 번역 선택">통독 <svg class="car" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+                  <div class="tswap" id="swapBtn" role="button" aria-label="주·보조 번역 바꾸기"><svg viewBox="0 0 24 24"><path d="M7 4 3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 4 4"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8a4 4 0 0 1-4-4"/></svg></div>
+                  <div class="tchip sub" id="chipSub" role="button" aria-label="보조 번역 선택">새번역 <svg class="car" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+                </div>
+              </div>
+              <div class="side" id="audioBtn" role="button" aria-label="소리내어 읽기">
+                <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>
+              </div>
+            </div>
+            <div class="a-prog"><div class="fill"></div></div>
+
+            <!-- READING view -->
+            <div class="a-read" id="viewRead">
+              <div class="inner">
+                <div class="v"><p class="vmain"><span class="vn">20</span>내 아들아, 내 말에 귀를 기울여라.</p><p class="vsub"><span class="vn">20</span>내가 하는 말에 네 귀를 바짝 기울여라.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">21</span>그 말이 네 눈을 떠나지 않게 하고, 네 마음 깊이 간직하여라.</p><p class="vsub"><span class="vn">21</span>네 눈에서 사라지지 않게 하며, 마음 한가운데 지켜라.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">22</span>그것을 얻는 사람에게 생명이 되고, 온몸을 건강하게 한다.</p><p class="vsub"><span class="vn">22</span>말씀을 깨닫는 이에게 생명이며, 그 몸 전체의 건강이 된다.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">23</span>무엇보다도 네 마음을 지켜라. 거기서 생명이 흘러나온다.</p><p class="vsub"><span class="vn">23</span>지킬 만한 모든 것 가운데 네 마음을 더욱 지켜라. 생명의 근원이 거기서 난다.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">24</span>더러운 말을 피하고 거짓말을 하지 마라.</p><p class="vsub"><span class="vn">24</span>왜곡된 말을 네 입에서 없애 버리고, 속이는 말을 네 입술에서 멀리하여라.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">25</span>앞만 바라보고 네 앞에 놓여져 있는 것에 시선을 두어라.</p><p class="vsub"><span class="vn">25</span>눈으로는 앞만 똑바로 보고, 시선은 앞으로만 곧게 두어라.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">26</span>너의 발걸음을 곧게 하고 네 모든 길을 곧게 하여 안전하게 행하라.</p><p class="vsub"><span class="vn">26</span>발로 디딜 곳을 잘 살펴라. 네 모든 길이 안전할 것이다.</p></div>
+                <div class="v"><p class="vmain"><span class="vn">27</span>곁길로 벗어나지 말고, 네 발을 악으로부터 멀리하여라.</p><p class="vsub"><span class="vn">27</span>좌로든 우로든 빗나가지 말고, 악에서 네 발을 끊어 버려라.</p></div>
+              </div>
+
+              <!-- mini audio player -->
+              <div class="a-audio" id="audioBar">
+                <div class="pp"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="meta"><div class="t1">잠언 4장 · 개역개정</div><div class="t2">02:14 / 03:48</div></div>
+                <div class="wave"><i></i><i></i><i></i><i></i></div>
+                <div class="x" id="audioClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+              </div>
+            </div>
+
+            <!-- SEARCH view (stub) -->
+            <div class="a-read a-stub" id="viewSearch" style="display:none">
+              <div class="a-segs"><span class="sg on">본문</span><span class="sg">주제</span></div>
+              <div class="cir"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+              <h4>본문·주제를 한 곳에서</h4>
+              <p>흩어졌던 본문검색과 주제추천을 검색 탭 하나로 합쳤다. 위 토글로 전환한다.</p>
+            </div>
+
+            <!-- TOC view (stub) -->
+            <div class="a-read a-stub" id="viewToc" style="display:none">
+              <div class="cir"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
+              <h4>성경 목차</h4>
+              <p>구약·신약 66권을 펼쳐 책과 장을 고른다.</p>
+            </div>
+
+            <!-- MARK view (stub) -->
+            <div class="a-read a-stub" id="viewMark" style="display:none">
+              <div class="cir"><svg viewBox="0 0 24 24"><path d="M6 4h12v16l-6-4-6 4z"/></svg></div>
+              <h4>책갈피 45</h4>
+              <p>표시해 둔 말씀을 모아 본다. 카드로 바로 내보낼 수 있다.</p>
+            </div>
+
+            <!-- SETTINGS view (stub) -->
+            <div class="a-read a-stub" id="viewSet" style="display:none">
+              <div class="cir"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></div>
+              <h4>설정</h4>
+              <p>글자 크기, 번역본, 읽기 모드, 야간 화면. 도구 버튼이 여기로 들어왔다.</p>
+            </div>
+
+            <!-- bottom tab bar -->
+            <div class="a-tabbar">
+              <div class="a-tab" data-view="viewToc"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg><span>목차</span></div>
+              <div class="a-tab" data-view="viewSearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>검색</span></div>
+              <div class="a-tab on" data-view="viewRead"><svg viewBox="0 0 24 24"><path d="M3 5.5C3 5 3.4 4.6 4 4.6c3 0 6 .6 8 2 2-1.4 5-2 8-2 .6 0 1 .4 1 .9V18c0 .5-.4 1-1 1-3 0-5.6.5-8 2-2.4-1.5-5-2-8-2-.6 0-1-.5-1-1z"/><path d="M12 6.6V20"/></svg><span>읽기</span></div>
+              <div class="a-tab" data-view="viewMark"><svg viewBox="0 0 24 24"><path d="M6 4h12v16l-6-4-6 4z"/></svg><span>책갈피</span><span class="bdg">45</span></div>
+              <div class="a-tab" data-view="viewSet"><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>설정</span></div>
+            </div>
+
+            <!-- chapter picker sheet -->
+            <div class="a-scrim" id="scrim"></div>
+            <div class="a-sheet" id="sheet">
+              <div class="grip"></div>
+              <div class="shead">
+                <span class="bk"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>잠언 · 장 선택</span>
+                <span class="cls" id="sheetClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              </div>
+              <div class="a-grid">
+                <div class="a-glabel">전체 31장</div>
+                <div class="a-chips" id="chips"></div>
+              </div>
+            </div>
+
+            <!-- translation picker sheet (주 / 보조) -->
+            <div class="a-sheet" id="transSheet">
+              <div class="grip"></div>
+              <div class="shead">
+                <span class="bk"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>번역본</span>
+                <span class="cls" id="transClose"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+              </div>
+              <div class="tsegs">
+                <button class="tseg on" data-role="main">주 번역</button>
+                <button class="tseg" data-role="sub">보조 번역</button>
+              </div>
+              <div class="tlist" id="tlist"></div>
+              <div class="tdual" id="dualRow" role="button">
+                <span>동시보기 — 두 번역 함께</span>
+                <span class="sw on" id="dualSw"><i></i></span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+<script>
+
+(function(){
+  /* ── chapter chips ───────────────────── */
+  var chips = document.getElementById('chips');
+  if(chips){
+    for(var i=1;i<=31;i++){
+      var c=document.createElement('div');
+      c.className='a-chip'+(i===4?' cur':'');
+      c.textContent=i;
+      chips.appendChild(c);
+    }
+  }
+
+  var scrim=document.getElementById('scrim');
+  var title=document.getElementById('chapTitle');
+  var chapSheet=document.getElementById('sheet');
+  var transSheet=document.getElementById('transSheet');
+
+  function showScrim(){scrim.classList.add('show');}
+  function syncScrim(){
+    if(!chapSheet.classList.contains('show') && !transSheet.classList.contains('show')) scrim.classList.remove('show');
+  }
+
+  /* ── chapter picker sheet ────────────── */
+  function openChap(){title.classList.add('open');chapSheet.classList.add('show');showScrim();}
+  function closeChap(){title.classList.remove('open');chapSheet.classList.remove('show');syncScrim();}
+  if(title) title.addEventListener('click',openChap);
+  document.getElementById('sheetClose').addEventListener('click',closeChap);
+  if(chips){
+    chips.addEventListener('click',function(e){
+      var t=e.target.closest('.a-chip');
+      if(!t)return;
+      Array.prototype.forEach.call(chips.children,function(ch){ch.classList.remove('cur');});
+      t.classList.add('cur');
+      title.childNodes[0].nodeValue='잠언 '+t.textContent+'장';
+      var pct=(parseInt(t.textContent,10)/31*100).toFixed(1);
+      document.querySelector('.a-prog .fill').style.width=pct+'%';
+      setTimeout(closeChap,160);
+    });
+  }
+
+  /* ── translation pair: chips · swap · sheet · dual toggle ── */
+  var TRANSLATIONS=['통독','새번역','개역개정','KJV'];
+  var state={main:'통독',sub:'새번역',dual:true};
+  var activeRole='main';
+
+  var chipMain=document.getElementById('chipMain');
+  var chipSub=document.getElementById('chipSub');
+  var transRow=document.getElementById('transRow');
+  var readInner=document.querySelector('#viewRead .inner');
+  var tlist=document.getElementById('tlist');
+  var dualSw=document.getElementById('dualSw');
+  var dualRow=document.getElementById('dualRow');
+
+  function setChip(el,name){ el.childNodes[0].nodeValue=name+' '; }
+  function renderChips(){ setChip(chipMain,state.main); setChip(chipSub,state.sub); }
+
+  function renderList(){
+    tlist.innerHTML='';
+    var current=state[activeRole];
+    var other=(activeRole==='main')?state.sub:state.main;
+    TRANSLATIONS.forEach(function(name){
+      var off=(name===other);
+      var row=document.createElement('div');
+      row.className='topt'+(name===current?' sel':'')+(off?' off':'');
+      row.innerHTML='<span>'+name+(off?' · 반대편에서 사용 중':'')+'</span>'+
+        '<svg class="ck" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>';
+      if(!off){
+        row.addEventListener('click',function(){
+          state[activeRole]=name;
+          renderChips(); renderList();
+        });
+      }
+      tlist.appendChild(row);
+    });
+  }
+  function setSeg(role){
+    activeRole=role;
+    document.querySelectorAll('.tseg').forEach(function(s){
+      s.classList.toggle('on', s.getAttribute('data-role')===role);
+    });
+    renderList();
+  }
+  function openTrans(role){ setSeg(role); transSheet.classList.add('show'); showScrim(); }
+  function closeTrans(){ transSheet.classList.remove('show'); syncScrim(); }
+
+  if(chipMain) chipMain.addEventListener('click',function(){openTrans('main');});
+  if(chipSub)  chipSub.addEventListener('click',function(){openTrans('sub');});
+  document.getElementById('transClose').addEventListener('click',closeTrans);
+  document.querySelectorAll('.tseg').forEach(function(s){
+    s.addEventListener('click',function(){ setSeg(s.getAttribute('data-role')); });
+  });
+
+  /* swap 주<->보조 : 바와 본문이 함께 뒤집힌다 */
+  var swapBtn=document.getElementById('swapBtn');
+  if(swapBtn){
+    swapBtn.addEventListener('click',function(){
+      var t=state.main; state.main=state.sub; state.sub=t;
+      renderChips();
+      readInner.classList.toggle('swapped');
+      if(transSheet.classList.contains('show')) renderList();
+    });
+  }
+
+  /* 동시보기 on/off : sub 칩·스왑·본문 보조줄을 함께 접고 편다 */
+  function applyDual(){
+    dualSw.classList.toggle('on', state.dual);
+    transRow.classList.toggle('solo', !state.dual);
+    readInner.classList.toggle('no-sub', !state.dual);
+  }
+  if(dualRow){ dualRow.addEventListener('click',function(){ state.dual=!state.dual; applyDual(); }); }
+
+  scrim.addEventListener('click',function(){ closeChap(); closeTrans(); });
+  renderChips();
+
+  /* ── bottom tab switching ────────────── */
+  var tabs=document.querySelectorAll('.a-tab');
+  var views=['viewRead','viewSearch','viewToc','viewMark','viewSet'];
+  tabs.forEach(function(tab){
+    tab.addEventListener('click',function(){
+      tabs.forEach(function(t){t.classList.remove('on');});
+      tab.classList.add('on');
+      var target=tab.getAttribute('data-view');
+      views.forEach(function(v){
+        var el=document.getElementById(v);
+        if(el) el.style.display=(v===target)?'':'none';
+      });
+      closeChap(); closeTrans();
+    });
+  });
+
+  /* ── audio mini player ───────────────── */
+  var audioBtn=document.getElementById('audioBtn');
+  var audioBar=document.getElementById('audioBar');
+  var audioClose=document.getElementById('audioClose');
+  if(audioBtn){
+    audioBtn.addEventListener('click',function(){
+      tabs.forEach(function(t){t.classList.remove('on');});
+      document.querySelector('.a-tab[data-view="viewRead"]').classList.add('on');
+      views.forEach(function(v){var el=document.getElementById(v);if(el)el.style.display=(v==='viewRead')?'':'none';});
+      audioBar.classList.toggle('show');
+    });
+  }
+  if(audioClose){audioClose.addEventListener('click',function(e){e.stopPropagation();audioBar.classList.remove('show');});}
+})();
+
+</script>
+</body>
+</html>
