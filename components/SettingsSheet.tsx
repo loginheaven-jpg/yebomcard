@@ -200,6 +200,7 @@ export default function SettingsSheet({
           <div className="w-full flex items-center justify-between px-5 py-2">
             <h2 className="text-base font-bold text-[var(--ink)] dark:text-gray-100">설정</h2>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={onClose}
               aria-label="닫기"
               className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1.5 -mr-1.5 rounded-full"
