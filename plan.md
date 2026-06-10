@@ -9,19 +9,23 @@
 
 WEB(World English Bible) 31,098절 적재 완료(또는 적재 진행 중). 후속 정합 항목들.
 
-### A. WEB 음원 통합 (대기 — 음원 미확보)
+### ~~A. WEB 음원 통합~~ — 완료 (2026-06-10)
 
-**현재 상태**: 사용자가 WEB 음원을 확보하는 대로 장 단위 음원(현 통독성경/개역개정 패턴) 으로 통합 예정.
+WEB 1189장 음원 적재 완료. 낭독자 David Williams (WEB Classic, Public Domain, AudioTreasure 출처).
 
-**도입 트리거**: 음원 파일 확보 + Supabase Storage 적재 가능 상태
+**적재 위치**: Cloudflare R2 bucket `attached` 에 `web/<book_code>/<NNN>.mp3` 형태로 1189 파일 (1.33GB)
+- Public URL base: `https://pub-7f869002b64b4501aa6e28ee31b1bd6c.r2.dev`
+- 캐시: `Cache-Control: public, max-age=31536000, immutable` (1년)
 
-**작업 내용**:
-1. `bible-audio` Storage 버킷에 `web/<book_code>/<NNN>.mp3` 업로드 (upload-bible-audio.mjs 재사용, `--version web` 지정)
-2. `bible_audio` 테이블에 (version='web', book_code, chapter, audio_url) 매핑 적재
-3. 코드 변경 0줄 — `TtsContext.transformWithChapterAudio` 가 이미 version 무관하게 동작 (lookupChapterAudio 가 매핑 있으면 mp3 우선)
-4. 미니플레이어 "녹음" 배지 자동 적용
+**DB**: `bible_audio` 1189행 (version='web', narrator='David Williams (WEB)')
 
-**예상 작업량** 음원 확보 후 ~30분 (시편 시범 → 전체 batch)
+**코드 변경 0줄** — `lib/bibleAudio.ts` 가 version 무관 동작, `TtsContext.transformWithChapterAudio` 가 mp3 자동 우선 재생, 미니플레이어 "녹음" 배지 자동 적용. 영문 TTS voice 분기는 mp3 없을 때 폴백으로 사용.
+
+**산출 스크립트**: `scripts/upload-web-audio-r2.mjs`, `scripts/gen-manifest.mjs`, `scripts/insert-web-audio-rows.mjs`, `scripts/verify-web-mapping.mjs`
+
+**백업**: 원본 LibriVox 124파일 묶음은 `bible/web-librivox-backup/` 보관 (1주 후 삭제 예정), Williams 원본은 `bible/web-source/` (R2 업로드용 원본, 모두 .gitignore 처리)
+
+**보안**: R2 API Token (`yebom-bible-audio-upload`) 작업 후 revoke 권장 — Cloudflare Dashboard → R2 → Manage R2 API Tokens.
 
 ### ~~B. 영문 TTS voice 분기~~ — 완료 (2026-06-10, 커밋 별건)
 
