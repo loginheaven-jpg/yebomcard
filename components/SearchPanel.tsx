@@ -2254,7 +2254,7 @@ export default function SearchPanel({
                   setBrowseStep("verse");
                   setMode("chapter");
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
               >
                 <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -2265,7 +2265,7 @@ export default function SearchPanel({
             {/* 복사 */}
             <button
               onClick={handleCopyToClipboard}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+              className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
             >
               <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185.64-.074 1.281-.135 1.927-.184" />
@@ -2276,7 +2276,7 @@ export default function SearchPanel({
             {isLoggedIn && selectedVerses.length === 1 && (
               <button
                 onClick={() => openNoteEditor(selectedVerses[0])}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
               >
                 <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
@@ -2288,7 +2288,7 @@ export default function SearchPanel({
             {adminMode && !bulkEditMode && selectedVerses.length === 1 && editingVerseId == null && (
               <button
                 onClick={() => enterEdit(selectedVerses[0])}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-amber-700 dark:text-amber-400 border-b border-[var(--line)] dark:border-gray-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 active:bg-amber-100 dark:active:bg-amber-900/40 transition-colors"
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-amber-700 dark:text-amber-400 border-b border-[var(--line)] dark:border-gray-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 active:bg-amber-100 dark:active:bg-amber-900/40 transition-colors"
                 title="이 절을 수정"
               >
                 <svg className="w-[17px] h-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
@@ -2299,13 +2299,13 @@ export default function SearchPanel({
             )}
             {/* 하이라이트 색칩 4종 + 지우개 (로그인) */}
             {isLoggedIn && (
-              <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--line)] dark:border-gray-700">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-4 px-2.5 py-2.5 border-b border-[var(--line)] dark:border-gray-700">
+                <div className="flex items-center gap-1.5">
                   {HIGHLIGHT_COLORS.map((c) => (
                     <button
                       key={c.key}
                       onClick={() => applyHighlight(c.key)}
-                      className={`w-[18px] h-[18px] rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
+                      className={`w-4 h-4 rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
                       title={c.label}
                       aria-label={`${c.label} 하이라이트`}
                     />
@@ -2313,7 +2313,7 @@ export default function SearchPanel({
                 </div>
                 <button
                   onClick={() => applyHighlight(null)}
-                  className="w-[18px] h-[18px] shrink-0 text-gray-400 dark:text-gray-500 active:scale-90 transition-transform"
+                  className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 active:scale-90 transition-transform"
                   title="하이라이트 지우기"
                   aria-label="하이라이트 지우기"
                 >
