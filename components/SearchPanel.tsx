@@ -239,7 +239,6 @@ export default function SearchPanel({
 
   // ─── 묵상 노트·하이라이트 (로그인 전용, verse_notes) ───
   const [chapterNotes, setChapterNotes] = useState<VerseNote[]>([]);
-  const [showColorPicker, setShowColorPicker] = useState(false);
   const [noteEditorVerse, setNoteEditorVerse] = useState<BibleVerse | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
@@ -261,13 +260,14 @@ export default function SearchPanel({
     [chapterNotes]
   );
   const refreshChapterNotes = useCallback(() => {
-    if (bookCode && chapter) fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+    if (bookCode && chapter) return fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+    return Promise.resolve();
   }, [bookCode, chapter]);
 
   // 선택된 절들에 하이라이트 색 적용/해제 (기존 메모는 유지)
   async function applyHighlight(color: string | null) {
-    setShowColorPicker(false);
-    for (const v of selectedVerses) {
+    const targets = [...selectedVerses];
+    for (const v of targets) {
       const existing = noteFor(v);
       await saveVerseNote({
         book_code: v.book_code,
@@ -278,7 +278,10 @@ export default function SearchPanel({
         version: mainVersion,
       });
     }
-    refreshChapterNotes();
+    // 노트(tint) 갱신 후 선택 해제 — 선택 배경(회색)이 하이라이트 색을 가리지 않도록.
+    // 갱신을 먼저 await 해서 해제 직후 색이 바로 보이게(깜빡임 방지).
+    await refreshChapterNotes();
+    targets.forEach((v) => onToggleVerse(v));
   }
   function openNoteEditor(v: BibleVerse) {
     setNoteDraft(noteFor(v)?.note ?? "");
@@ -2236,90 +2239,106 @@ export default function SearchPanel({
         </div>
       )}
 
-      {/* ─── 플로팅 액션 (선택 절이 있을 때) ─── */}
+      {/* ─── 플로팅 액션 카드 (선택 절이 있을 때) — 시안 F: 통합 카드 + 윤곽선 아이콘 ─── */}
       {selectedVerses.length > 0 && (
-        <div className="fixed bottom-24 right-4 sm:right-6 z-40 flex flex-col items-end gap-2 pointer-events-none">
-          {mode !== "chapter" && (
+        <div className="fixed bottom-24 right-4 sm:right-6 z-40 pointer-events-none">
+          <div className="pointer-events-auto w-[138px] bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-2xl shadow-lg dark:shadow-none overflow-hidden">
+            {/* 본문으로 (검색 결과에서만) */}
+            {mode !== "chapter" && (
+              <button
+                onClick={() => {
+                  const lastVerse = selectedVerses[selectedVerses.length - 1];
+                  setBookCode(lastVerse.book_code);
+                  setChapter(lastVerse.chapter);
+                  setRememberedVerse(lastVerse.verse);
+                  setBrowseStep("verse");
+                  setMode("chapter");
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+              >
+                <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                </svg>
+                본문으로
+              </button>
+            )}
+            {/* 복사 */}
             <button
-              onClick={() => {
-                const lastVerse = selectedVerses[selectedVerses.length - 1];
-                setBookCode(lastVerse.book_code);
-                setChapter(lastVerse.chapter);
-                setRememberedVerse(lastVerse.verse);
-                setBrowseStep("verse");
-                setMode("chapter");
-              }}
-              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
+              onClick={handleCopyToClipboard}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
             >
-              본문으로 가기
+              <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185.64-.074 1.281-.135 1.927-.184" />
+              </svg>
+              {copied ? "복사됨" : "복사"}
             </button>
-          )}
-          <button
-            onClick={handleCopyToClipboard}
-            className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:bg-gray-900 active:scale-95 transition-all"
-          >
-            {copied ? "✓ 복사됨" : "클립보드 복사"}
-          </button>
-          {/* 묵상: 하이라이트 + 메모 (로그인 전용) */}
-          {isLoggedIn && (
-            <div className="pointer-events-auto relative flex flex-col items-end gap-2">
-              {showColorPicker && (
-                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none">
+            {/* 메모 (로그인 + 단일) */}
+            {isLoggedIn && selectedVerses.length === 1 && (
+              <button
+                onClick={() => openNoteEditor(selectedVerses[0])}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+              >
+                <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+                메모
+              </button>
+            )}
+            {/* 수정 (관리자 + 단일) */}
+            {adminMode && !bulkEditMode && selectedVerses.length === 1 && editingVerseId == null && (
+              <button
+                onClick={() => enterEdit(selectedVerses[0])}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-amber-700 dark:text-amber-400 border-b border-[var(--line)] dark:border-gray-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 active:bg-amber-100 dark:active:bg-amber-900/40 transition-colors"
+                title="이 절을 수정"
+              >
+                <svg className="w-[17px] h-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+                수정
+              </button>
+            )}
+            {/* 하이라이트 색칩 4종 + 지우개 (로그인) */}
+            {isLoggedIn && (
+              <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--line)] dark:border-gray-700">
+                <div className="flex items-center gap-2">
                   {HIGHLIGHT_COLORS.map((c) => (
                     <button
                       key={c.key}
                       onClick={() => applyHighlight(c.key)}
-                      className={`w-6 h-6 rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
+                      className={`w-[18px] h-[18px] rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
                       title={c.label}
+                      aria-label={`${c.label} 하이라이트`}
                     />
                   ))}
-                  <button
-                    onClick={() => applyHighlight(null)}
-                    className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 active:scale-90"
-                    title="지우기"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
                 </div>
-              )}
-              <button
-                onClick={() => setShowColorPicker((v) => !v)}
-                className="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:hover:bg-gray-900 active:scale-95 transition-all"
-              >
-                🖍 형광펜
-              </button>
-            </div>
-          )}
-          {isLoggedIn && selectedVerses.length === 1 && (
+                <button
+                  onClick={() => applyHighlight(null)}
+                  className="w-[18px] h-[18px] shrink-0 text-gray-400 dark:text-gray-500 active:scale-90 transition-transform"
+                  title="하이라이트 지우기"
+                  aria-label="하이라이트 지우기"
+                >
+                  <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M22 21H7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m5 11 9 9" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            {/* 선택 완료 (primary) */}
             <button
-              onClick={() => openNoteEditor(selectedVerses[0])}
-              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:hover:bg-gray-900 active:scale-95 transition-all"
+              onClick={onConfirm}
+              className="w-full flex items-center justify-center gap-1.5 px-2 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white text-[13px] font-bold active:brightness-95 transition-colors"
             >
-              ✏️ 메모
-            </button>
-          )}
-          {/* 관리자: 단일 선택 시 [수정] 진입 (A안) */}
-          {adminMode && !bulkEditMode && selectedVerses.length === 1 && editingVerseId == null && (
-            <button
-              onClick={() => enterEdit(selectedVerses[0])}
-              className="pointer-events-auto px-4 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-full shadow-md dark:shadow-none hover:bg-amber-100 dark:hover:bg-amber-900/40 active:scale-95 transition-all flex items-center gap-1.5"
-              title="이 절을 수정"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
-              수정
+              선택 완료
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[11px] font-semibold bg-white/25 rounded-full">
+                {selectedVerses.length}
+              </span>
             </button>
-          )}
-          <button
-            onClick={onConfirm}
-            className="pointer-events-auto px-5 py-3 text-sm font-semibold text-white bg-[var(--amber)] rounded-full shadow-xl hover:bg-[var(--amber-deep)] active:scale-95 transition-all flex items-center gap-2"
-          >
-            선택 완료
-            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 text-xs font-semibold bg-white/25 text-white rounded-full">
-              {selectedVerses.length}
-            </span>
-          </button>
+          </div>
         </div>
       )}
 
