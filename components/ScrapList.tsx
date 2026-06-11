@@ -12,6 +12,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { BibleVerse } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
+import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 interface ScrapListProps {
   onBack: () => void;
@@ -19,7 +20,7 @@ interface ScrapListProps {
   onScrapCountChange: (count: number) => void;
 }
 
-type ScrapTab = "mine" | "community";
+type ScrapTab = "mine" | "myCards" | "community";
 
 export default function ScrapList({
   onBack,
@@ -30,10 +31,32 @@ export default function ScrapList({
   const [myScraps, setMyScraps] = useState<ServerScrap[]>([]);
   const [communityScraps, setCommunityScraps] = useState<CommunityScrap[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cardLightbox, setCardLightbox] = useState<ServerScrap | null>(null);
+
+  // 카드 = image_url 있는 스크랩 (신규 fetch 없이 로드된 myScraps 재사용)
+  const myCards = myScraps.filter((s) => s.image_url);
+
+  useHardwareBack(!!cardLightbox, () => setCardLightbox(null));
 
   useEffect(() => {
     loadMyScraps();
   }, []);
+
+  // 카드 이미지 재다운로드 (원격 URL → blob → 다운로드, CORS 실패 시 새 탭 폴백)
+  async function downloadCard(url: string, filename: string) {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      window.open(url, "_blank");
+    }
+  }
 
   async function loadMyScraps() {
     setLoading(true);
@@ -58,9 +81,13 @@ export default function ScrapList({
   }
 
   async function handleRemove(id: number) {
-    await removeScrapFromServer(id);
-    setMyScraps((prev) => prev.filter((s) => s.id !== id));
-    onScrapCountChange(myScraps.length - 1);
+    const ok = await removeScrapFromServer(id);
+    if (!ok) { alert("삭제에 실패했습니다. 다시 시도해 주세요."); return; }
+    setMyScraps((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      onScrapCountChange(next.length);
+      return next;
+    });
   }
 
   const versionLabel = (v: string) => getVersionLabel(v as any);
@@ -75,9 +102,12 @@ export default function ScrapList({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-          스크랩{" "}
+          {tab === "myCards" ? "나의 카드" : "스크랩"}{" "}
           {tab === "mine" && (
             <span className="text-sm font-normal text-gray-400">{myScraps.length}개</span>
+          )}
+          {tab === "myCards" && (
+            <span className="text-sm font-normal text-gray-400">{myCards.length}개</span>
           )}
         </h2>
         <button
@@ -93,8 +123,11 @@ export default function ScrapList({
         <button onClick={() => handleTabChange("mine")} className={tabClass("mine")}>
           나의 스크랩
         </button>
+        <button onClick={() => handleTabChange("myCards")} className={tabClass("myCards")}>
+          나의 카드
+        </button>
         <button onClick={() => handleTabChange("community")} className={tabClass("community")}>
-          다른 성도님의 스크랩
+          다른 성도님
         </button>
       </div>
 
@@ -154,6 +187,38 @@ export default function ScrapList({
         </>
       )}
 
+      {/* 나의 카드 — image_url 있는 스크랩 갤러리 */}
+      {!loading && tab === "myCards" && (
+        <>
+          {myCards.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 16.5h18M3 16.5a1.5 1.5 0 01-1.5-1.5V6A1.5 1.5 0 013 4.5h18A1.5 1.5 0 0122.5 6v9a1.5 1.5 0 01-1.5 1.5M3 16.5l3.75-.003" />
+              </svg>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">만든 카드가 없습니다</p>
+              <p className="text-xs text-gray-400">
+                말씀으로 카드를 만들면<br />여기에 모입니다
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {myCards.map((card) => (
+              <button
+                key={card.id}
+                onClick={() => setCardLightbox(card)}
+                className="group relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 border border-gray-100 dark:border-gray-800 active:scale-[0.98] transition-transform"
+              >
+                <img src={card.image_url} alt={card.reference} className="w-full h-full object-cover" />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
+                  <p className="text-[11px] font-medium text-white truncate text-left">{card.reference}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* 커뮤니티 스크랩 */}
       {!loading && tab === "community" && (
         <>
@@ -192,6 +257,43 @@ export default function ScrapList({
             ))}
           </div>
         </>
+      )}
+
+      {/* 카드 라이트박스 — 확대 + 재다운로드 */}
+      {cardLightbox && cardLightbox.image_url && (
+        <div
+          className="fixed inset-0 z-[150] bg-black/95 flex flex-col items-center justify-center p-4 animate-[fadeInUp_0.2s_ease-out]"
+          onClick={() => setCardLightbox(null)}
+        >
+          <img
+            src={cardLightbox.image_url}
+            alt={cardLightbox.reference}
+            className="max-w-full max-h-[72vh] object-contain rounded-lg pointer-events-none"
+          />
+          <p className="text-white/80 text-sm mt-3">{cardLightbox.reference}</p>
+          <div className="flex gap-3 mt-5" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() =>
+                downloadCard(
+                  cardLightbox.image_url!,
+                  `yebom-card-${cardLightbox.book_code}${cardLightbox.chapter}.png`
+                )
+              }
+              className="flex items-center gap-2 px-5 py-3 rounded-full bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white font-medium shadow-lg transition-all active:scale-95"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              다운로드
+            </button>
+            <button
+              onClick={() => setCardLightbox(null)}
+              className="flex items-center gap-2 px-5 py-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-medium shadow-lg transition-all active:scale-95"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

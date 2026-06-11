@@ -605,15 +605,18 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
       }
       
       // 3. 서버 스크랩 저장 (이미지 URL 포함)
-      await addScrapToServer(verses, mainVersion, imageUrl);
-      
+      const saved = await addScrapToServer(verses, mainVersion, imageUrl);
+
       // 4. 로컬 다운로드도 병행 실행
       const link = document.createElement("a");
       link.download = `yebom-card-${firstVerse.book_code}${firstVerse.chapter}.png`;
       link.href = dataUrl;
       link.click();
-      
-      alert("카드가 갤러리에 저장되고 앱 스크랩에도 추가되었습니다!");
+
+      // 비로그인/세션만료 시 스크랩 저장은 실패하지만 다운로드는 정상 — 거짓 성공 안내 방지
+      alert(saved
+        ? "카드가 갤러리에 저장되고 앱 스크랩에도 추가되었습니다!"
+        : "카드를 다운로드했습니다.\n(로그인하시면 앱 스크랩에도 저장됩니다)");
     } catch (err) {
       console.error("Scrap & Download failed:", err);
       alert("저장 중 오류가 발생했습니다.");
@@ -937,10 +940,12 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
                     onClick={async () => {
                       if (!confirm("이 사진을 삭제하시겠습니까?")) return;
                       // 서버에서 삭제 (UUID가 아닌 경우 무시)
+                      // 서버 삭제 실패(401/네트워크) 시 로컬만 지워지는 불일치 방지 — 실패하면 중단
                       if (img.id && img.id.length === 36) {
                         try {
-                          await fetch(`/api/photos?id=${img.id}`, { method: "DELETE" });
-                        } catch { /* silent */ }
+                          const delRes = await fetch(`/api/photos?id=${img.id}`, { method: "DELETE" });
+                          if (!delRes.ok) { alert("사진 삭제에 실패했습니다."); return; }
+                        } catch { alert("사진 삭제에 실패했습니다."); return; }
                       }
                       setUploads((prev) => prev.filter((_, idx) => idx !== i));
                       setSelectedUploadIdx((prev) => Math.max(0, Math.min(prev, uploads.length - 2)));

@@ -16,6 +16,20 @@ import {
   type BiblePosition,
   type Bookmark,
 } from "@/lib/bookmark";
+import {
+  fetchReadChapters,
+  markChapterRead,
+  computeProgress,
+  type ReadChapter,
+} from "@/lib/reading-progress";
+import {
+  HIGHLIGHT_COLORS,
+  colorTint,
+  fetchChapterNotes,
+  saveVerseNote,
+  type VerseNote,
+} from "@/lib/verse-notes";
+import { syncOnLogin, pushBookmarks, pushRecent } from "@/lib/userSync";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
 import HomeBlankContent from "./HomeBlankContent";
@@ -204,6 +218,88 @@ export default function SearchPanel({
   const [showBookmarkMenu, setShowBookmarkMenu] = useState(false);
   const bookmarkMenuContainerRef = useRef<HTMLDivElement>(null);
 
+  // ─── 통독 진도 (로그인 전용, reading_progress) ───
+  const [readChapters, setReadChapters] = useState<ReadChapter[]>([]);
+  const progress = useMemo(() => computeProgress(readChapters), [readChapters]);
+  useEffect(() => {
+    if (sessionLoading || !isLoggedIn) { setReadChapters([]); return; }
+    fetchReadChapters().then(setReadChapters);
+  }, [sessionLoading, isLoggedIn]);
+
+  // ─── 기기간 동기화 (로그인 시 1회: 책갈피 union + 마지막 위치 merge) ───
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (sessionLoading || !isLoggedIn || syncedRef.current) return;
+    syncedRef.current = true;
+    syncOnLogin().then(({ bookmarks, recent }) => {
+      setBookmarks(bookmarks);
+      if (recent) setRecent(recent);
+    });
+  }, [sessionLoading, isLoggedIn]);
+
+  // ─── 묵상 노트·하이라이트 (로그인 전용, verse_notes) ───
+  const [chapterNotes, setChapterNotes] = useState<VerseNote[]>([]);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [noteEditorVerse, setNoteEditorVerse] = useState<BibleVerse | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
+
+  // 현재 browse 장의 노트만 로드 (전체 페치 금지 — 쿼리 부하 최소화)
+  useEffect(() => {
+    if (sessionLoading || !isLoggedIn || mode !== "chapter" || browseStep !== "verse" || !bookCode || !chapter) {
+      setChapterNotes([]);
+      return;
+    }
+    fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+  }, [sessionLoading, isLoggedIn, mode, browseStep, bookCode, chapter]);
+
+  const noteFor = useCallback(
+    (v: BibleVerse) =>
+      chapterNotes.find(
+        (n) => n.book_code === v.book_code && n.chapter === v.chapter && n.verse === v.verse
+      ),
+    [chapterNotes]
+  );
+  const refreshChapterNotes = useCallback(() => {
+    if (bookCode && chapter) fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+  }, [bookCode, chapter]);
+
+  // 선택된 절들에 하이라이트 색 적용/해제 (기존 메모는 유지)
+  async function applyHighlight(color: string | null) {
+    setShowColorPicker(false);
+    for (const v of selectedVerses) {
+      const existing = noteFor(v);
+      await saveVerseNote({
+        book_code: v.book_code,
+        chapter: v.chapter,
+        verse: v.verse,
+        color,
+        note: existing?.note ?? null,
+        version: mainVersion,
+      });
+    }
+    refreshChapterNotes();
+  }
+  function openNoteEditor(v: BibleVerse) {
+    setNoteDraft(noteFor(v)?.note ?? "");
+    setNoteEditorVerse(v);
+  }
+  async function saveNote() {
+    if (!noteEditorVerse) return;
+    const v = noteEditorVerse;
+    const existing = noteFor(v);
+    await saveVerseNote({
+      book_code: v.book_code,
+      chapter: v.chapter,
+      verse: v.verse,
+      color: existing?.color ?? null,
+      note: noteDraft.trim() || null,
+      version: mainVersion,
+    });
+    setNoteEditorVerse(null);
+    refreshChapterNotes();
+  }
+
   // 책갈피 메뉴 외부 클릭 시 자동 닫기 (Fix #2)
   // 하단 5탭 책갈피 버튼 (data-bookmark-tab) 은 토글이므로 제외
   useEffect(() => {
@@ -380,11 +476,22 @@ export default function SearchPanel({
         version: mainVersion,
         subVersion,
       };
+      const recentPos: BiblePosition = { ...next, savedAt: Date.now() };
       saveRecent(next);
-      setRecent({ ...next, savedAt: Date.now() });
+      setRecent(recentPos);
+      // 통독 진도 + 마지막 위치 동기화 (로그인 시) + 낙관적 진도 갱신 (서버 SELECT-then-UPSERT 가 중복 흡수)
+      if (isLoggedIn) {
+        markChapterRead(bookCode, chapter, mainVersion);
+        pushRecent(recentPos);
+        setReadChapters((prev) =>
+          prev.some((r) => r.book_code === bookCode && r.chapter === chapter)
+            ? prev
+            : [...prev, { book_code: bookCode, chapter, read_at: new Date().toISOString() }]
+        );
+      }
     }, 3000);
     return () => clearTimeout(t);
-  }, [mode, browseStep, bookCode, chapter, mainVersion, subVersion]);
+  }, [mode, browseStep, bookCode, chapter, mainVersion, subVersion, isLoggedIn]);
 
   // 위치로 점프 — 번역본(주·부)도 함께 복원
   function jumpTo(pos: BiblePosition | Bookmark) {
@@ -411,10 +518,12 @@ export default function SearchPanel({
       subVersion,
     });
     setBookmarks(updated);
+    if (isLoggedIn) pushBookmarks(updated);
   }
   function deleteBookmark(id: string) {
     const updated = removeBookmark(id);
     setBookmarks(updated);
+    if (isLoggedIn) pushBookmarks(updated);
   }
   const totalBookmarkCount = (recent ? 1 : 0) + bookmarks.length;
   const canAddCurrent = mode === "chapter" && browseStep === "verse" && !!bookCode && !!chapter;
@@ -1165,6 +1274,8 @@ export default function SearchPanel({
     }
     const { showBookInfo, altText } = opts ?? {};
     const selected = isSelected(verse, selectedVerses);
+    const note = noteFor(verse);
+    const tint = note?.color ? colorTint(note.color) : "";
     return (
       <button
         key={verse.id}
@@ -1175,7 +1286,7 @@ export default function SearchPanel({
         className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
           selected
             ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400"
-            : "hover:bg-gray-50 dark:bg-gray-900"
+            : tint || "hover:bg-gray-50 dark:bg-gray-900"
         }`}
       >
         {showBookInfo && (
@@ -1196,6 +1307,12 @@ export default function SearchPanel({
         {altText && (
           <div className="bible-sub-text leading-relaxed text-gray-400" style={{ fontSize: `${fontSize - 2}px`, fontFamily: currentFont.css, fontWeight: currentFont.weight }}>
             {altText}
+          </div>
+        )}
+        {note?.note && (
+          <div className="mt-1.5 flex items-start gap-1 text-[12px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
+            <span className="shrink-0">📝</span>
+            <span className="whitespace-pre-wrap break-words">{note.note}</span>
           </div>
         )}
         {selected && (
@@ -1513,6 +1630,30 @@ export default function SearchPanel({
                 ref={bookmarkMenuContainerRef}
                 className="absolute z-30 left-0 right-0 top-0 bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-xl shadow-lg dark:shadow-none overflow-hidden"
               >
+                {/* 통독 진도 (로그인 전용) */}
+                {isLoggedIn && (
+                  <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">📖 통독 진도</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {progress.readCount}/{progress.total}장
+                      </span>
+                    </div>
+                    {[
+                      { label: "전체", p: progress.percent },
+                      { label: "구약", p: progress.ot.percent },
+                      { label: "신약", p: progress.nt.percent },
+                    ].map(({ label, p }) => (
+                      <div key={label} className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 w-6 shrink-0">{label}</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                          <div className="h-full bg-[var(--amber)] rounded-full transition-all" style={{ width: `${p}%` }} />
+                        </div>
+                        <span className="text-[10px] text-gray-400 w-9 shrink-0 text-right">{p}%</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* 최근 (자동) */}
                 {recent && (
                   <button
@@ -2119,6 +2260,44 @@ export default function SearchPanel({
           >
             {copied ? "✓ 복사됨" : "클립보드 복사"}
           </button>
+          {/* 묵상: 하이라이트 + 메모 (로그인 전용) */}
+          {isLoggedIn && (
+            <div className="pointer-events-auto relative flex flex-col items-end gap-2">
+              {showColorPicker && (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none">
+                  {HIGHLIGHT_COLORS.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => applyHighlight(c.key)}
+                      className={`w-6 h-6 rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
+                      title={c.label}
+                    />
+                  ))}
+                  <button
+                    onClick={() => applyHighlight(null)}
+                    className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 active:scale-90"
+                    title="지우기"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => setShowColorPicker((v) => !v)}
+                className="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:hover:bg-gray-900 active:scale-95 transition-all"
+              >
+                🖍 형광펜
+              </button>
+            </div>
+          )}
+          {isLoggedIn && selectedVerses.length === 1 && (
+            <button
+              onClick={() => openNoteEditor(selectedVerses[0])}
+              className="pointer-events-auto px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full shadow-md dark:shadow-none hover:bg-gray-50 dark:hover:bg-gray-900 active:scale-95 transition-all"
+            >
+              ✏️ 메모
+            </button>
+          )}
           {/* 관리자: 단일 선택 시 [수정] 진입 (A안) */}
           {adminMode && !bulkEditMode && selectedVerses.length === 1 && editingVerseId == null && (
             <button
@@ -2141,6 +2320,46 @@ export default function SearchPanel({
               {selectedVerses.length}
             </span>
           </button>
+        </div>
+      )}
+
+      {/* 묵상 메모 에디터 */}
+      {noteEditorVerse && (
+        <div
+          className="fixed inset-0 z-[150] bg-black/50 flex items-center justify-center p-4 animate-[fadeInUp_0.2s_ease-out]"
+          onClick={() => setNoteEditorVerse(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+              {noteEditorVerse.book_name} {noteEditorVerse.chapter}:{noteEditorVerse.verse} 메모
+            </div>
+            <p className="text-xs text-gray-400 mb-3 line-clamp-2">{stripNotes(noteEditorVerse.text)}</p>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder="이 말씀에 대한 묵상을 적어보세요"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--amber)]"
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setNoteEditorVerse(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                취소
+              </button>
+              <button
+                onClick={saveNote}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)]"
+              >
+                저장
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

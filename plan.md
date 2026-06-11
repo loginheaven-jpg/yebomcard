@@ -5,6 +5,50 @@
 
 ---
 
+## 🚧 로그인 게이트 보완 + 로그인 전용 신규 기능 (구현 완료, 런타임 검증 대기, 2026-06-11)
+
+로그인 게이트 UX 통일 + 로그인 명분을 강화하는 개인 신앙 데이터 기능 4종 신설.
+
+**상태**: 5개 Phase 코드 완료 + `npx next build` 통과 + **DB 마이그레이션 적용 완료**(Supabase MCP, project `iityjmjgnjtvqujpivjg`). **남은 일**: 앱에서 로그인 상태 런타임 검증(진도 기록·하이라이트/메모·카드갤러리·기기 동기화).
+
+### 📌 후속 발견 (별건): AI 생성 게이트 누락
+감사 중 [components/CardPreview.tsx](components/CardPreview.tsx) 의 AI 배경/삽화 생성(`/api/ai/background`, `/api/ai/recommend`)이 **로그인 체크 없이** 호출됨을 확인. 운영비 노출 가능성. 빈도·심각도 판단 후 게이트 추가 여부 결정(변경 안 함도 옵션).
+
+### 🔒 공유 DB(yebomsaint) RLS 점검 (별건, 보류)
+마이그레이션 적용 중 Supabase advisor 가 **기존 32개 테이블의 RLS 비활성** 경고 — `members`(306), `attendance`(33,495), `prayer_requests`, `prayer_notifications`(26,149) 등 민감 데이터 포함. anon key 보유자가 읽기/수정 가능.
+- **성격**: `yebomsaint` DB 공유 앱들(교적부/기도의집/와이즈톡/성경)의 **기존 설정** — 이번 작업과 무관(신규 3개 테이블은 RLS enable 로 적재). 예봄성경 단독 이슈 아님.
+- **왜 보류**: 블랭킷 `ENABLE ROW LEVEL SECURITY`(정책 없이) 시 해당 앱들 전면 차단되어 깨짐. 테이블별 접근 패턴 파악 + 정책 설계 선행 필요. advisor remediation_sql(32개 일괄 enable) 그대로 실행 금지.
+- **트리거**: 공유 DB 보안 점검을 별도 과제로 착수 + 앱별 소유자 합의 시.
+
+### 확정 결정
+- **A 통독진도**: 자유 진도 (읽은 장 자동 집계 → 전체/구약/신약 % + 권별 dot grid). 1년1독 플랜 X
+- **B 묵상노트**: 하이라이트 **4색**(노랑/분홍/파랑/초록) + 절 메모. 진입 = **절 선택 → 하단 액션바**에 [형광펜][메모] 버튼
+- **C 카드갤러리**: 기존 `scraps` 재사용(`image_url IS NOT NULL`). ScrapList 세 번째 탭. 카드 클릭 = 이미지 확대+재다운로드
+- **E 기기간 동기화**: 책갈피(union 머지) + 마지막 위치(recent, last-write-wins). TTS 재생위치는 영속 상태가 없어 recent로 갈음(통독진도 A와 보완)
+- **진도 기록 기준**: 장 진입 3초(기존 `saveRecent` 트리거 재사용)
+
+### 신규 테이블 (모두 `scraps` RLS 패턴 복제 — RLS 작성 필수)
+- `reading_progress(user_id, book_code, chapter, version, read_at)` UNIQUE(user_id, book_code, chapter)
+- `verse_notes(user_id, user_name, book_code, chapter, verse, color?, note?, version, created_at, updated_at)` UNIQUE(user_id, book_code, chapter, verse). color·note 둘 다 비면 행 삭제
+- `user_state(user_id, key, value jsonb, updated_at)` PK(user_id, key). key='bookmarks'|'recent'
+- C는 신규 테이블 0
+
+### 구현 순서 (게이트 먼저 — 신규 기능이 전부 같은 게이트 사용)
+1. **게이트 보완**: `components/LoginGate.tsx`(Provider+`useLoginGate().ensureLogin(label)`) — HymnModal 모달 공용화. `requireAuth()` 즉시 외부 튕김 3곳 + silent 401 토스트 일괄 교체. `LOGIN_URL` 단일화
+2. **C 카드갤러리**: ScrapList `myCards` 탭 + `fetchMyCards()` 래퍼
+3. **A 통독진도**: `/api/reading-progress`(scrap 라우트 복제) + SearchPanel 3초 useEffect에 `markChapterRead()` + 책갈피/목차 진도 섹션
+4. **B 묵상노트**: `/api/verse-notes` + renderVerseItem 하이라이트 배경/메모 아이콘 + `noteEditorVerseId` 편집(기존 `editingVerseId` 패턴 복제)
+5. **E 동기화**: `/api/user-state` + 로그인 시 클라우드→localStorage 머지
+
+### 주의 (워크플로 감사 risk)
+- renderVerseItem 메모 아이콘 onClick은 `stopPropagation()` 필수(절 선택 토글 발화 방지)
+- 길게누름 타이머 가드에 `noteEditorVerseId!==null` 추가(에디터 중 전체화면 차단)
+- 병기·검색 모드 절 렌더 분기까지 하이라이트/메모 적용
+- LoginGate z-index `z-[155]` (HymnModal 150/160 경합 회피)
+- GET류(fetchMyScraps/ChapterNotes/ReadChapters) 401 무음 유지 — 빈 목록이 정상, 토스트 과잉 금지
+
+---
+
 ## WEB 역본 후속 — 음원 통합 + 부가 정합 (대기, 2026-06-10)
 
 WEB(World English Bible) 31,098절 적재 완료(또는 적재 진행 중). 후속 정합 항목들.

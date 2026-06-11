@@ -124,6 +124,20 @@ API `/api/photos`:
 | `storage_path` | bucket 내 경로 |
 | `created_at` |  |
 
+## 5b. 로그인 전용 기능 테이블 (2026-06-11 신설)
+
+DDL: [scripts/migration-login-features.sql](../scripts/migration-login-features.sql). 모두 `scraps` 패턴.
+공통: `user_id`(text, saint.yebom.org), 쓰기는 SELECT-then-UPDATE/INSERT(또는 upsert), API 는 `supabaseAdmin`(service_role)로만 접근.
+
+### `reading_progress` — 통독 진도 (A)
+1행=1장. `(user_id, book_code, chapter, version, read_at)`. **UNIQUE** `(user_id, book_code, chapter)` — 어느 역본으로 읽든 1독 1회(version 키 제외). SearchPanel 3초 트리거가 `markChapterRead`. 진도% = `computeProgress` (총 1189장, [lib/books.ts](../lib/books.ts) `CHAPTER_COUNTS`).
+
+### `verse_notes` — 묵상 노트·하이라이트 (B)
+1행=1절. `(user_id, user_name, book_code, chapter, verse, color?, note?, version, created_at, updated_at)`. **UNIQUE** `(user_id, book_code, chapter, verse)`. color·note 둘 다 비면 **행 삭제**. 색 4종(노랑/분홍/파랑/초록, [lib/verse-notes.ts](../lib/verse-notes.ts) `HIGHLIGHT_COLORS`). GET 은 `?book=&chapter=` 장 단위 페치.
+
+### `user_state` — 기기간 동기화 (E)
+KV. PK `(user_id, key)`, `value jsonb`, `updated_at`. key=`bookmarks`(union 머지) / `recent`(마지막 위치, last-write-wins). [lib/userSync.ts](../lib/userSync.ts). 카드갤러리(C)는 기존 `scraps` 재사용(신규 테이블 없음).
+
 ## 6. iron-session 쿠키
 
 `SessionData` (lib/auth/session.ts):
@@ -143,11 +157,13 @@ TTL: 7일. 만료 시 다음 페이지 로드의 `/api/auth/session` 이 `{ sess
 - `scraps`: 자신 데이터만 SELECT/INSERT/UPDATE/DELETE (server-side service role 우회 권장)
 - `bible_verses`, `bible_audio`: public READ (anon key OK)
 - `user_photos`: 자신 데이터만 접근
+- `reading_progress`, `verse_notes`, `user_state`: **RLS enable + 정책 없음** → anon/authenticated 직접 접근 전면 차단. 앱이 iron-session(Supabase Auth 미사용)이라 `auth.uid()` 가 항상 null. API 의 `supabaseAdmin`(service_role)만 우회하며 항상 `user_id` 스코프
 
 ## 8. 마이그레이션 이력
 
 | 일자 | 변경 |
 |---|---|
+| 2026-06-11 | 로그인 전용 기능 테이블 3종 신설 (`reading_progress`/`verse_notes`/`user_state`) — `scripts/migration-login-features.sql` |
 | 2026-06-10 | `scraps_unique_per_user` UNIQUE 추가 + 기존 중복 row 정리 (20+ 그룹) |
 | 2026-06-10 | WEB 역본 적재 (`bible_verses` + `bible_audio` 1189 row) |
 | 2026-05 | (선) bible_verses 3개 한국어 역본 (nkrv/rnksv/easy) — `성경데이터확장문서.md` |

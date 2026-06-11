@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import type { SessionData } from "@/lib/auth/session";
 
-const LOGIN_URL = "https://saint.yebom.org/login?from=bible";
+export const LOGIN_URL = "https://saint.yebom.org/login?from=bible";
 
 export function useSession() {
   const [session, setSession] = useState<SessionData | null>(null);

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useWakeLock } from "@/hooks/useWakeLock";
-import { useSession } from "@/hooks/useSession";
+import { useLoginGate } from "@/components/LoginGate";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 import { useFont, FONTS } from "@/contexts/FontContext";
@@ -29,12 +29,10 @@ export default function HymnModal({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [selectedHymn, setSelectedHymn] = useState<Hymn | null>(null);
   const [showHymnImage, setShowHymnImage] = useState(false);
-  const [showLoginConfirm, setShowLoginConfirm] = useState(false);
-  
-  const { session } = useSession();
-  
+
+  const { ensureLogin } = useLoginGate();
+
   useHardwareBack(showHymnImage, () => setShowHymnImage(false));
-  useHardwareBack(showLoginConfirm, () => setShowLoginConfirm(false));
 
   useWakeLock(!!selectedHymn);
 
@@ -314,11 +312,7 @@ export default function HymnModal({ onClose }: Props) {
               <div>
                 <button 
                   onClick={() => {
-                    if (session?.isLoggedIn) {
-                      setShowHymnImage(true);
-                    } else {
-                      setShowLoginConfirm(true);
-                    }
+                    if (ensureLogin("악보 보기")) setShowHymnImage(true);
                   }}
                   className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold tracking-wider mb-4 transition-colors ${theme === "dark" ? "bg-gray-800 text-gray-400 hover:bg-gray-700" : "bg-gray-200 text-gray-600 hover:bg-gray-300"}`}
                 >
@@ -393,33 +387,6 @@ export default function HymnModal({ onClose }: Props) {
         </div>
       )}
 
-      {/* Login Confirm Modal */}
-      {showLoginConfirm && (
-        <div className="fixed inset-0 z-[160] bg-black/60 flex items-center justify-center animate-[fadeInUp_0.2s_ease-out]">
-          <div className={`w-[90%] max-w-sm rounded-2xl p-6 shadow-xl ${theme === "dark" ? "bg-gray-800 text-gray-100" : "bg-white text-gray-900"}`}>
-            <h3 className="text-lg font-bold mb-3 text-center">로그인 필요</h3>
-            <p className={`text-center mb-6 leading-relaxed ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
-              악보 보기 기능은 로그인 후<br />이용하실 수 있습니다.
-            </p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setShowLoginConfirm(false)}
-                className={`flex-1 py-3 rounded-xl font-bold transition-colors ${theme === "dark" ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
-              >
-                취소
-              </button>
-              <button 
-                onClick={() => {
-                  window.location.href = "https://saint.yebom.org/login?from=bible";
-                }}
-                className="flex-1 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white rounded-xl font-bold transition-colors shadow-sm"
-              >
-                로그인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

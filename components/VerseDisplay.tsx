@@ -9,6 +9,7 @@ import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useFont, FONTS } from "@/contexts/FontContext";
+import { useLoginGate } from "@/components/LoginGate";
 
 interface VerseDisplayProps {
   verses: BibleVerse[];
@@ -19,7 +20,6 @@ interface VerseDisplayProps {
   onRemoveVerse: (verse: BibleVerse) => void;
   onCreateCard: () => void;
   onScrapSaved?: () => void;
-  requireAuth?: () => boolean;
 }
 
 /**
@@ -121,8 +121,8 @@ export default function VerseDisplay({
   onRemoveVerse,
   onCreateCard,
   onScrapSaved,
-  requireAuth,
 }: VerseDisplayProps) {
+  const { ensureLogin } = useLoginGate();
   const [englishVerses, setEnglishVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showShareOptions, setShowShareOptions] = useState(false);
@@ -337,7 +337,7 @@ export default function VerseDisplay({
         {!showShareOptions ? (
           <button
             onClick={() => {
-              if (requireAuth && !requireAuth()) return;
+              if (!ensureLogin("스크랩")) return;
               addScrapToServer(verses, mainVersion);
               onScrapSaved?.();
               setShowShareOptions(true);
@@ -431,7 +431,7 @@ export default function VerseDisplay({
         {/* 스크랩만 하기 */}
         <button
           onClick={async () => {
-            if (requireAuth && !requireAuth()) return;
+            if (!ensureLogin("스크랩")) return;
             await addScrapToServer(verses, mainVersion);
             onScrapSaved?.();
           }}

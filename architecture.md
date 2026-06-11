@@ -1,6 +1,6 @@
 # architecture.md — 시스템 아키텍처 (현행 + 변경 이력)
 
-> **버전**: 0.5.0
+> **버전**: 0.6.0
 > **최종 갱신**: 2026-06-11
 > **상태**: living document — 모든 아키텍처 변경·신규 개발 사항은 본 파일의 **변경 이력** 섹션에 최상단부터 누적 기록한다.
 
@@ -12,6 +12,16 @@
 ---
 
 ## 📜 변경 이력 (최신 위)
+
+### 2026-06-11 — 로그인 게이트 통일 + 로그인 전용 기능 4종 (코드 완료, DB 마이그레이션 대기)
+- **게이트 보완**: `components/LoginGate.tsx` 신규 — `LoginGateProvider`(layout 마운트) + `useLoginGate().ensureLogin(label)`. 찬송가 악보 인앱 모달을 공용화. `requireAuth()` 즉시 외부 튕김(page/VerseDisplay/HymnModal) → 인앱 "로그인 필요" 모달 경유로 통일. `LOGIN_URL` 단일화(`useSession.ts` export)
+- **401 피드백**: CardPreview 카드저장 거짓 성공 안내 수정 + 사진삭제 실패 중단, ScrapList 삭제 실패 롤백+alert
+- **A 통독진도**: `reading_progress` 테이블 + `/api/reading-progress` + `lib/reading-progress.ts`(computeProgress) + `lib/books.ts` `CHAPTER_COUNTS`(1189장). SearchPanel 3초 트리거에 `markChapterRead` 합류, 책갈피 메뉴에 전체/구약/신약 진도 바
+- **B 묵상노트·하이라이트**: `verse_notes` 테이블 + `/api/verse-notes` + `lib/verse-notes.ts`(4색). renderVerseItem 하이라이트 배경+메모 표시, 하단 액션바 [형광펜][메모], 메모 에디터 모달
+- **C 카드갤러리**: 신규 테이블 0. ScrapList `myCards` 탭 — `image_url` 있는 스크랩 그리드 + 라이트박스(확대/재다운로드)
+- **E 기기간 동기화**: `user_state` 테이블 + `/api/user-state` + `lib/userSync.ts`. 책갈피 union 머지 + 마지막위치(recent) last-write-wins. 로그인 시 1회 동기화 + 변경 시 푸시
+- **마이그레이션**: `scripts/migration-login-features.sql` (3개 테이블, RLS enable+정책없음=service-role 전용) — **적용 대기**
+- 빌드 통과(`npx next build`). [plan.md](plan.md) "로그인 게이트 보완" 항목 참조
 
 ### 2026-06-11 — AI 주제 추천 모든 version 호환
 - 증상: mainVersion=KJV 에서 "추천된 구절을 DB에서 찾을 수 없습니다" 에러

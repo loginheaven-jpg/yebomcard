@@ -112,6 +112,17 @@ export function removeBookmark(id: string): Bookmark[] {
   return list;
 }
 
+// ─── 기기간 동기화용 writer (lib/userSync.ts 에서 사용) ───
+export function overwriteBookmarks(list: Bookmark[]) {
+  writeBookmarks(list);
+}
+export function overwriteRecent(pos: BiblePosition) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(pos));
+  } catch {}
+}
+
 // ─── 시간 포맷 ───
 
 export function formatRelativeTime(savedAt: number): string {

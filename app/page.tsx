@@ -10,7 +10,8 @@ import SettingsSheet from "@/components/SettingsSheet";
 import { readBookmarks } from "@/lib/bookmark";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
 import { supabase } from "@/lib/supabase";
-import { useSession } from "@/hooks/useSession";
+import { useSession, LOGIN_URL } from "@/hooks/useSession";
+import { useLoginGate } from "@/components/LoginGate";
 import { isAdmin } from "@/lib/admin";
 import WorshipBible from "@/components/WorshipBible";
 import CardBuilder from "@/components/CardBuilder";
@@ -24,7 +25,8 @@ const MAIN_VERSION_KEY = "yebom_main_version";
 const SUB_VERSION_KEY = "yebom_sub_version";
 
 export default function Home() {
-  const { session, requireAuth, isLoggedIn, loading: sessionLoading, logout } = useSession();
+  const { session, isLoggedIn, logout } = useSession();
+  const { ensureLogin } = useLoginGate();
   const adminMode = isAdmin(session);
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
@@ -207,8 +209,7 @@ export default function Home() {
   }, []);
 
   const handleCreateCard = useCallback(async () => {
-    if (sessionLoading) { showToast("로그인 확인 중..."); return; }
-    if (!requireAuth()) return;
+    if (!ensureLogin("카드 만들기")) return;
     if (selectedVerses.length > 0) {
       await addScrapToServer(selectedVerses, mainVersion);
       const scraps = await fetchMyScraps();
@@ -216,7 +217,7 @@ export default function Home() {
       showToast("스크랩에 저장되었습니다");
     }
     setView("card");
-  }, [selectedVerses, mainVersion, showToast, requireAuth, sessionLoading]);
+  }, [selectedVerses, mainVersion, showToast, ensureLogin]);
 
   const handleBackToDisplay = useCallback(() => {
     setView("display");
@@ -277,7 +278,6 @@ export default function Home() {
           onRemoveVerse={handleRemoveVerse}
           onCreateCard={handleCreateCard}
           onScrapSaved={handleScrapSaved}
-          requireAuth={requireAuth}
         />
       </div>
 
@@ -296,8 +296,7 @@ export default function Home() {
           navRequest={navRequest}
           fullscreenRequestNonce={fullscreenRequestNonce}
           onOpenScrap={() => {
-            if (sessionLoading) { showToast("로그인 확인 중..."); return; }
-            if (requireAuth()) setShowScrap(true);
+            if (ensureLogin("스크랩")) setShowScrap(true);
           }}
           scrapCount={scrapCount}
         />
@@ -395,7 +394,7 @@ export default function Home() {
           userName={session?.name}
           isLoggedIn={isLoggedIn}
           onLogin={() => {
-            window.location.href = "https://saint.yebom.org/login?from=bible";
+            window.location.href = LOGIN_URL;
           }}
           onLogout={async () => { await logout(); }}
           adminMode={adminMode}
