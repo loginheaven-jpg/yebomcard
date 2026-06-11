@@ -2168,12 +2168,14 @@ export default function SearchPanel({
                           return <div key={alt.id}>{renderEditForm(alt)}</div>;
                         }
                         const selected = isSelected(v, selectedVerses);
+                        const note = noteFor(v);
+                        const tint = note?.color ? colorTint(note.color) : "";
                         return (
                           <button
                             key={v.id}
                             onClick={() => handleToggle(v)}
                             className={`w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 transition-colors ${
-                              selected ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400" : "hover:bg-gray-50 dark:bg-gray-900"
+                              selected ? "bg-gray-100 dark:bg-gray-800 border-l-4 border-l-gray-400" : tint || "hover:bg-gray-50 dark:bg-gray-900"
                             }`}
                           >
                             {/* 모바일: 교차 (세로) */}
@@ -2209,6 +2211,12 @@ export default function SearchPanel({
                               </div>
                             </div>
 
+                            {note?.note && (
+                              <div className="mt-1.5 flex items-start gap-1 text-[12px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
+                                <span className="shrink-0">📝</span>
+                                <span className="whitespace-pre-wrap break-words">{note.note}</span>
+                              </div>
+                            )}
                             {selected && (
                               <span className="float-right text-gray-700 dark:text-gray-300 text-sm">&#10003;</span>
                             )}
