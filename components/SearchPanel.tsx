@@ -1593,7 +1593,7 @@ export default function SearchPanel({
               Yebom
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0 justify-self-center">
+          <div className="flex items-center gap-1.5 shrink-0 justify-self-center">
             <select
               value={mainVersion}
               onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
@@ -1620,15 +1620,26 @@ export default function SearchPanel({
               disabled={subVersion === "none"}
               title="주/부 버전 교환"
               aria-label="주/부 버전 교환"
-              className="flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              style={{ width: "26px", height: "30px", borderRadius: "4px", fontSize: "13px", fontWeight: 600 }}
+              className="flex items-center justify-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
+              style={{
+                width: subVersion === "none" ? "26px" : "42px",
+                height: subVersion === "none" ? "30px" : "34px",
+                borderRadius: "8px",
+                fontSize: subVersion === "none" ? "13px" : "17px",
+                fontWeight: 700,
+                lineHeight: 1,
+              }}
             >
               ⇄
             </button>
             <select
               value={subVersion}
               onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-              className="text-[11px] font-semibold bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 outline-none cursor-pointer text-center"
+              className={`text-[11px] font-semibold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
+                subVersion === "none"
+                  ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
+                  : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+              }`}
               style={{
                 height: "30px",
                 width: "78px",
@@ -1641,7 +1652,7 @@ export default function SearchPanel({
                 backgroundSize: "8px",
               }}
             >
-              <option value="none">대역</option>
+              <option value="none">대역 선택…</option>
               {subVersionOptions.map((v) => (
                 <option key={v} value={v}>{getVersionLabel(v)}</option>
               ))}
