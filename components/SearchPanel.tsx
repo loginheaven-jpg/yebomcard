@@ -264,12 +264,47 @@ export default function SearchPanel({
     return Promise.resolve();
   }, [bookCode, chapter]);
 
-  // 선택된 절들에 하이라이트 색 적용/해제 (기존 메모는 유지)
-  async function applyHighlight(color: string | null) {
+  // 로컬 chapterNotes 낙관적 upsert — 색/메모를 네트워크 대기 없이 즉시 반영
+  function upsertLocalNote(v: BibleVerse, patch: { color?: string | null; note?: string | null }) {
+    setChapterNotes((prev) => {
+      const next = [...prev];
+      const i = next.findIndex(
+        (n) => n.book_code === v.book_code && n.chapter === v.chapter && n.verse === v.verse
+      );
+      const cur = i >= 0 ? next[i] : null;
+      const color = patch.color !== undefined ? patch.color : cur?.color ?? null;
+      const note = patch.note !== undefined ? patch.note : cur?.note ?? null;
+      if (!color && !note) {
+        if (i >= 0) next.splice(i, 1); // 색·메모 모두 없으면 제거
+      } else if (i >= 0) {
+        next[i] = { ...next[i], color, note };
+      } else {
+        next.push({
+          id: -Date.now() - v.verse, // 임시 id (렌더에 미사용)
+          book_code: v.book_code,
+          chapter: v.chapter,
+          verse: v.verse,
+          color,
+          note,
+          version: mainVersion,
+          updated_at: new Date().toISOString(),
+        });
+      }
+      return next;
+    });
+  }
+
+  // 선택된 절들에 하이라이트 색 적용/해제 — 낙관적 즉시 반영 + 서버 저장은 백그라운드
+  function applyHighlight(color: string | null) {
     const targets = [...selectedVerses];
-    for (const v of targets) {
-      const existing = noteFor(v);
-      await saveVerseNote({
+    if (targets.length === 0) return;
+    // 1) 색 즉시 반영(네트워크 대기 X) + 선택 해제(회색 배경이 색 가리지 않도록)
+    targets.forEach((v) => upsertLocalNote(v, { color }));
+    targets.forEach((v) => onToggleVerse(v));
+    // 2) 서버 저장은 백그라운드 — 실패한 게 있을 때만 서버 상태로 보정
+    const saves = targets.map((v) => {
+      const existing = noteFor(v); // 기존 메모 보존 (변경 전 값)
+      return saveVerseNote({
         book_code: v.book_code,
         chapter: v.chapter,
         verse: v.verse,
@@ -277,30 +312,32 @@ export default function SearchPanel({
         note: existing?.note ?? null,
         version: mainVersion,
       });
-    }
-    // 노트(tint) 갱신 후 선택 해제 — 선택 배경(회색)이 하이라이트 색을 가리지 않도록.
-    // 갱신을 먼저 await 해서 해제 직후 색이 바로 보이게(깜빡임 방지).
-    await refreshChapterNotes();
-    targets.forEach((v) => onToggleVerse(v));
+    });
+    Promise.all(saves)
+      .then((results) => { if (results.some((ok) => !ok)) refreshChapterNotes(); })
+      .catch(() => refreshChapterNotes());
   }
   function openNoteEditor(v: BibleVerse) {
     setNoteDraft(noteFor(v)?.note ?? "");
     setNoteEditorVerse(v);
   }
-  async function saveNote() {
+  function saveNote() {
     if (!noteEditorVerse) return;
     const v = noteEditorVerse;
-    const existing = noteFor(v);
-    await saveVerseNote({
+    const existing = noteFor(v); // 기존 색 보존
+    const note = noteDraft.trim() || null;
+    // 즉시 반영 + 모달 닫기
+    upsertLocalNote(v, { note });
+    setNoteEditorVerse(null);
+    // 서버 저장 백그라운드
+    saveVerseNote({
       book_code: v.book_code,
       chapter: v.chapter,
       verse: v.verse,
       color: existing?.color ?? null,
-      note: noteDraft.trim() || null,
+      note,
       version: mainVersion,
-    });
-    setNoteEditorVerse(null);
-    refreshChapterNotes();
+    }).then((ok) => { if (!ok) refreshChapterNotes(); });
   }
 
   // 책갈피 메뉴 외부 클릭 시 자동 닫기 (Fix #2)
