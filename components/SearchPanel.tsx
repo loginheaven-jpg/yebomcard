@@ -2242,7 +2242,7 @@ export default function SearchPanel({
       {/* ─── 플로팅 액션 카드 (선택 절이 있을 때) — 시안 F: 통합 카드 + 윤곽선 아이콘 ─── */}
       {selectedVerses.length > 0 && (
         <div className="fixed bottom-24 right-4 sm:right-6 z-40 pointer-events-none">
-          <div className="pointer-events-auto w-[138px] bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-2xl shadow-lg dark:shadow-none overflow-hidden">
+          <div className="pointer-events-auto w-[156px] bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-2xl shadow-lg dark:shadow-none overflow-hidden">
             {/* 본문으로 (검색 결과에서만) */}
             {mode !== "chapter" && (
               <button
@@ -2299,21 +2299,22 @@ export default function SearchPanel({
             )}
             {/* 하이라이트 색칩 4종 + 지우개 (로그인) */}
             {isLoggedIn && (
-              <div className="flex items-center justify-center gap-4 px-2.5 py-2.5 border-b border-[var(--line)] dark:border-gray-700">
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center px-3 py-3 border-b border-[var(--line)] dark:border-gray-700">
+                <div className="flex flex-1 items-center justify-around">
                   {HIGHLIGHT_COLORS.map((c) => (
                     <button
                       key={c.key}
                       onClick={() => applyHighlight(c.key)}
-                      className={`w-4 h-4 rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
+                      className={`w-5 h-5 rounded-full ${c.chip} ring-1 ring-black/10 active:scale-90 transition-transform`}
                       title={c.label}
                       aria-label={`${c.label} 하이라이트`}
                     />
                   ))}
                 </div>
+                <span className="w-px h-5 bg-[var(--line)] dark:bg-gray-600 mx-1.5" aria-hidden />
                 <button
                   onClick={() => applyHighlight(null)}
-                  className="w-4 h-4 shrink-0 text-gray-400 dark:text-gray-500 active:scale-90 transition-transform"
+                  className="w-5 h-5 shrink-0 text-gray-400 dark:text-gray-500 active:scale-90 transition-transform"
                   title="하이라이트 지우기"
                   aria-label="하이라이트 지우기"
                 >
@@ -2328,11 +2329,8 @@ export default function SearchPanel({
             {/* 선택 완료 (primary) */}
             <button
               onClick={onConfirm}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white text-[13px] font-bold active:brightness-95 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-2 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white text-[13px] font-bold active:brightness-95 transition-colors"
             >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-              </svg>
               선택 완료
               <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[11px] font-semibold bg-white/25 rounded-full">
                 {selectedVerses.length}
