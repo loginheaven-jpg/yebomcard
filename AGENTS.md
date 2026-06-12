@@ -51,6 +51,7 @@
 - `useHardwareBack` + `modalStack` 패턴. push/pop history state 로 브라우저 back 흡수
 - 종료 팝업: `isAppRoot && !isHome` 상태 popstate 시
 - 모달 X 버튼은 그립 영역과 pointer capture 충돌 주의 (`onPointerDown stopPropagation`)
+- **trivial/gesture history intervention 안전망**: Chrome/Edge 가 항목 1개 탭 또는 제스처 없는 `pushState` 를 강등 → history 트랩 무력화로 뒤로가기 무확인 종료. **로그인+비PWA 브라우저 탭에 `beforeunload` 무장**(`lib/appExit` 의도적 이탈 우회)으로 차단. `useHardwareBack` 닫기 `back()` 은 실제 length 증가 시에만. 상세: [architecture.md](architecture.md) 2026-06-12 변경 이력
 
 ## 3. 폴더 구조
 
@@ -96,7 +97,8 @@ R2_PUBLIC_BASE
 
 | 패턴 | 회피 |
 |---|---|
-| `requireAuth()` 즉시 호출 (loading 미체크) | `useSession().loading` 가드 + 토스트 안내 |
+| 로그인 게이트에 `loading` 미체크 (race) | `useLoginGate().ensureLogin(label)` (loading 가드+인앱 모달 내장) |
+| history `pushState` 트랩만으로 뒤로가기 종료 차단 | Chrome trivial/gesture intervention 으로 강등됨 → `beforeunload` 안전망 병행(로그인+비PWA) |
 | pointer capture 영역 안에 클릭 버튼 | `onPointerDown={(e)=>e.stopPropagation()}` |
 | `scraps` INSERT (UNIQUE 미인지) | API `SELECT-then-UPDATE/INSERT` 패턴 사용 |
 | TTS 영문 본문에 ko-KR voice 사용 | `lang="en"` 자동 분기 (`isEnglishVersion`) |

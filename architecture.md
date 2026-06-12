@@ -1,7 +1,7 @@
 # architecture.md — 시스템 아키텍처 (현행 + 변경 이력)
 
-> **버전**: 0.6.0
-> **최종 갱신**: 2026-06-11
+> **버전**: 0.6.1
+> **최종 갱신**: 2026-06-12
 > **상태**: living document — 모든 아키텍처 변경·신규 개발 사항은 본 파일의 **변경 이력** 섹션에 최상단부터 누적 기록한다.
 
 본 문서는 예봄성경 / 예봄카드의 현재 아키텍처를 단일 소스로 기록한다.
@@ -12,6 +12,16 @@
 ---
 
 ## 📜 변경 이력 (최신 위)
+
+### 2026-06-12 — 뒤로가기 무확인 종료 차단 (Chrome trivial/gesture history intervention)
+- **증상**: 6/11~ 로그인 상태에서 뒤로가기·메뉴 닫기 시 확인 없이 앱 밖(빈 화면/로그인 전 화면)으로 튕김. Chrome·Edge 발생, PWA standalone·모바일 면역. 로그아웃(vercel.app 직접 접속)은 정상.
+- **원인**: Chrome 이 (a) *trivial session history context*(탭에 히스토리 항목 1개 — 로그인 SSO 가 bible.yebom.org 를 단일 항목으로 올림) 또는 (b) *사용자 제스처 없이 `useEffect` 에서 호출된 `pushState`*(History Manipulation Intervention)를 `replaceState` 로 강등/건너뜀 → `isAppRoot`/`isHome` 종료 트랩과 `useHardwareBack` push 가 무력화 → 뒤로가기가 앱 밖 직행. 콘솔: "Use of history.pushState in a trivial session history context … treated as history.replaceState". 6/10 코드로 되돌려도 동일(코드 회귀 아님 — Chrome 정책 변화가 방아쇠).
+- **해결 (2중 안전망)**:
+  - `hooks/useHardwareBack.ts`: `addedHistoryEntry` 를 `window.history.length > lenBefore`(실제 증가)만으로 판정 — `lenBefore>1` 오판정 제거. pushState 강등 시 닫을 때 `history.back()` skip → 모달 닫기·뷰전환 튕김 차단(잔여 항목 무해).
+  - `app/page.tsx` + `lib/appExit.ts`(신규): **로그인 + 비-PWA 브라우저 탭**에 `beforeunload` 무조건 무장 → trivial/gesture 무관하게 무확인 종료 차단(브라우저 기본 확인창). 종료 버튼(`exitingRef`)·로그인 SSO 이동(`markIntentionalLeave`)은 통과. PWA standalone 면역이라 무장 안 함.
+  - 비-trivial 컨텍스트는 기존 `isAppRoot`/`isHome` 커스텀 "종료?" 팝업 유지.
+- **한계**: 로그인 브라우저 탭에선 새로고침·탭닫기도 브라우저 기본 확인창(커스텀 팝업은 trivial 에서 원천 불가). 후속(옵션): 단일 센티넬+메모리 스택으로 뒤로가기=모달닫기 UX 복원.
+- **부수**: `requireAuth()` 죽은 코드 제거(무확인 로그인 리다이렉트 지뢰) + 음원 이전 실험 스크립트 4종 제거. 음원 Supabase→R2 이전(easy/nkrv/web 3567파일 8.3GB, `bible_audio.audio_url` R2 전환, 원본 마스터 보존) 반영.
 
 ### 2026-06-11 — 로그인 게이트 통일 + 로그인 전용 기능 4종 (코드 완료, DB 마이그레이션 대기)
 - **게이트 보완**: `components/LoginGate.tsx` 신규 — `LoginGateProvider`(layout 마운트) + `useLoginGate().ensureLogin(label)`. 찬송가 악보 인앱 모달을 공용화. `requireAuth()` 즉시 외부 튕김(page/VerseDisplay/HymnModal) → 인앱 "로그인 필요" 모달 경유로 통일. `LOGIN_URL` 단일화(`useSession.ts` export)
@@ -227,10 +237,10 @@ backup/                   실효 문서 보관
 - 캐시 → fetch → 폴백 3단
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
-**인증 (`hooks/useSession`)**:
+**인증 (`hooks/useSession` + `components/LoginGate`)**:
 - `/api/auth/session` 1회 fetch (mount) + bfcache 시 재검증
-- `requireAuth()` 가 `loading` 가드 → race 차단
-- 미로그인 시 saint.yebom.org 로 외부 리다이렉트
+- `useLoginGate().ensureLogin(label)` 가 `loading` 가드 → race 차단
+- 미로그인 시 인앱 "로그인 필요" 모달 → "로그인" 클릭 시에만 saint.yebom.org 외부 이동
 - 상세: [AUTH_INTEGRATION_GUIDE.md](AUTH_INTEGRATION_GUIDE.md)
 
 ---
@@ -259,7 +269,7 @@ handleToggleVerse → selectedVerses 추가/제거
 사용자: "이 말씀으로 카드 만들기"
   ↓
 handleCreateCard:
-  1. requireAuth() 가드 + sessionLoading 토스트
+  1. ensureLogin("카드 만들기") 가드 (미로그인 시 인앱 모달)
   2. addScrapToServer(selectedVerses, mainVersion)
      → API: SELECT-then-UPDATE/INSERT (scraps)
   3. setView("card") → CardPreview
@@ -300,10 +310,10 @@ loading=false, session=값 또는 null
 
 사용자: 보호 액션 (스크랩/카드/링크)
   ↓
-requireAuth():
+ensureLogin(label):
   - loading=true → false 반환 ("로그인 확인 중..." 토스트)
   - session.isLoggedIn → true 반환 → 액션 진행
-  - 그 외 → window.location.href = "https://saint.yebom.org/login?from=bible"
+  - 그 외 → 인앱 "로그인 필요" 모달 ("로그인" 클릭 시에만 saint.yebom.org/login?from=bible 이동)
 
 bfcache 복원 (모바일 백그라운드 → 포그라운드)
   ↓
@@ -373,7 +383,8 @@ AI_GATEWAY_KEY=...
 
 | 패턴 | 회피 |
 |---|---|
-| `requireAuth()` 즉시 호출 | `useSession().loading` 가드 |
+| 로그인 게이트에 `loading` 미체크 | `useLoginGate().ensureLogin()` (loading 가드 내장) |
+| history `pushState` 트랩만으로 뒤로가기 종료 차단 | Chrome trivial/gesture intervention 으로 강등 → `beforeunload` 안전망 병행 |
 | pointer capture 안에 click 버튼 | `onPointerDown stopPropagation` |
 | `scraps` INSERT (UNIQUE 미인지) | API SELECT-then-UPDATE 패턴 |
 | TTS 영문 본문 ko-KR voice | `lang="en"` 자동 분기 |

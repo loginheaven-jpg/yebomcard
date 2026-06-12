@@ -183,7 +183,7 @@ export const config = {
 위 미들웨어를 그대로 사용하면 **모든 페이지가 차단**되어 비로그인 사용자가 접근할 수 없다.
 
 이 경우 미들웨어는 **유효하지 않은 쿠키 정리만** 수행하고, 로그인 리다이렉트는 하지 않는다.
-로그인 필요 시점은 클라이언트의 `useSession().requireAuth()`가 처리한다.
+로그인 필요 시점은 클라이언트의 `useLoginGate().ensureLogin(label)`(인앱 "로그인 필요" 모달)이 처리한다.
 
 ```typescript
 import { NextResponse } from 'next/server'
@@ -242,9 +242,9 @@ export const config = {
   ↓
 카드 생성 버튼 클릭
   ↓
-useSession().requireAuth() 호출
+useLoginGate().ensureLogin(label) 호출
   ├─ 로그인 상태 → true 반환 → 기능 실행
-  └─ 비로그인 → saint.yebom.org/login?from=bible 리다이렉트
+  └─ 비로그인 → 인앱 "로그인 필요" 모달 → "로그인" 클릭 시 saint.yebom.org/login?from=bible 이동
                 → 로그인 후 돌아옴 → 기능 실행
 ```
 
