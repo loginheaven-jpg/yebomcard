@@ -46,12 +46,12 @@ export function useHardwareBack(isActive: boolean, onBack: () => void) {
     const currentState = window.history.state || {};
     const lenBefore = window.history.length;
     window.history.pushState({ ...currentState, modalId: stateId }, "", window.location.href);
-    // Chrome "trivial session history context": 히스토리 항목이 하나뿐(length 1)인 탭에선
-    // pushState 가 replaceState 로 처리되어 새 항목이 추가되지 않는다.
-    // 그 경우 닫을 때 history.back() 을 부르면 앱 밖(이전 페이지/빈 탭)으로 튕긴다 → back() 금지.
-    // 비-trivial(length>1) 컨텍스트에선 pushState 가 항상 항목을 추가하므로 back() 으로 되돌린다.
-    // (length 는 forward 항목 제거로 줄 수 있어, 증가 여부와 length>1 을 함께 본다)
-    const addedHistoryEntry = lenBefore > 1 || window.history.length > lenBefore;
+    // Chrome 은 (a) trivial session history context(항목 1개) 또는 (b) 사용자 제스처 없이
+    // useEffect 안에서 호출된 pushState 를 replaceState 로 강등/건너뛴다 → 새 항목이 실제로
+    // 추가되지 않는다. 이때 닫으면서 history.back() 을 부르면 앱 밖(빈 탭/이전 사이트)으로 튕긴다.
+    // 따라서 "실제로 length 가 늘었을 때"만 추가로 간주해 back() 한다 (lenBefore>1 가정 제거).
+    // 강등으로 항목이 안 늘면 back() 을 건너뛴다 — 잔여 항목은 무해(다음 뒤로가기에서 정리).
+    const addedHistoryEntry = window.history.length > lenBefore;
 
     // 스택에 등록할 핸들러
     const handler = () => {

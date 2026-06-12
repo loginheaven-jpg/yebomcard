@@ -121,12 +121,6 @@ export default function Home() {
   const exitingRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Chrome "trivial session history context"(탭에 히스토리 항목 1개 — 로그인 SSO 직후 등):
-    // pushState 가 replaceState 로 강등돼 아래 isAppRoot/isHome 종료 트랩이 만들어지지 않는다
-    // → 뒤로가기가 확인 없이 곧장 앱 밖으로 이탈. 이 경우 beforeunload 로 브라우저 기본
-    // 확인창을 띄워 무확인 종료를 차단한다(이 컨텍스트에서 유일하게 동작하는 차단막).
-    const trivialContext = window.history.length <= 1;
-
     if (!window.history.state?.isAppRoot) {
       const currentState = window.history.state || {};
       window.history.replaceState({ ...currentState, isAppRoot: true }, "", window.location.href);
@@ -148,21 +142,31 @@ export default function Home() {
       }
     };
     window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
 
-    // trivial context 안전망: 명시적 확인 없는 종료(뒤로가기/새로고침/탭닫기) 차단.
-    // 의도된 이탈(종료 버튼 exitingRef, 로그인 이동 markIntentionalLeave)은 통과.
+  // 무확인 종료 차단 안전망 (beforeunload).
+  // Chrome/Edge 는 trivial context(항목 1개) 또는 사용자 제스처 없는 pushState 를 강등/건너뛰어
+  // history 기반 종료 트랩(위 isAppRoot/isHome, useHardwareBack)을 무력화한다 → 뒤로가기가
+  // 확인 없이 앱을 이탈. 이 환경에서 유일하게 동작하는 차단막이 beforeunload(브라우저 기본
+  // 확인창)다. length·제스처 감지가 불안정하므로 "튕기는 집단"(로그인 + 비-PWA 브라우저 탭)에
+  // 조건 없이 무장한다. 의도된 이탈은 통과: 종료 버튼(exitingRef), 로그인 SSO 이동
+  // (markIntentionalLeave). PWA standalone 은 intervention 비적용 + 새로고침/주소창 없음 → 면역.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isLoggedIn) return;
+    const isStandalone =
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true;
+    if (isStandalone) return;
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (exitingRef.current || isIntentionalLeave()) return;
       e.preventDefault();
       e.returnValue = "";
     };
-    if (trivialContext) window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("popstate", handlePop);
-      if (trivialContext) window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, []);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isLoggedIn]);
 
   // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
   useEffect(() => {
