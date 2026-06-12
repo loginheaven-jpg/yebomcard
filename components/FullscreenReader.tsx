@@ -341,7 +341,7 @@ export default function FullscreenReader({
         t.chapter === current?.chapter &&
         t.verse === current?.verse,
     );
-    tts.start({ tracks: ttsTracks, startIndex: startAt >= 0 ? startAt : 0 });
+    tts.start({ tracks: ttsTracks, startIndex: startAt >= 0 ? startAt : 0, perVerse: true });
   }, [ttsActiveHere, tts, ttsTracks, current]);
 
   if (!current) return null;

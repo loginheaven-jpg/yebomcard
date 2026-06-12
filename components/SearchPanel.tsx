@@ -576,6 +576,11 @@ export default function SearchPanel({
 
   // ─── TTS (본문 읽기) ───
   const tts = useTts();
+  // 재생 중 미니플레이어(하단 고정 오버레이)가 본문 끝줄을 가리지 않도록 스크롤 영역 하단 예약을 늘림
+  const playerActive = tts.status !== "idle";
+  const browseScrollMaxH = playerActive
+    ? "max-h-[calc(100dvh-272px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-222px)]"
+    : "max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)]";
   const ttsActiveOnThisChapter =
     tts.status !== "idle" &&
     tts.currentTrack?.bookCode === bookCode &&
@@ -1948,7 +1953,7 @@ export default function SearchPanel({
           {searchByVersion.some((g) => g.verses.length > 0) && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)] overflow-y-auto">
+              <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                 {searchByVersion.map((group) => {
                   const has = group.verses.length > 0;
                   return (
@@ -2134,7 +2139,7 @@ export default function SearchPanel({
                   </button>
                 </div>
 
-                {/* 우: 읽기 버튼 (전체화면은 Phase 2b 에서 설정 시트로 이동 — 사용자 #6) */}
+                {/* 우: 읽기(TTS) + 전체화면(1절씩) 버튼 */}
                 <div className="flex items-center shrink-0 gap-1.5">
                   <TTSButton
                     isPlaying={ttsActiveOnThisChapter}
@@ -2142,12 +2147,24 @@ export default function SearchPanel({
                     disabled={browseVerses.length === 0}
                     onClick={handleTtsToggle}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowFullscreen(true)}
+                    disabled={browseVerses.length === 0}
+                    aria-label="전체화면 (1절씩 보기)"
+                    title="전체화면 (1절씩 보기)"
+                    className="inline-flex items-center px-2.5 py-1.5 rounded-lg shadow-sm dark:shadow-none transition-all border text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)] overflow-y-auto">
+                <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : (
@@ -2228,7 +2245,7 @@ export default function SearchPanel({
                 </div>
               ) : (
                 /* 단일 버전 모드 */
-                <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)] overflow-y-auto">
+                <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : browseVerses.length === 0 ? (
@@ -2268,7 +2285,7 @@ export default function SearchPanel({
           {topicResults.length > 0 && (
             <>
               {fontSlider}
-              <div ref={scrollRef} className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)] overflow-y-auto">
+              <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                 {topicResults.map((v) => {
                   const alt = parallel ? topicResultsAlt.find(
                     (a) => a.book_code === v.book_code && a.chapter === v.chapter && a.verse === v.verse

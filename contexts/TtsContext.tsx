@@ -138,6 +138,8 @@ interface StartParams {
   tracks: TtsTrack[];
   startIndex?: number;
   loadNextChapter?: LoadNextChapterFn;
+  /** true면 장 mp3 압축을 건너뛰고 절 단위로 재생 (전체화면 1절 모드 — 절마다 currentTrack 갱신 → 화면 동기화) */
+  perVerse?: boolean;
 }
 
 /** 현재 재생 중인 음원의 엔진 식별 */
@@ -534,8 +536,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setStatus("loading");
       statusRef.current = "loading";
 
-      // 장 단위 음원이 있으면 [announcement, mp3 통째] 큐로 압축, 없으면 절 단위 + announcement
-      const augmented = await transformWithChapterAudio(p.tracks);
+      // 장 단위 음원이 있으면 [announcement, mp3 통째] 큐로 압축, 없으면 절 단위 + announcement.
+      // perVerse(전체화면 1절 모드)면 압축 없이 절 단위 그대로 — 절마다 currentTrack 갱신돼 화면이 따라감.
+      const augmented = p.perVerse ? p.tracks : await transformWithChapterAudio(p.tracks);
       queueRef.current = augmented;
       setQueueLength(augmented.length);
 

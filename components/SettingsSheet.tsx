@@ -404,39 +404,7 @@ export default function SettingsSheet({
             </div>
           </section>
 
-          {/* 3. 읽기 모드 */}
-          <section>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">읽기 모드</div>
-            <button
-              onClick={() => {
-                if (!canOpenFullscreen) return;
-                onClose();
-                onOpenFullscreen();
-              }}
-              disabled={!canOpenFullscreen}
-              className={`w-full flex items-center gap-3 p-3.5 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95 transition-all ${
-                !canOpenFullscreen ? "opacity-40 cursor-not-allowed" : ""
-              }`}
-            >
-              <span className="w-9 h-9 rounded-lg bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--amber-deep)] dark:text-amber-400 flex items-center justify-center">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                </svg>
-              </span>
-              <span className="flex-1 text-left">
-                <span className="block text-sm font-semibold text-[var(--ink)] dark:text-gray-100">전체화면 (1절씩 보기)</span>
-                <span className="block text-[11px] text-[var(--ink-soft)] dark:text-gray-400">큰 글자로 한 절씩 — 빔프로젝터·집중 독서</span>
-              </span>
-              <svg className="w-4 h-4 text-[var(--ink-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-            <p className="mt-1.5 px-1 text-[10px] text-[var(--ink-faint)] dark:text-gray-500">
-              본문 영역을 길게 누르면 빠르게 진입할 수 있습니다 (Phase 3)
-            </p>
-          </section>
-
-          {/* 4. 음성 — TTS 미니플레이어와 동기 */}
+          {/* 음성 — TTS 미니플레이어와 동기 */}
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">음성</div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-3">
