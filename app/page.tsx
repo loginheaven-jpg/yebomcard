@@ -120,6 +120,18 @@ export default function Home() {
   const exitingRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Chrome "trivial session history context"(히스토리 항목 1개) 대응:
+    // 항목이 하나뿐이면 pushState 가 replaceState 로 처리되어 아래 종료 트랩(isAppRoot/isHome)이
+    // 안 만들어지고, 뒤로가기가 명시적 확인 없이 곧장 앱 밖으로 나간다.
+    // 해시 내비게이션(fragment navigation)으로 실제 항목을 1개 추가해 non-trivial 로 만든 뒤
+    // URL 의 해시만 제거(항목은 유지)한다 → 이후 pushState 트랩이 정상 동작.
+    if (window.history.length <= 1 && !window.history.state?.isAppRoot) {
+      try {
+        const cleanUrl = window.location.pathname + window.location.search;
+        window.location.hash = "g";
+        window.history.replaceState(window.history.state, "", cleanUrl);
+      } catch {}
+    }
     if (!window.history.state?.isAppRoot) {
       const currentState = window.history.state || {};
       window.history.replaceState({ ...currentState, isAppRoot: true }, "", window.location.href);
