@@ -93,7 +93,10 @@ export async function POST(req: NextRequest) {
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
     }
-    if (new TextEncoder().encode(text).length > 5000) {
+    // TTS 입력 정제: 새번역(rnksv) 등 편집자 주석 "(주: …)"은 화면엔 두되 낭독에서만 제외.
+    // 주석은 절 끝에 오므로 "(주:"부터 끝까지 제거. "( 셀라 )"·본문 괄호는 보존.
+    const ttsText = text.replace(/\s*\(\s*주\s*[:：][\s\S]*$/, "").trim() || text;
+    if (new TextEncoder().encode(ttsText).length > 5000) {
       return NextResponse.json(
         { error: "text too long (max 5000 bytes)" },
         { status: 400 },
@@ -104,7 +107,8 @@ export async function POST(req: NextRequest) {
     const isEng = lang === "en";
     const isGb = isEng && accent === "gb";
     const languageCode = isEng ? (isGb ? "en-GB" : "en-US") : "ko-KR";
-    // Chirp 3 HD voices 1순위, 실패 시 Neural2 로 자동 폴백 — 항상 Cloud TTS 음원 반환 보장
+    // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백. 한국어: Chirp 가 띄어쓰기/억양을 흘려
+    // 읽어 실용성↓ → Neural2 1순위 → WaveNet 폴백 (한국어 전용 모델이라 끊어읽기 정확)
     const candidates = isEng
       ? (isGb
           ? (isMale
@@ -114,8 +118,8 @@ export async function POST(req: NextRequest) {
               ? ["en-US-Chirp3-HD-Charon", "en-US-Neural2-D"]
               : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"]))
       : (isMale
-          ? ["ko-KR-Chirp3-HD-Charon", "ko-KR-Neural2-C"]
-          : ["ko-KR-Chirp3-HD-Aoede", "ko-KR-Neural2-A"]);
+          ? ["ko-KR-Neural2-C", "ko-KR-Wavenet-C"]
+          : ["ko-KR-Neural2-A", "ko-KR-Wavenet-A"]);
 
     const token = await getAccessToken();
 
@@ -141,7 +145,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          input: { text },
+          input: { text: ttsText },
           voice: { languageCode, name: voiceName },
           audioConfig,
         }),
