@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSession, LOGIN_URL } from "@/hooks/useSession";
+import { markIntentionalLeave } from "@/lib/appExit";
 
 /**
  * 공용 로그인 게이트.
@@ -96,6 +97,7 @@ export function LoginGateProvider({ children }: { children: ReactNode }) {
               </button>
               <button
                 onClick={() => {
+                  markIntentionalLeave();
                   window.location.href = LOGIN_URL;
                 }}
                 className="flex-1 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white rounded-xl font-bold transition-colors shadow-sm"

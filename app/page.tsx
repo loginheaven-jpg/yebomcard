@@ -18,6 +18,7 @@ import CardBuilder from "@/components/CardBuilder";
 import HymnModal from "@/components/HymnModal";
 import GlobalFontSettings from "@/components/GlobalFontSettings";
 import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
+import { isIntentionalLeave, markIntentionalLeave } from "@/lib/appExit";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 import { useFont } from "@/contexts/FontContext";
 
@@ -120,6 +121,12 @@ export default function Home() {
   const exitingRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Chrome "trivial session history context"(탭에 히스토리 항목 1개 — 로그인 SSO 직후 등):
+    // pushState 가 replaceState 로 강등돼 아래 isAppRoot/isHome 종료 트랩이 만들어지지 않는다
+    // → 뒤로가기가 확인 없이 곧장 앱 밖으로 이탈. 이 경우 beforeunload 로 브라우저 기본
+    // 확인창을 띄워 무확인 종료를 차단한다(이 컨텍스트에서 유일하게 동작하는 차단막).
+    const trivialContext = window.history.length <= 1;
+
     if (!window.history.state?.isAppRoot) {
       const currentState = window.history.state || {};
       window.history.replaceState({ ...currentState, isAppRoot: true }, "", window.location.href);
@@ -141,7 +148,20 @@ export default function Home() {
       }
     };
     window.addEventListener("popstate", handlePop);
-    return () => window.removeEventListener("popstate", handlePop);
+
+    // trivial context 안전망: 명시적 확인 없는 종료(뒤로가기/새로고침/탭닫기) 차단.
+    // 의도된 이탈(종료 버튼 exitingRef, 로그인 이동 markIntentionalLeave)은 통과.
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (exitingRef.current || isIntentionalLeave()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    if (trivialContext) window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("popstate", handlePop);
+      if (trivialContext) window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, []);
 
   // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
@@ -394,6 +414,7 @@ export default function Home() {
           userName={session?.name}
           isLoggedIn={isLoggedIn}
           onLogin={() => {
+            markIntentionalLeave();
             window.location.href = LOGIN_URL;
           }}
           onLogout={async () => { await logout(); }}
