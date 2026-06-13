@@ -444,6 +444,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             speed: sp,
             lang: isEng ? "en" : "ko",
             accent: englishAccentRef.current,
+            bookCode: track.bookCode,
             signal: ctrl.signal,
           });
           if (playGenRef.current !== gen) return;

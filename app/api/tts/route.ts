@@ -86,9 +86,44 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
+// ── ElevenLabs 한국어 온디맨드 (rnksv 등) ──────────────────────────────
+// Vercel 배포 시 ELEVENLABS_API_KEY 환경변수 필요(로컬은 .env.local 의 11LABS 도 인식).
+const EL_API_KEY = process.env.ELEVENLABS_API_KEY || process.env["11LABS"] || "";
+const NT_CODES = new Set([
+  "mat","mrk","luk","jhn","act","rom","1co","2co","gal","eph","php","col",
+  "1th","2th","1ti","2ti","tit","phm","heb","jas","1pe","2pe","1jn","2jn","3jn","jud","rev",
+]);
+// 구약: Hunmin(남)/Sian(여) · 신약: 천장성(남)/김미연(여)
+function elevenVoiceId(bookCode: string, isMale: boolean): string {
+  const isNT = NT_CODES.has((bookCode || "").toLowerCase());
+  if (isNT) return isMale ? "657hGmxIvJTkmFa17K9v" : "vDA1h0ZXkQiojUReMmR9";
+  return isMale ? "MpbDJfQJUYUnp0i1QvOZ" : "5n5gqmaQi9Ewevrz7bOS";
+}
+async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, speed: number): Promise<Buffer | null> {
+  if (!EL_API_KEY) return null;
+  const voiceId = elevenVoiceId(bookCode, isMale);
+  const spd = Math.min(1.2, Math.max(0.7, speed || 1)); // ElevenLabs speed 범위 0.7~1.2
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: "POST",
+      headers: { "xi-api-key": EL_API_KEY, "Content-Type": "application/json", Accept: "audio/mpeg" },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true, speed: spd },
+      }),
+    });
+    if (!r.ok) { console.error("[ElevenLabs]", r.status, (await r.text()).slice(0, 150)); return null; }
+    return Buffer.from(await r.arrayBuffer());
+  } catch (e) {
+    console.error("[ElevenLabs] exception", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { text, speed, voice, lang, accent, pitch, volumeGainDb } = await req.json();
+    const { text, speed, voice, lang, accent, pitch, volumeGainDb, bookCode } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -105,6 +140,24 @@ export async function POST(req: NextRequest) {
 
     const isMale = voice === "male";
     const isEng = lang === "en";
+
+    // 한국어 온디맨드(주로 rnksv): ElevenLabs 한국어 성우 1순위 — 구약 Hunmin/Sian · 신약 천장성/김미연
+    // (남/녀 토글 유지). 키 없음·실패 시 아래 GCP(Neural2→WaveNet)로 폴백.
+    if (!isEng) {
+      const el = await synthElevenLabs(ttsText, bookCode || "", isMale, speed ?? 1);
+      if (el) {
+        return new NextResponse(el, {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/mpeg",
+            "Cache-Control": "public, max-age=86400",
+            "X-TTS-Voice": `el:${elevenVoiceId(bookCode || "", isMale)}`,
+          },
+        });
+      }
+      console.error("[TTS] ElevenLabs 미설정/실패 → GCP 폴백");
+    }
+
     const isGb = isEng && accent === "gb";
     const languageCode = isEng ? (isGb ? "en-GB" : "en-US") : "ko-KR";
     // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백. 한국어: Chirp 가 띄어쓰기/억양을 흘려

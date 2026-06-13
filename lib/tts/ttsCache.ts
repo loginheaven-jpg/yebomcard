@@ -10,7 +10,8 @@
 const DB_NAME = "yebom_tts_cache";
 // v5: 영문 발음 미국식/영국식 분기 도입 — accent 차이로 같은 캐시 키여도 음원 달라야 함
 // v6: 한국어 TTS 엔진 Chirp→Neural2 전환 + rnksv 주석 "(주:…)" 낭독 제외 → 기존 한국어 캐시 무효화
-const DB_VERSION = 6;
+// v7: 한국어 온디맨드를 ElevenLabs 성우로 전환(구약 Hunmin/Sian·신약 천장성/김미연) → 기존 한국어 캐시 무효화
+const DB_VERSION = 7;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;

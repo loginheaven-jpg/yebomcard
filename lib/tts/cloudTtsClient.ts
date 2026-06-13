@@ -16,6 +16,8 @@ export interface CloudTtsParams {
   lang?: TTSLang;
   /** 영문 발음 — 기본 "us". lang="ko" 시 무시됨. */
   accent?: TTSAccent;
+  /** 구약/신약 판정용 — ElevenLabs 한국어 성우 voice 선택(구약 Hunmin/Sian, 신약 천장성/김미연) */
+  bookCode?: string;
   signal?: AbortSignal;
 }
 
@@ -35,6 +37,7 @@ export async function fetchCloudTtsAudio(p: CloudTtsParams): Promise<CloudTtsRes
       speed: p.speed,
       lang: p.lang ?? "ko",
       accent: p.accent ?? "us",
+      bookCode: p.bookCode,
     }),
     signal: p.signal,
   });
