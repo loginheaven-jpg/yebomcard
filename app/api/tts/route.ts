@@ -99,7 +99,7 @@ function elevenVoiceId(bookCode: string, isMale: boolean): string {
   if (isNT) return isMale ? "657hGmxIvJTkmFa17K9v" : "vDA1h0ZXkQiojUReMmR9";
   return isMale ? "MpbDJfQJUYUnp0i1QvOZ" : "5n5gqmaQi9Ewevrz7bOS";
 }
-async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, speed: number): Promise<Buffer | null> {
+async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, speed: number): Promise<ArrayBuffer | null> {
   if (!EL_API_KEY) return null;
   const voiceId = elevenVoiceId(bookCode, isMale);
   const spd = Math.min(1.2, Math.max(0.7, speed || 1)); // ElevenLabs speed 범위 0.7~1.2
@@ -114,7 +114,7 @@ async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, 
       }),
     });
     if (!r.ok) { console.error("[ElevenLabs]", r.status, (await r.text()).slice(0, 150)); return null; }
-    return Buffer.from(await r.arrayBuffer());
+    return await r.arrayBuffer(); // ArrayBuffer 는 BodyInit — NextResponse 에 그대로 전달 가능
   } catch (e) {
     console.error("[ElevenLabs] exception", e instanceof Error ? e.message : e);
     return null;
