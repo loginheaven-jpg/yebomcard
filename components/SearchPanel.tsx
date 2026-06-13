@@ -186,6 +186,7 @@ export default function SearchPanel({
   const [searchByVersion, setSearchByVersion] = useState<{ version: BibleVersion; verses: BibleVerse[] }[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [searchFallbackNote, setSearchFallbackNote] = useState("");
   const [lastSearchType, setLastSearchType] = useState<"ref" | "word-and" | "word-or" | null>(null);
   const [topicResultsAlt, setTopicResultsAlt] = useState<BibleVerse[]>([]);
   // 풀스크린 등 외부에서 사용하는 mainVersion 결과 (호환용 derived)
@@ -441,7 +442,7 @@ export default function SearchPanel({
   );
   useHardwareBack(
     mode === "search" && searchByVersion.some((g) => g.verses.length > 0),
-    () => { setSearchByVersion([]); setSearchError(""); }
+    () => { setSearchByVersion([]); setSearchError(""); setSearchFallbackNote(""); }
   );
   useHardwareBack(
     mode === "topic" && (topicResults.length > 0 || topicRecommendations.length > 0),
@@ -879,15 +880,20 @@ export default function SearchPanel({
           version: v,
           verses: ((results[i].data ?? []) as BibleVerse[]),
         }));
-        // 결과 있는 것 먼저, 없는 것 나중 (preferred order 유지)
+        // 현재 역본 먼저 → 결과 있는 다른 역본 → 결과 없는 역본 (순차 폴백)
+        const mainHas = (groups.find((g) => g.version === mainVersion)?.verses.length ?? 0) > 0;
         const sorted = [
-          ...groups.filter((g) => g.verses.length > 0),
+          ...groups.filter((g) => g.version === mainVersion && g.verses.length > 0),
+          ...groups.filter((g) => g.version !== mainVersion && g.verses.length > 0),
           ...groups.filter((g) => g.verses.length === 0),
         ];
         setSearchByVersion(sorted);
         const totalCount = sorted.reduce((acc, g) => acc + g.verses.length, 0);
         if (totalCount === 0) {
           setSearchError("해당 구절을 찾을 수 없습니다");
+          setSearchFallbackNote("");
+        } else {
+          setSearchFallbackNote(mainHas ? "" : "현재 역본에는 없어 다른 역본에서 찾은 결과입니다");
         }
         // 자동 선택: 주성경 결과가 정확히 1개일 때만
         const mainGroup = sorted.find((g) => g.version === mainVersion);
@@ -974,13 +980,20 @@ export default function SearchPanel({
         });
 
         const groups = await Promise.all(versionPromises);
+        const mainHas = (groups.find((g) => g.version === mainVersion)?.verses.length ?? 0) > 0;
         const sorted = [
-          ...groups.filter((g) => g.verses.length > 0),
+          ...groups.filter((g) => g.version === mainVersion && g.verses.length > 0),
+          ...groups.filter((g) => g.version !== mainVersion && g.verses.length > 0),
           ...groups.filter((g) => g.verses.length === 0),
         ];
         setSearchByVersion(sorted);
         const totalCount = sorted.reduce((acc, g) => acc + g.verses.length, 0);
-        if (totalCount === 0) setSearchError("검색 결과가 없습니다");
+        if (totalCount === 0) {
+          setSearchError("검색 결과가 없습니다");
+          setSearchFallbackNote("");
+        } else {
+          setSearchFallbackNote(mainHas ? "" : "현재 역본에는 없어 다른 역본에서 찾은 결과입니다");
+        }
 
         requestAnimationFrame(() => {
           if (scrollRef.current && savedScroll.current > 0) {
@@ -1930,6 +1943,9 @@ export default function SearchPanel({
         <div>
           {searchError && (
             <p className="text-sm text-red-500 mb-3 text-center">{searchError}</p>
+          )}
+          {!searchError && searchFallbackNote && (
+            <p className="text-xs text-[var(--amber-deep)] dark:text-amber-400 mb-3 text-center">{searchFallbackNote}</p>
           )}
 
           {/* 빈 홈 화면 — 검색 전이고 결과 없을 때만 표시 (다시 펴기 · 책갈피 · 환영) */}
