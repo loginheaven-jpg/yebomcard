@@ -23,7 +23,14 @@ if (!["easy", "rnksv"].includes(version)) {
 const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
-const GW = (process.env.AI_GATEWAY_URL || "https://ai-gateway20251125.up.railway.app") + "/api/ai/chat";
+// 직접 Gemini API (게이트웨이 우회). 키: .env.local 의 gemini-flash-latest (또는 GEMINI_API_KEY).
+const GEMINI_KEY = process.env["gemini-flash-latest"] || process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+if (!GEMINI_KEY) {
+  console.error("[FATAL] Gemini 키 없음 — .env.local 의 gemini-flash-latest 확인");
+  process.exit(1);
+}
 const SYS =
   "너는 한국어 성경 본문의 띄어쓰기만 표준 맞춤법으로 교정하는 도구다. 규칙: (1) 공백(띄어쓰기)만 고친다. " +
   "(2) 글자·문장부호·숫자·괄호·따옴표·내용은 절대 바꾸지 않는다(추가·삭제·수정 금지). " +
@@ -31,22 +38,28 @@ const SYS =
   "(4) 붙은 단어와 문장부호 뒤는 띄운다(예: '아들인셈과'→'아들인 셈과', '이러합니다.홍수가'→'이러합니다. 홍수가'). " +
   "(5) 설명·따옴표 없이 교정된 본문만 출력한다.";
 const norm = (s) => s.replace(/\s/g, "");
-const CONC = Number(process.env.CONC) || 32;
+const CONC = Number(process.env.CONC) || 12;
 const logFile = `spacing-fix-${version}.json`;
 
 async function once(text) {
-  // 게이트웨이 응답이 멎으면 워커가 영구 hang → 30s 타임아웃으로 abort 후 재시도
+  // 직접 Gemini 호출. thinking 끔(thinkingBudget:0) — 결정적 작업이라 추론 불필요·빠름(~1s).
+  // 멈춤 방지 30s 타임아웃 → abort 후 재시도.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
-    const r = await fetch(GW, {
+    const r = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [{ role: "user", content: text }], system_prompt: SYS, provider: "gemini-flash", temperature: 0, max_tokens: 1200, caller: "spacing-fix" }),
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYS }] },
+        contents: [{ role: "user", parts: [{ text }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
+      }),
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
-    return ((await r.json()).content || "").trim();
+    const j = await r.json();
+    return ((j?.candidates?.[0]?.content?.parts || []).map((p) => p.text).join("") || "").trim();
   } catch {
     return null;
   } finally {
