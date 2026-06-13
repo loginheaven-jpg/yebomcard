@@ -9,7 +9,7 @@ import { callAI } from "@/lib/aiGateway";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topic, version = "nkrv" } = body;
+    const { topic } = body;
 
     if (!topic || typeof topic !== "string" || topic.trim().length < 1) {
       return NextResponse.json(
@@ -18,11 +18,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const versionName = version === "rnksv" ? "새번역" : "개역개정";
-
+    // 버전 무관: AI 는 구절 참조(책/장/절)만 추천하고, 실제 본문은 클라이언트가 현재 역본에서 조회한다.
+    // 프롬프트에 역본명("새번역" 등)을 넣으면 그 역본 표현으로 출력이 길어져 — 특히 긴 주제 + 새번역에서 —
+    // preview 모델 잘림 경계를 넘겨 0개 파싱→500 이 났음. 역본명을 빼면 출력이 짧고 버전 무관해져 안정.
     const prompt = `"${topic.trim()}" 주제 성경 구절 5개 추천. JSON 배열만 출력하라. 설명 금지.
 [{"book":"시편","chapter":23,"verse":1,"preview":"여호와는 나의 목자시니"}]
-${versionName} 책이름. preview 10자.`;
+한국어 책이름. preview 10자.`;
 
     // preview 모델(gemini-3-flash-preview)이 간헐적으로 응답을 잘라 0개 파싱→500 이 나던 문제
     // (특히 rnksv 출력이 잘림 경계에 걸침). 최대 3회 재시도하며 가장 많이 복구된 결과를 채택
