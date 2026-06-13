@@ -88,10 +88,11 @@ const processedIds = new Set();
 if (existsSync(logFile)) {
   try {
     const prev = JSON.parse(readFileSync(logFile, "utf-8"));
+    // 이전 실패는 재시도 대상 — processedIds 에 넣지 않고 fails 도 새로 시작(회복 구간마다 수렴)
+    const prevFailIds = new Set((prev.fails || []).map((f) => f.id));
     (prev.changes || []).forEach((c) => { changes.push(c); processedIds.add(c.id); });
-    (prev.fails || []).forEach((f) => { fails.push(f); processedIds.add(f.id); });
-    (prev.processedIds || []).forEach((id) => processedIds.add(id));
-    console.log(`[RESUME] 기존 로그: 처리 ${processedIds.size}, 변경 ${changes.length}, 실패 ${fails.length}`);
+    (prev.processedIds || []).forEach((id) => { if (!prevFailIds.has(id)) processedIds.add(id); });
+    console.log(`[RESUME] 처리(성공/무변경) ${processedIds.size}, 변경 ${changes.length}, 재시도(이전 실패) ${prevFailIds.size}`);
   } catch { /* 손상 로그 무시 */ }
 }
 
@@ -123,13 +124,16 @@ async function worker() {
     const row = queue.shift();
     const fixed = await fix(row.text);
     if (fixed == null) {
+      // 실패 — processedIds 에 넣지 않음 → 다음 회복 구간에 재처리(영구 실패 방지)
       fails.push({ id: row.id, ref: `${row.book_code} ${row.chapter}:${row.verse}`, text: row.text });
-    } else if (fixed !== row.text) {
-      const ok = await dbUpdate(row.id, fixed);
-      changes.push({ id: row.id, ref: `${row.book_code} ${row.chapter}:${row.verse}`, before: row.text, after: fixed, applied: ok });
-      if (!ok) console.error(`[DB-FAIL] ${row.id}`);
+    } else {
+      if (fixed !== row.text) {
+        const ok = await dbUpdate(row.id, fixed);
+        changes.push({ id: row.id, ref: `${row.book_code} ${row.chapter}:${row.verse}`, before: row.text, after: fixed, applied: ok });
+        if (!ok) console.error(`[DB-FAIL] ${row.id}`);
+      }
+      processedIds.add(row.id); // 성공/무변경만 처리완료
     }
-    processedIds.add(row.id);
     done++;
     if (done % 500 === 0) {
       save();
@@ -140,7 +144,7 @@ async function worker() {
 await Promise.all(Array.from({ length: CONC }, () => worker()));
 save();
 
-const unchanged = processedIds.size - changes.length - fails.length;
+const unchanged = processedIds.size - changes.length;
 const notApplied = changes.filter((c) => !c.applied).length;
-console.log(`\n[DONE] 전체 ${all.length} | 변경(DB반영) ${changes.length}${notApplied ? ` (반영실패 ${notApplied})` : ""} | 정상 ${unchanged} | 실패 ${fails.length}`);
+console.log(`\n[DONE] 전체 ${all.length} | 변경(DB반영) ${changes.length}${notApplied ? ` (반영실패 ${notApplied})` : ""} | 정상 ${unchanged} | 실패(재시도대상) ${fails.length}`);
 console.log(`[LOG] ${logFile} (감사·롤백용 before/after 보존)`);
