@@ -533,6 +533,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       if (!p.tracks || p.tracks.length === 0) return;
       loadNextChapterRef.current = p.loadNextChapter ?? null;
       setIsWebSpeechFallback(false);
+      // 새 재생 세션: 직전 재생(녹음 등) 엔진 배지 잔상 제거 — 트랙 해석 후 다시 채움.
+      // (녹음 음원은 mp3Url 즉시 "real" 로 재설정되므로 깜빡임 없음)
+      setEngine("unknown");
+      setEngineVoice("");
       // 즉시 loading 표시 — bible_audio lookup 대기 중에도 미니 플레이어 노출
       setStatus("loading");
       statusRef.current = "loading";

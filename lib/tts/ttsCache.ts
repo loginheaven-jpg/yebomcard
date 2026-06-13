@@ -24,6 +24,18 @@ function openDB(): Promise<IDBDatabase> {
     return Promise.reject(new Error("IndexedDB not supported"));
   }
   dbPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    // open 이 success/error/blocked 중 무엇도 못 받고 멈추는 경우까지 차단 —
+    // 절대 영구 대기 금지(여기서 hang 하면 모든 TTS 가 loading 에서 멈춤).
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      dbPromise = null; // 실패 promise 를 캐시하지 않음 → 다음 호출 때 재시도(복구 가능)
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    timer = setTimeout(() => fail(new Error("openDB timeout")), 4000);
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -34,8 +46,29 @@ function openDB(): Promise<IDBDatabase> {
       const store = db.createObjectStore(STORE, { keyPath: "key" });
       store.createIndex("accessedAt", "accessedAt", { unique: false });
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    // 다른 탭/홈화면 PWA 가 구버전 DB 연결을 쥐고 있으면 open(신버전) 이 blocked 로
+    // 영구 대기 → reject 해 캐시 없이라도 TTS 진행. (DB_VERSION bump 직후 발생)
+    req.onblocked = () => fail(new Error("openDB blocked"));
+    req.onsuccess = () => {
+      if (settled) {
+        try {
+          req.result.close();
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      const db = req.result;
+      // 이 연결이 다른 탭의 향후 업그레이드를 막지 않도록 — versionchange 시 닫고 재오픈 유도
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+    req.onerror = () => fail(req.error);
   });
   return dbPromise;
 }
