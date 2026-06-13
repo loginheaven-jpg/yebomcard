@@ -23,14 +23,10 @@ if (!["easy", "rnksv"].includes(version)) {
 const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
-// 직접 Gemini API (게이트웨이 우회). 키: .env.local 의 gemini-flash-latest (또는 GEMINI_API_KEY).
-const GEMINI_KEY = process.env["gemini-flash-latest"] || process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-if (!GEMINI_KEY) {
-  console.error("[FATAL] Gemini 키 없음 — .env.local 의 gemini-flash-latest 확인");
-  process.exit(1);
-}
+// AI Gateway 경유 (게이트웨이 자체 키 사용 → 직접 호출의 free-tier 100/일 제한 우회).
+// provider 기본 claude-haiku(게이트웨이가 가용 엔진으로 라우팅 — 현재 gemini-flash-latest 서빙).
+const GW = (process.env.AI_GATEWAY_URL || "https://ai-gateway20251125.up.railway.app") + "/api/ai/chat";
+const GW_PROVIDER = process.env.GW_PROVIDER || "claude-haiku";
 const SYS =
   "너는 한국어 성경 본문의 띄어쓰기만 표준 맞춤법으로 교정하는 도구다. 규칙: (1) 공백(띄어쓰기)만 고친다. " +
   "(2) 글자·문장부호·숫자·괄호·따옴표·내용은 절대 바꾸지 않는다(추가·삭제·수정 금지). " +
@@ -42,24 +38,18 @@ const CONC = Number(process.env.CONC) || 12;
 const logFile = `spacing-fix-${version}.json`;
 
 async function once(text) {
-  // 직접 Gemini 호출. thinking 끔(thinkingBudget:0) — 결정적 작업이라 추론 불필요·빠름(~1s).
-  // 멈춤 방지 30s 타임아웃 → abort 후 재시도.
+  // AI Gateway(provider=claude-haiku) 호출. 멈춤 방지 30s 타임아웃 → abort 후 재시도.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 30000);
   try {
-    const r = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
+    const r = await fetch(GW, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYS }] },
-        contents: [{ role: "user", parts: [{ text }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-      }),
+      body: JSON.stringify({ messages: [{ role: "user", content: text }], system_prompt: SYS, provider: GW_PROVIDER, temperature: 0, max_tokens: 1200, caller: "spacing-fix" }),
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
-    const j = await r.json();
-    return ((j?.candidates?.[0]?.content?.parts || []).map((p) => p.text).join("") || "").trim();
+    return ((await r.json()).content || "").trim();
   } catch {
     return null;
   } finally {
