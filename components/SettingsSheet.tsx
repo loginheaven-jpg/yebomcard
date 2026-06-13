@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
-import { useTts, TTS_SPEEDS, type TtsSpeed } from "@/contexts/TtsContext";
+import { useTts } from "@/contexts/TtsContext";
 
 interface Props {
   onClose: () => void;
@@ -408,62 +408,7 @@ export default function SettingsSheet({
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">음성</div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-3">
-              <div>
-                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-1.5">재생 속도</div>
-                <div className="grid grid-cols-7 gap-1">
-                  {TTS_SPEEDS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => tts.setSpeed(s as TtsSpeed)}
-                      className={`py-1.5 text-[11px] font-mono font-bold rounded-md transition-colors ${
-                        tts.speed === s
-                          ? "bg-[var(--amber)] text-white"
-                          : "bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--ink-soft)] dark:text-gray-300 hover:brightness-95"
-                      }`}
-                    >
-                      {s === 1.0 ? "1x" : `${s}x`}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-[var(--ink)] dark:text-gray-100 shrink-0">합성 음성</span>
-                <div className="flex gap-1" role="group" aria-label="합성 음성 선택">
-                  {(["female", "male"] as const).map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => tts.setVoice(v)}
-                      title="녹음 음원 모드일 때는 무시됩니다"
-                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
-                        tts.voice === v
-                          ? "bg-[var(--amber)] text-white border-[var(--amber)]"
-                          : "border-[var(--line)] dark:border-gray-600 text-[var(--ink-soft)] dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)]"
-                      }`}
-                    >
-                      {v === "female" ? "여성" : "남성"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-[var(--ink)] dark:text-gray-100 shrink-0">영문 음성</span>
-                <div className="flex gap-1" role="group" aria-label="영문 발음 선택">
-                  {(["us", "gb"] as const).map((a) => (
-                    <button
-                      key={a}
-                      onClick={() => tts.setEnglishAccent(a)}
-                      title="영문 역본(KJV/NIrV/GNT/WEB) 재생 시 적용"
-                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${
-                        tts.englishAccent === a
-                          ? "bg-[var(--amber)] text-white border-[var(--amber)]"
-                          : "border-[var(--line)] dark:border-gray-600 text-[var(--ink-soft)] dark:text-gray-300 hover:border-[var(--amber)] hover:text-[var(--amber)]"
-                      }`}
-                    >
-                      {a === "us" ? "미국식" : "영국식"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              {/* 재생속도·합성음성(남녀/4성우)·영문음성(미/영)은 미니플레이어 + 유형별 기본값으로 결정 → 설정에서 제거 */}
               <label className="flex items-center justify-between gap-2 cursor-pointer">
                 <span className="text-sm text-[var(--ink)] dark:text-gray-100">자동 다음 장 진행</span>
                 <input

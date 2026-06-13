@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTts, TTS_SPEEDS, type TtsSpeed } from "@/contexts/TtsContext";
+import { useTts, TTS_SPEEDS, KOREAN_VOICE_LABELS, type TtsSpeed, type KoreanVoice } from "@/contexts/TtsContext";
 import { isEnglishVersion } from "@/lib/versions";
 
 export default function TTSMiniPlayer() {
@@ -17,20 +17,22 @@ export default function TTSMiniPlayer() {
     [tts.currentTrack?.version],
   );
   const [speedOpen, setSpeedOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!speedOpen && !moreOpen) return;
+    if (!speedOpen && !moreOpen && !voiceOpen) return;
     const close = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setSpeedOpen(false);
         setMoreOpen(false);
+        setVoiceOpen(false);
       }
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
-  }, [speedOpen, moreOpen]);
+  }, [speedOpen, moreOpen, voiceOpen]);
 
   if (tts.status === "idle") return null;
 
@@ -118,9 +120,9 @@ export default function TTSMiniPlayer() {
           </div>
         </div>
 
-        {/* 엔진 라벨 — 순수 표시 (non-clickable) */}
-        {tts.engine !== "unknown" && (() => {
-          const isReal = tts.engine === "real";
+        {/* 엔진 라벨 — 녹음/AI/Web 구별 (non-clickable). AI 합성은 로딩 중에도 "AI" 표시 */}
+        {(() => {
+          const isReal = isAudioMode; // 녹음 음원(mp3Url) — 그 외(ElevenLabs·Chirp·Neural2 등)는 AI
           const isWeb = tts.engine === "webspeech";
           const label = isReal ? "녹음" : isWeb ? "Web" : "AI";
           const bg = isReal
@@ -134,7 +136,7 @@ export default function TTSMiniPlayer() {
           return (
             <span
               className={`text-[9px] font-bold uppercase tracking-wider shrink-0 px-1 py-0.5 rounded ${bg} ${border}`}
-              title={tts.engineVoice || tts.engine}
+              title={tts.engineVoice || (isReal ? "녹음 음원" : "AI 합성")}
             >
               {label}
             </span>
@@ -148,6 +150,7 @@ export default function TTSMiniPlayer() {
             onClick={() => {
               setSpeedOpen((v) => !v);
               setMoreOpen(false);
+              setVoiceOpen(false);
             }}
             aria-label="재생 속도 선택"
             aria-expanded={speedOpen}
@@ -179,7 +182,7 @@ export default function TTSMiniPlayer() {
         </div>
 
         {/* 발음 토글 (single) — 영문 + AI 합성 시만. 탭 → 즉시 다른 발음으로 전환 */}
-        {isEng && (tts.engine === "chirp" || tts.engine === "neural2" || tts.engine === "wavenet") && (
+        {isEng && !isAudioMode && tts.engine !== "webspeech" && (
           <button
             type="button"
             onClick={() => tts.setEnglishAccent(tts.englishAccent === "us" ? "gb" : "us")}
@@ -190,8 +193,8 @@ export default function TTSMiniPlayer() {
             {tts.englishAccent === "us" ? "미국식" : "영국식"}
           </button>
         )}
-        {/* 음성 토글 (single) — 녹음/WebSpeech/unknown 시 숨김 */}
-        {!isAudioMode && tts.engine !== "webspeech" && tts.engine !== "unknown" && (
+        {/* 영문 음성(남/녀) 토글 — 영문 AI 합성 시만 */}
+        {isEng && !isAudioMode && tts.engine !== "webspeech" && (
           <button
             type="button"
             onClick={() => tts.setVoice(tts.voice === "female" ? "male" : "female")}
@@ -202,6 +205,45 @@ export default function TTSMiniPlayer() {
             {tts.voice === "female" ? "여" : "남"}
           </button>
         )}
+        {/* 한국어 성우(4종) 선택 — 한국어 AI 합성 시만. 팝오버: 남성1·남성2·여성1·여성2 */}
+        {!isEng && !isAudioMode && tts.engine !== "webspeech" && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setVoiceOpen((v) => !v);
+                setSpeedOpen(false);
+                setMoreOpen(false);
+              }}
+              aria-label="성우 선택"
+              aria-expanded={voiceOpen}
+              className="px-3 py-1.5 text-[11px] font-bold text-gray-700 dark:text-gray-200 rounded-md border border-gray-200 dark:border-gray-700 hover:text-[var(--amber)] hover:border-[var(--amber)] dark:hover:text-amber-400 dark:hover:border-amber-400 transition-colors"
+            >
+              {KOREAN_VOICE_LABELS[tts.koreanVoice]}
+            </button>
+            {voiceOpen && (
+              <div className="absolute bottom-full right-0 mb-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[84px]">
+                {(["m1", "m2", "f1", "f2"] as KoreanVoice[]).map((kv) => (
+                  <button
+                    key={kv}
+                    type="button"
+                    onClick={() => {
+                      tts.setKoreanVoice(kv);
+                      setVoiceOpen(false);
+                    }}
+                    className={`block w-full text-center px-3 py-1.5 text-xs font-bold whitespace-nowrap transition-colors ${
+                      tts.koreanVoice === kv
+                        ? "bg-[var(--amber)] text-white"
+                        : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {KOREAN_VOICE_LABELS[kv]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 더보기 */}
         <div className="relative shrink-0">
@@ -210,6 +252,7 @@ export default function TTSMiniPlayer() {
             onClick={() => {
               setMoreOpen((v) => !v);
               setSpeedOpen(false);
+              setVoiceOpen(false);
             }}
             aria-label="설정"
             aria-expanded={moreOpen}

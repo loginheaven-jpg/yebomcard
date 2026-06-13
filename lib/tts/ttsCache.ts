@@ -11,7 +11,8 @@ const DB_NAME = "yebom_tts_cache";
 // v5: 영문 발음 미국식/영국식 분기 도입 — accent 차이로 같은 캐시 키여도 음원 달라야 함
 // v6: 한국어 TTS 엔진 Chirp→Neural2 전환 + rnksv 주석 "(주:…)" 낭독 제외 → 기존 한국어 캐시 무효화
 // v7: 한국어 온디맨드를 ElevenLabs 성우로 전환(구약 Hunmin/Sian·신약 천장성/김미연) → 기존 한국어 캐시 무효화
-const DB_VERSION = 7;
+// v8: 신/구약 구분 폐지 + 한국어 성우 4종(m1/m2/f1/f2) 선택 → 캐시 키에 koreanVoice 반영, 기존 무효화
+const DB_VERSION = 8;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
@@ -82,11 +83,15 @@ export interface TtsCacheKey {
   speed: number;
   /** 영문 accent — "us"|"gb". 한국어 트랙은 "ko" 고정. */
   accent?: "us" | "gb" | "ko";
+  /** 한국어 ElevenLabs 성우(m1/m2/f1/f2). 있으면 voice 슬롯 대신 사용 → 4성우 캐시 구분 */
+  koreanVoice?: string;
 }
 
 export function makeCacheKey(k: TtsCacheKey): string {
   const acc = k.accent ?? "us";
-  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${k.voice}-${k.speed}-${acc}`;
+  // 한국어는 4성우(m1/m2/f1/f2)를, 영문은 voice(male/female)를 키 슬롯에 사용
+  const v = k.koreanVoice ?? k.voice;
+  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${v}-${k.speed}-${acc}`;
 }
 
 export interface CachedAudio {

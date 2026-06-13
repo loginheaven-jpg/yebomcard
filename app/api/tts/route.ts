@@ -89,19 +89,19 @@ async function getAccessToken(): Promise<string> {
 // ── ElevenLabs 한국어 온디맨드 (rnksv 등) ──────────────────────────────
 // Vercel 배포 시 ELEVENLABS_API_KEY 환경변수 필요(로컬은 .env.local 의 11LABS 도 인식).
 const EL_API_KEY = process.env.ELEVENLABS_API_KEY || process.env["11LABS"] || "";
-const NT_CODES = new Set([
-  "mat","mrk","luk","jhn","act","rom","1co","2co","gal","eph","php","col",
-  "1th","2th","1ti","2ti","tit","phm","heb","jas","1pe","2pe","1jn","2jn","3jn","jud","rev",
-]);
-// 구약: Hunmin(남)/Sian(여) · 신약: 천장성(남)/김미연(여)
-function elevenVoiceId(bookCode: string, isMale: boolean): string {
-  const isNT = NT_CODES.has((bookCode || "").toLowerCase());
-  if (isNT) return isMale ? "657hGmxIvJTkmFa17K9v" : "vDA1h0ZXkQiojUReMmR9";
-  return isMale ? "MpbDJfQJUYUnp0i1QvOZ" : "5n5gqmaQi9Ewevrz7bOS";
+// 한국어 ElevenLabs 성우 4종 (신약/구약 구분 없음). 클라이언트가 koreanVoice 로 선택.
+const KOREAN_VOICES: Record<string, string> = {
+  m1: "657hGmxIvJTkmFa17K9v", // 남성1 천장성
+  m2: "MpbDJfQJUYUnp0i1QvOZ", // 남성2 Hunmin
+  f1: "vDA1h0ZXkQiojUReMmR9", // 여성1 김미연
+  f2: "5n5gqmaQi9Ewevrz7bOS", // 여성2 Sian
+};
+function elevenVoiceId(koreanVoice: string): string {
+  return KOREAN_VOICES[koreanVoice] || KOREAN_VOICES.m1;
 }
-async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, speed: number): Promise<ArrayBuffer | null> {
+async function synthElevenLabs(text: string, koreanVoice: string, speed: number): Promise<ArrayBuffer | null> {
   if (!EL_API_KEY) return null;
-  const voiceId = elevenVoiceId(bookCode, isMale);
+  const voiceId = elevenVoiceId(koreanVoice);
   const spd = Math.min(1.2, Math.max(0.7, speed || 1)); // ElevenLabs speed 범위 0.7~1.2
   try {
     const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -123,7 +123,7 @@ async function synthElevenLabs(text: string, bookCode: string, isMale: boolean, 
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, speed, voice, lang, accent, pitch, volumeGainDb, bookCode } = await req.json();
+    const { text, speed, voice, lang, accent, pitch, volumeGainDb, koreanVoice } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -141,17 +141,18 @@ export async function POST(req: NextRequest) {
     const isMale = voice === "male";
     const isEng = lang === "en";
 
-    // 한국어 온디맨드(주로 rnksv): ElevenLabs 한국어 성우 1순위 — 구약 Hunmin/Sian · 신약 천장성/김미연
-    // (남/녀 토글 유지). 키 없음·실패 시 아래 GCP(Neural2→WaveNet)로 폴백.
+    // 한국어 온디맨드(주로 rnksv): ElevenLabs 한국어 성우 1순위 — 신/구약 구분 없이
+    // koreanVoice(m1 천장성/m2 Hunmin/f1 김미연/f2 Sian) 선택. 키 없음·실패 시 GCP(Neural2→WaveNet) 폴백.
     if (!isEng) {
-      const el = await synthElevenLabs(ttsText, bookCode || "", isMale, speed ?? 1);
+      const kv = koreanVoice || "m1";
+      const el = await synthElevenLabs(ttsText, kv, speed ?? 1);
       if (el) {
         return new NextResponse(el, {
           status: 200,
           headers: {
             "Content-Type": "audio/mpeg",
             "Cache-Control": "public, max-age=86400",
-            "X-TTS-Voice": `el:${elevenVoiceId(bookCode || "", isMale)}`,
+            "X-TTS-Voice": `el:${elevenVoiceId(kv)}`,
           },
         });
       }

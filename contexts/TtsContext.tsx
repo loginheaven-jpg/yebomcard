@@ -47,6 +47,15 @@ export type TtsStatus = "idle" | "loading" | "speaking" | "paused";
 export type TtsSpeed = 0.7 | 0.85 | 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
 export const TTS_SPEEDS: TtsSpeed[] = [0.7, 0.85, 1.0, 1.15, 1.5, 1.75, 2.0];
 
+/** 한국어 ElevenLabs 성우 — m1 남성1(천장성)·m2 남성2(Hunmin)·f1 여성1(김미연)·f2 여성2(Sian) */
+export type KoreanVoice = "m1" | "m2" | "f1" | "f2";
+export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
+  m1: "남성1",
+  m2: "남성2",
+  f1: "여성1",
+  f2: "여성2",
+};
+
 export interface TtsTrack {
   text: string;
   /** 화면 표시용 ref (예: "시 121:5") */
@@ -143,7 +152,7 @@ interface StartParams {
 }
 
 /** 현재 재생 중인 음원의 엔진 식별 */
-export type TtsEngine = "real" | "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
+export type TtsEngine = "real" | "eleven" | "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
 
 interface TtsContextValue {
   status: TtsStatus;
@@ -151,6 +160,8 @@ interface TtsContextValue {
   currentTrack: TtsTrack | null;
   queueLength: number;
   voice: TTSVoice;
+  /** 한국어 AI 성우 (m1/m2/f1/f2) */
+  koreanVoice: KoreanVoice;
   speed: TtsSpeed;
   autoNext: boolean;
   readVerseNumber: boolean;
@@ -167,6 +178,7 @@ interface TtsContextValue {
   resume: () => void;
   jumpTo: (index: number) => void;
   setVoice: (v: TTSVoice) => void;
+  setKoreanVoice: (v: KoreanVoice) => void;
   setSpeed: (s: TtsSpeed) => void;
   setAutoNext: (b: boolean) => void;
   setReadVerseNumber: (b: boolean) => void;
@@ -175,6 +187,7 @@ interface TtsContextValue {
 
 function classifyEngine(voiceName: string): TtsEngine {
   if (!voiceName) return "unknown";
+  if (voiceName.startsWith("el:")) return "eleven"; // ElevenLabs (X-TTS-Voice: el:<voiceId>)
   if (voiceName.includes("Chirp")) return "chirp";
   if (voiceName.includes("Neural2")) return "neural2";
   if (voiceName.includes("Wavenet")) return "wavenet";
@@ -185,11 +198,24 @@ const Ctx = createContext<TtsContextValue | null>(null);
 
 const LS = {
   voice: "yebom_tts_voice",
-  speed: "yebom_tts_speed",
+  koreanVoice: "yebom_tts_korean_voice",
+  speedAi: "yebom_tts_speed_ai",
+  speedRecKo: "yebom_tts_speed_recko",
+  speedRecEn: "yebom_tts_speed_recen",
   autoNext: "yebom_tts_auto_next",
   readVerseNumber: "yebom_tts_read_verse_number",
   englishAccent: "yebom_tts_english_accent",
 } as const;
+
+/** 재생 유형 — ai(TTS 합성) / recko(녹음·한글) / recen(녹음·영문) */
+type SpeedType = "ai" | "recko" | "recen";
+const SPEED_LS: Record<SpeedType, string> = {
+  ai: LS.speedAi,
+  recko: LS.speedRecKo,
+  recen: LS.speedRecEn,
+};
+// 유형별 기본 속도: AI 1.0 / 녹음·한글 1.15 / 녹음·영문 0.85
+const SPEED_DEFAULT: Record<SpeedType, TtsSpeed> = { ai: 1.0, recko: 1.15, recen: 0.85 };
 
 function readStorage<T>(key: string, fallback: T, parse: (s: string) => T): T {
   if (typeof window === "undefined") return fallback;
@@ -209,11 +235,20 @@ function writeStorage(key: string, value: string) {
   } catch {}
 }
 
+/** 유형별 저장 속도 읽기 (없으면 유형 기본값). 사용자가 바꾼 값이 유지됨(유형별 기억) */
+function readSpeedForType(t: SpeedType): TtsSpeed {
+  return readStorage<TtsSpeed>(SPEED_LS[t], SPEED_DEFAULT[t], (s) => {
+    const n = parseFloat(s);
+    return (TTS_SPEEDS as number[]).includes(n) ? (n as TtsSpeed) : SPEED_DEFAULT[t];
+  });
+}
+
 export function TtsProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<TtsStatus>("idle");
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [queueLength, setQueueLength] = useState(0);
-  const [voice, setVoiceState] = useState<TTSVoice>("female");
+  const [voice, setVoiceState] = useState<TTSVoice>("male");
+  const [koreanVoice, setKoreanVoiceState] = useState<KoreanVoice>("m1");
   const [speed, setSpeedState] = useState<TtsSpeed>(1.0);
   const [autoNext, setAutoNextState] = useState(true);
   const [readVerseNumber, setReadVerseNumberState] = useState(false);
@@ -221,14 +256,16 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<TtsTrack | null>(null);
   const [engine, setEngine] = useState<TtsEngine>("unknown");
   const [engineVoice, setEngineVoice] = useState("");
-  const [englishAccent, setEnglishAccentState] = useState<TTSAccent>("us");
-  const englishAccentRef = useRef<TTSAccent>("us");
+  const [englishAccent, setEnglishAccentState] = useState<TTSAccent>("gb");
+  const englishAccentRef = useRef<TTSAccent>("gb");
 
   const queueRef = useRef<TtsTrack[]>([]);
   const indexRef = useRef(-1);
   const statusRef = useRef<TtsStatus>("idle");
-  const voiceRef = useRef<TTSVoice>("female");
+  const voiceRef = useRef<TTSVoice>("male");
+  const koreanVoiceRef = useRef<KoreanVoice>("m1");
   const speedRef = useRef<TtsSpeed>(1.0);
+  const speedTypeRef = useRef<SpeedType>("ai");
   const autoNextRef = useRef(true);
   const readVerseNumberRef = useRef(false);
   const loadNextChapterRef = useRef<LoadNextChapterFn | null>(null);
@@ -243,22 +280,22 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // localStorage 초기 복원 — SSR 시 default → mount 후 보정 (hydration mismatch 회피)
     setVoiceState(
-      readStorage<TTSVoice>(LS.voice, "female", (s) =>
-        s === "male" ? "male" : "female",
+      readStorage<TTSVoice>(LS.voice, "male", (s) =>
+        s === "female" ? "female" : "male",
       ),
     );
-    setSpeedState(
-      readStorage<TtsSpeed>(LS.speed, 1.0, (s) => {
-        const n = parseFloat(s);
-        return (TTS_SPEEDS as number[]).includes(n) ? (n as TtsSpeed) : 1.0;
-      }),
+    const kv = readStorage<KoreanVoice>(LS.koreanVoice, "m1", (s) =>
+      (["m1", "m2", "f1", "f2"] as string[]).includes(s) ? (s as KoreanVoice) : "m1",
     );
+    setKoreanVoiceState(kv);
+    koreanVoiceRef.current = kv;
+    // 속도는 재생 시작 시 유형별로 로드(SPEED_DEFAULT/유형별 기억) — 단일 전역 속도 복원 없음
     setAutoNextState(readStorage<boolean>(LS.autoNext, true, (s) => s === "1"));
     setReadVerseNumberState(
       readStorage<boolean>(LS.readVerseNumber, false, (s) => s === "1"),
     );
-    const acc = readStorage<TTSAccent>(LS.englishAccent, "us", (s) =>
-      s === "gb" ? "gb" : "us",
+    const acc = readStorage<TTSAccent>(LS.englishAccent, "gb", (s) =>
+      s === "us" ? "us" : "gb",
     );
     setEnglishAccentState(acc);
     englishAccentRef.current = acc;
@@ -267,6 +304,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     voiceRef.current = voice;
   }, [voice]);
+  useEffect(() => {
+    koreanVoiceRef.current = koreanVoice;
+  }, [koreanVoice]);
   useEffect(() => {
     speedRef.current = speed;
     // 장 단위 mp3 재생 중이면 즉시 playbackRate 반영 (TTS 합성 모드는 다음 절부터 적용됨)
@@ -306,9 +346,16 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     setVoiceState(v);
     writeStorage(LS.voice, v);
   }, []);
+  const setKoreanVoice = useCallback((v: KoreanVoice) => {
+    setKoreanVoiceState(v);
+    koreanVoiceRef.current = v;
+    writeStorage(LS.koreanVoice, v);
+  }, []);
   const setSpeed = useCallback((s: TtsSpeed) => {
     setSpeedState(s);
-    writeStorage(LS.speed, String(s));
+    speedRef.current = s;
+    // 현재 재생 유형의 속도로 저장 → 그 유형의 새 기본값으로 유지
+    writeStorage(SPEED_LS[speedTypeRef.current], String(s));
   }, []);
   const setAutoNext = useCallback((b: boolean) => {
     setAutoNextState(b);
@@ -400,10 +447,12 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const v = voiceRef.current;
+      const isEng = isEnglishVersion(track.version);
+      const kv = koreanVoiceRef.current;
+      // 영문은 voice(male/female), 한국어는 koreanVoice 의 성별로 voice 슬롯 결정(GCP 폴백 성별용)
+      const v: TTSVoice = isEng ? voiceRef.current : (kv.startsWith("m") ? "male" : "female");
       const sp = speedRef.current;
       const isAnnouncement = track.verse === 0;
-      const isEng = isEnglishVersion(track.version);
       const cacheKey = makeCacheKey({
         version: track.version,
         bookCode: track.bookCode,
@@ -412,6 +461,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         voice: v,
         speed: sp,
         accent: isEng ? englishAccentRef.current : "ko",
+        koreanVoice: isEng ? undefined : kv,
       });
 
       const playableText =
@@ -444,7 +494,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             speed: sp,
             lang: isEng ? "en" : "ko",
             accent: englishAccentRef.current,
-            bookCode: track.bookCode,
+            koreanVoice: isEng ? undefined : kv,
             signal: ctrl.signal,
           });
           if (playGenRef.current !== gen) return;
@@ -547,6 +597,18 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       queueRef.current = augmented;
       setQueueLength(augmented.length);
 
+      // 유형별 기본 속도 적용(유형별 기억값 우선): AI 1.0 / 녹음·한글 1.15 / 녹음·영문 0.85
+      const recorded = augmented.some((t) => t.mp3Url);
+      const stype: SpeedType = !recorded
+        ? "ai"
+        : isEnglishVersion(p.tracks[0].version)
+          ? "recen"
+          : "recko";
+      speedTypeRef.current = stype;
+      const tsp = readSpeedForType(stype);
+      speedRef.current = tsp;
+      setSpeedState(tsp);
+
       // 장 단위 mp3 모드: startIndex 와 무관하게 announcement 부터 (mp3 는 장 내부 seek 불가)
       // 절 단위 모드: startIndex > 0 이면 그 절 위치를 augmented 에서 찾아 announcement 스킵
       let startIdx = 0;
@@ -626,6 +688,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       currentTrack,
       queueLength,
       voice,
+      koreanVoice,
       speed,
       autoNext,
       readVerseNumber,
@@ -639,6 +702,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       resume,
       jumpTo,
       setVoice,
+      setKoreanVoice,
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
@@ -650,6 +714,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       currentTrack,
       queueLength,
       voice,
+      koreanVoice,
       speed,
       autoNext,
       readVerseNumber,
@@ -663,6 +728,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       resume,
       jumpTo,
       setVoice,
+      setKoreanVoice,
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
