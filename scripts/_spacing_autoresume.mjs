@@ -1,7 +1,8 @@
 // 게이트웨이(gemini-flash) 회복을 폴링하다 정상화되면 띄어쓰기 교정을 자동 재개·수렴.
 // 게이트웨이가 회복↔악화를 반복하므로: 회복 구간마다 easy·rnksv 를 (실패 재시도 포함) 돌리고,
 // 잔여 실패가 0 이 되거나 더는 줄지 않을 때(영구 실패 추정)까지 반복한다.
-// 회복 판정: provider gemini-flash 호출이 200 + 응답 model 이 gemini 계열(폴백 gpt-5.1 아님) + 8s 미만.
+// 회복 판정: provider gemini-flash 호출이 빠른 200(8s 미만). gemini 가 죽어도 게이트웨이가
+// 정상 폴백(claude-haiku 등)으로 빠르게 응답하면 재개(검증 가드가 모델 무관 내용 안전 보장).
 // CONC=16. 일회성 운영 스크립트(미커밋 대상이었으나 수렴 로직 반영 위해 커밋).
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
@@ -40,8 +41,10 @@ async function probe() {
 async function waitHealthy() {
   while (true) {
     const { ok, ms, model } = await probe();
-    const healthy = ok && /gemini/i.test(model) && ms < 8000;
-    console.log(`[autoresume] ${ts()} ok=${ok} ${ms}ms model=${model}${healthy ? " ← 회복" : ""}`);
+    // gemini-flash 가 죽어도 게이트웨이가 정상 폴백(claude-haiku 등)으로 빠르게 200 응답하면 재개.
+    // (gpt-5.1 은 quota 소진으로 ok=false 거나 느려 ms<8000 에서 자동 제외됨)
+    const healthy = ok && ms < 8000;
+    console.log(`[autoresume] ${ts()} ok=${ok} ${ms}ms model=${model}${healthy ? " ← 정상" : ""}`);
     if (healthy) return;
     await sleep(180000); // 3분
   }
@@ -61,7 +64,7 @@ function failsOf(version) {
   try { return JSON.parse(readFileSync(`spacing-fix-${version}.json`, "utf8")).fails.length; } catch { return 0; }
 }
 
-console.log(`[autoresume] 시작 ${ts()} — 게이트웨이 gemini-flash 회복 대기(3분 간격), 회복 시 easy·rnksv 수렴 실행`);
+console.log(`[autoresume] 시작 ${ts()} — 게이트웨이 정상 응답(빠른 200) 대기(3분 간격), 정상 시 easy·rnksv 수렴 실행`);
 let prevTotal = Infinity;
 let noProgress = 0;
 let pass = 0;
