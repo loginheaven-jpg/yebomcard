@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { useTts, type TtsTrack } from "@/contexts/TtsContext";
+import TTSMiniPlayer from "@/components/TTSMiniPlayer";
 import TTSButton from "./TTSButton";
 
 export interface FullscreenVerseItem {
@@ -956,6 +957,9 @@ export default function FullscreenReader({
           </button>
         </div>
       </footer>
+      {/* 읽기 중 하단 플레이어 — 전체화면(z-1000) 내부에 렌더해야 전역 미니플레이어(z-50)가 가려지지 않음.
+          status==="idle" 이면 스스로 렌더 안 함 → 읽기 중에만 노출. footer 위(bottom 70px)에 자리. */}
+      <TTSMiniPlayer />
     </div>
   );
 }
