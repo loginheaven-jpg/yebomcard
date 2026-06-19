@@ -1677,48 +1677,46 @@ export default function SearchPanel({
                 <option key={v} value={v}>{getVersionLabel(v)}</option>
               ))}
             </select>
-            {/* 글자 크기 빠른 조절 — 'A' 버튼 → 인라인 스테퍼(A− 크기 A+). 설정 시트 안 거침 */}
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setFontStepOpen((v) => !v)}
-                aria-label="글자 크기 조절"
-                aria-expanded={fontStepOpen}
-                title="글자 크기"
-                className="flex items-center justify-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-90 transition-all"
-                style={{ width: "30px", height: "30px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, lineHeight: 1 }}
-              >
-                가
-              </button>
-              {fontStepOpen && (
-                <>
-                  <div className="fixed inset-0 z-[59]" onClick={() => setFontStepOpen(false)} aria-hidden />
-                  <div className="absolute right-0 top-full mt-1.5 z-[60] flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-1">
-                    <button
-                      type="button"
-                      onClick={() => setFontSize(Math.max(16, fontSize - 2))}
-                      aria-label="글자 작게"
-                      className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
-                    >
-                      A−
-                    </button>
-                    <span className="min-w-[34px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
-                    <button
-                      type="button"
-                      onClick={() => setFontSize(Math.min(60, fontSize + 2))}
-                      aria-label="글자 크게"
-                      className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
-                    >
-                      A+
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
             {/* 화면 설정 아이콘 — Phase 2b 에서 하단 5탭 "설정" 으로 흡수 (사용자 #5) */}
           </div>
-          {/* 우측 빈 자리 — QuickNavFab 가 fixed 로 떠 있음 (top:12 right:12) */}
-          <div aria-hidden />
+          {/* 우측 컬럼: 글자 크기 '가' — 버전 셀렉터는 col-2 정중앙, '가'는 우측으로 분리해 좌우 균형 */}
+          <div className="relative shrink-0 justify-self-end">
+            <button
+              type="button"
+              onClick={() => setFontStepOpen((v) => !v)}
+              aria-label="글자 크기 조절"
+              aria-expanded={fontStepOpen}
+              title="글자 크기"
+              className="flex items-center justify-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-90 transition-all"
+              style={{ width: "30px", height: "30px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, lineHeight: 1 }}
+            >
+              가
+            </button>
+            {fontStepOpen && (
+              <>
+                <div className="fixed inset-0 z-[59]" onClick={() => setFontStepOpen(false)} aria-hidden />
+                <div className="absolute right-0 top-full mt-1.5 z-[60] flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setFontSize(Math.max(16, fontSize - 2))}
+                    aria-label="글자 작게"
+                    className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                  >
+                    A−
+                  </button>
+                  <span className="min-w-[34px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFontSize(Math.min(60, fontSize + 2))}
+                    aria-label="글자 크게"
+                    className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                  >
+                    A+
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
