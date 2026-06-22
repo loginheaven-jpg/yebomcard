@@ -295,12 +295,14 @@ export default function SearchPanel({
     (v: BibleVerse) => sharedNotes.filter((s) => s.verse === v.verse),
     [sharedNotes],
   );
-  // 공유 메모 작성자 이름 마스킹 — 첫 글자만 남기고 나머지 * (최철영 → 최**)
+  // 공유 메모 작성자 이름 마스킹 — 가운데를 * (홍길동→홍*동, 김수→김*, 남궁민수→남**수)
   const maskName = (name?: string | null) => {
     if (!name) return name ?? "";
     const chars = [...name];
-    if (chars.length <= 1) return name;
-    return chars[0] + "*".repeat(chars.length - 1);
+    const n = chars.length;
+    if (n <= 1) return name;
+    if (n === 2) return chars[0] + "*";
+    return chars[0] + "*".repeat(n - 2) + chars[n - 1];
   };
   const fmtNoteDate = (iso?: string | null) => {
     if (!iso) return "";
