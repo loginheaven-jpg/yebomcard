@@ -28,6 +28,7 @@ import {
   fetchChapterNotes,
   saveVerseNote,
   reportNote,
+  amenNote,
   type VerseNote,
   type SharedNote,
 } from "@/lib/verse-notes";
@@ -248,6 +249,7 @@ export default function SearchPanel({
   const [sharedNotes, setSharedNotes] = useState<SharedNote[]>([]); // 타인의 공개 메모(목장/전체)
   const [expandedShared, setExpandedShared] = useState<Set<number>>(new Set()); // 펼친 공유 메모 id
   const [expandedMine, setExpandedMine] = useState<Set<number>>(new Set()); // 펼친 내 메모 (verse 번호)
+  const [amenedIds, setAmenedIds] = useState<Set<number>>(new Set()); // 내가 아멘한 공유 메모 id
   const [noteVisibility, setNoteVisibility] = useState<string>("목장"); // 저장 공개 범위 (기본 목장)
   const [noteEditorVerse, setNoteEditorVerse] = useState<BibleVerse | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -265,6 +267,7 @@ export default function SearchPanel({
     fetchChapterNotes(bookCode, chapter).then(({ notes, shared }) => {
       setChapterNotes(notes);
       setSharedNotes(shared);
+      setAmenedIds(new Set(shared.filter((s) => s.i_amened).map((s) => s.id)));
     });
   }, [sessionLoading, isLoggedIn, mode, browseStep, bookCode, chapter]);
 
@@ -280,6 +283,7 @@ export default function SearchPanel({
       return fetchChapterNotes(bookCode, chapter).then(({ notes, shared }) => {
         setChapterNotes(notes);
         setSharedNotes(shared);
+        setAmenedIds(new Set(shared.filter((s) => s.i_amened).map((s) => s.id)));
       });
     return Promise.resolve();
   }, [bookCode, chapter]);
@@ -316,6 +320,15 @@ export default function SearchPanel({
     if (r.ok && r.hidden) setSharedNotes((prev) => prev.filter((s) => s.id !== id));
     setReportToast(!r.ok ? "신고 처리에 실패했습니다" : r.hidden ? "신고 누적 — 임시 숨김 처리됐습니다" : "신고가 접수되었습니다");
     window.setTimeout(() => setReportToast(null), 2500);
+  }
+  function handleAmen(id: number) {
+    setAmenedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    void amenNote(id); // 서버 토글(낙관적). 카운트 미표시.
   }
 
   // 로컬 chapterNotes 낙관적 upsert — 색/메모를 네트워크 대기 없이 즉시 반영
@@ -1464,8 +1477,13 @@ export default function SearchPanel({
             {sharedFor(verse).map((s) => {
               const open = expandedShared.has(s.id);
               const reported = reportedIds.has(s.id);
+              const amened = amenedIds.has(s.id);
               return (
-                <div key={s.id} className="flex items-start gap-1 text-[13px] leading-snug text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30 rounded-md px-2 py-1">
+                <div
+                  key={s.id}
+                  className="flex items-start gap-1 text-[13px] leading-snug text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30 rounded-md px-2 py-1 cursor-pointer"
+                  onClick={() => toggleSharedExpand(s.id)}
+                >
                   <span className="shrink-0">💬</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1 text-[10px] text-blue-500 dark:text-blue-400 mb-0.5">
@@ -1476,26 +1494,32 @@ export default function SearchPanel({
                       <span className="opacity-70">({fmtNoteDate(s.created_at)})</span>
                     </div>
                     <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{linkify(s.note)}</div>
+                    {open && (
+                      <div
+                        className="flex items-center gap-3 mt-2 pt-1.5 border-t border-blue-100 dark:border-blue-900/40 text-[12px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleAmen(s.id)}
+                          className={`cursor-pointer select-none font-semibold ${amened ? "text-amber-600 dark:text-amber-400" : "text-blue-400 dark:text-blue-500"}`}
+                        >
+                          🙏 아멘
+                        </span>
+                        <span className="text-blue-200 dark:text-blue-800" aria-hidden>|</span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => !reported && handleReportNote(s.id)}
+                          className={`cursor-pointer select-none ${reported ? "text-gray-400 opacity-60" : "text-blue-400 dark:text-blue-500 hover:text-red-500"}`}
+                        >
+                          🚩 {reported ? "신고됨" : "신고"}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleSharedExpand(s.id)}
-                    className="shrink-0 cursor-pointer px-1 text-blue-400 select-none"
-                    aria-label={open ? "접기" : "펼치기"}
-                  >
-                    {open ? "▾" : "▸"}
-                  </span>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => !reported && handleReportNote(s.id)}
-                    className={`shrink-0 cursor-pointer px-1 select-none ${reported ? "opacity-30" : "text-blue-400 hover:text-red-500"}`}
-                    title="신고"
-                    aria-label="신고"
-                  >
-                    🚩
-                  </span>
+                  <span className="shrink-0 self-center text-blue-300 dark:text-blue-600 select-none" aria-hidden>{open ? "▾" : "▸"}</span>
                 </div>
               );
             })}

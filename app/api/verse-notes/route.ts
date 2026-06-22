@@ -67,7 +67,20 @@ export async function GET(request: NextRequest) {
     (a.created_at || "").localeCompare(b.created_at || ""),
   );
 
-  return NextResponse.json({ notes: mine || [], shared });
+  // 내가 '아멘'한 공유 메모 표시 (카운트 없이 본인 토글 상태만)
+  let sharedOut = shared;
+  if (shared.length > 0) {
+    const ids = shared.map((s) => s.id);
+    const { data: amens } = await supabaseAdmin
+      .from("verse_note_amens")
+      .select("note_id")
+      .eq("user_id", session.user_id)
+      .in("note_id", ids);
+    const amenedSet = new Set((amens || []).map((a) => a.note_id));
+    sharedOut = shared.map((s) => ({ ...s, i_amened: amenedSet.has(s.id) }));
+  }
+
+  return NextResponse.json({ notes: mine || [], shared: sharedOut });
 }
 
 // POST: 절 하이라이트/메모 저장 — SELECT-then-UPDATE/INSERT. color·note 둘 다 비면 행 삭제.

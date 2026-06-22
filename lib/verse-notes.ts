@@ -40,6 +40,8 @@ export interface SharedNote {
   group_id: string | null;
   visibility: string;
   created_at: string;
+  /** 현재 사용자가 이 메모에 '아멘'을 눌렀는지 */
+  i_amened?: boolean;
 }
 
 export async function fetchChapterNotes(
@@ -55,6 +57,22 @@ export async function fetchChapterNotes(
     return { notes: data.notes || [], shared: data.shared || [] };
   } catch {
     return { notes: [], shared: [] };
+  }
+}
+
+/** 타인 메모 '아멘' 토글 — 카운트 미표시, 사용자별 on/off만. 반환: 토글 후 상태 */
+export async function amenNote(noteId: number): Promise<{ ok: boolean; amened?: boolean }> {
+  try {
+    const res = await fetch("/api/verse-notes/amen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_id: noteId }),
+    });
+    if (!res.ok) return { ok: false };
+    const d = await res.json();
+    return { ok: true, amened: !!d.amened };
+  } catch {
+    return { ok: false };
   }
 }
 
