@@ -2710,10 +2710,10 @@ export default function SearchPanel({
           >
             <div className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">메모 신고</div>
             <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed mb-1.5">
-              이 글이 <b>욕설·비방·이단</b> 등으로 <b>성도의 믿음과 덕을 세우는 데 해가 된다</b>고 여겨지십니까?
+              이 글이 <b>욕설·비방·이단성</b> 등으로 <b>성도의 믿음과 덕을 세우는 데 해가 된다</b>고 여겨지십니까?
             </p>
             <p className="text-xs text-gray-400 leading-relaxed mb-4">
-              그렇다면 신고해 주세요. 서로 다른 두 분이 신고하면 자동으로 가려지고 운영자가 검토합니다.
+              신고하시면 운영자가 검토 후 삭제 처리합니다.
             </p>
             <div className="flex gap-2">
               <button
