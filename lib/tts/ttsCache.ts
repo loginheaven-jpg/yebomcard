@@ -12,7 +12,8 @@ const DB_NAME = "yebom_tts_cache";
 // v6: 한국어 TTS 엔진 Chirp→Neural2 전환 + rnksv 주석 "(주:…)" 낭독 제외 → 기존 한국어 캐시 무효화
 // v7: 한국어 온디맨드를 ElevenLabs 성우로 전환(구약 Hunmin/Sian·신약 천장성/김미연) → 기존 한국어 캐시 무효화
 // v8: 신/구약 구분 폐지 + 한국어 성우 4종(m1/m2/f1/f2) 선택 → 캐시 키에 koreanVoice 반영, 기존 무효화
-const DB_VERSION = 8;
+// v9: 본문 띄어쓰기 교정 완료(easy/rnksv) → 교정된 본문으로 재낭독하도록 기존 한국어 캐시 무효화
+const DB_VERSION = 9;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
