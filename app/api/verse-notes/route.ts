@@ -81,8 +81,9 @@ export async function POST(request: NextRequest) {
   const { book_code, chapter, verse, version } = body;
   const color: string | null = body.color || null;
   const note: string | null = body.note ? String(body.note).trim() || null : null;
-  // 공개 범위 — 기본 '홀로'(안전). 클라이언트가 메모 저장 시 명시 전달(기본 목장).
-  const visibility: string = VISIBILITIES.includes(body.visibility) ? body.visibility : "홀로";
+  // 공개 범위 — 전달되면 사용, 미전달이면 업데이트 시 기존값 보존 / 신규는 '홀로'.
+  // (하이라이트 등 visibility 미전달 저장이 공유 메모를 '홀로'로 덮어쓰지 않도록)
+  const visibilityIn: string | null = VISIBILITIES.includes(body.visibility) ? body.visibility : null;
 
   if (!book_code || !chapter || !verse) {
     return NextResponse.json({ error: "book_code, chapter, verse가 필요합니다" }, { status: 400 });
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await supabaseAdmin
     .from("verse_notes")
-    .select("id")
+    .select("id, visibility")
     .eq("user_id", session.user_id)
     .eq("book_code", book_code)
     .eq("chapter", chapter)
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
         color,
         note,
         version: version || null,
-        visibility,
+        visibility: visibilityIn ?? existing.visibility ?? "홀로",
         group_id: session.group_id || null,
         updated_at: new Date().toISOString(),
       })
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
     color,
     note,
     version: version || null,
-    visibility,
+    visibility: visibilityIn ?? "홀로",
     group_id: session.group_id || null,
   });
 

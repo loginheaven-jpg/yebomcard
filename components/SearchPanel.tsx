@@ -310,7 +310,7 @@ export default function SearchPanel({
   }
 
   // 로컬 chapterNotes 낙관적 upsert — 색/메모를 네트워크 대기 없이 즉시 반영
-  function upsertLocalNote(v: BibleVerse, patch: { color?: string | null; note?: string | null }) {
+  function upsertLocalNote(v: BibleVerse, patch: { color?: string | null; note?: string | null; visibility?: string }) {
     setChapterNotes((prev) => {
       const next = [...prev];
       const i = next.findIndex(
@@ -319,10 +319,11 @@ export default function SearchPanel({
       const cur = i >= 0 ? next[i] : null;
       const color = patch.color !== undefined ? patch.color : cur?.color ?? null;
       const note = patch.note !== undefined ? patch.note : cur?.note ?? null;
+      const visibility = patch.visibility !== undefined ? patch.visibility : cur?.visibility ?? null;
       if (!color && !note) {
         if (i >= 0) next.splice(i, 1); // 색·메모 모두 없으면 제거
       } else if (i >= 0) {
-        next[i] = { ...next[i], color, note };
+        next[i] = { ...next[i], color, note, visibility };
       } else {
         next.push({
           id: -Date.now() - v.verse, // 임시 id (렌더에 미사용)
@@ -331,6 +332,7 @@ export default function SearchPanel({
           verse: v.verse,
           color,
           note,
+          visibility,
           version: mainVersion,
           updated_at: new Date().toISOString(),
         });
@@ -373,8 +375,8 @@ export default function SearchPanel({
     const v = noteEditorVerse;
     const existing = noteFor(v); // 기존 색 보존
     const note = noteDraft.trim() || null;
-    // 즉시 반영 + 모달 닫기
-    upsertLocalNote(v, { note });
+    // 즉시 반영(visibility 포함) + 모달 닫기 → 재오픈 시 방금 고른 공개범위가 그대로 보임
+    upsertLocalNote(v, { note, visibility: noteVisibility });
     setNoteEditorVerse(null);
     // 서버 저장 백그라운드
     saveVerseNote({
@@ -2574,7 +2576,7 @@ export default function SearchPanel({
             <textarea
               value={noteDraft}
               onChange={(e) => setNoteDraft(e.target.value)}
-              rows={4}
+              rows={8}
               autoFocus
               placeholder="이 말씀에 대한 묵상을 적어보세요"
               className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--amber)]"
