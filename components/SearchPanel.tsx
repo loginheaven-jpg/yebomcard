@@ -295,6 +295,13 @@ export default function SearchPanel({
     (v: BibleVerse) => sharedNotes.filter((s) => s.verse === v.verse),
     [sharedNotes],
   );
+  // 공유 메모 작성자 이름 마스킹 — 첫 글자만 남기고 나머지 * (최철영 → 최**)
+  const maskName = (name?: string | null) => {
+    if (!name) return name ?? "";
+    const chars = [...name];
+    if (chars.length <= 1) return name;
+    return chars[0] + "*".repeat(chars.length - 1);
+  };
   const fmtNoteDate = (iso?: string | null) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -1489,7 +1496,7 @@ export default function SearchPanel({
                   <span className="shrink-0">💬</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1 text-[10px] text-blue-500 dark:text-blue-400 mb-0.5">
-                      <span className="font-semibold">{s.user_name || "익명"}</span>
+                      <span className="font-semibold">{maskName(s.user_name) || "익명"}</span>
                       {s.visibility === "목장" && (
                         <span className="px-1 rounded bg-blue-100 dark:bg-blue-900/50">목장</span>
                       )}
