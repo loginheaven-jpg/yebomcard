@@ -255,7 +255,9 @@ export default function SearchPanel({
   const [noteDraft, setNoteDraft] = useState("");
   const [reportToast, setReportToast] = useState<string | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<number>>(new Set());
+  const [reportTarget, setReportTarget] = useState<number | null>(null); // 신고 확인 팝업 대상 note id
   useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
+  useHardwareBack(reportTarget !== null, () => setReportTarget(null));
 
   // 현재 browse 장의 노트만 로드 (전체 페치 금지 — 쿼리 부하 최소화)
   useEffect(() => {
@@ -1511,7 +1513,7 @@ export default function SearchPanel({
                         <span
                           role="button"
                           tabIndex={0}
-                          onClick={() => !reported && handleReportNote(s.id)}
+                          onClick={() => !reported && setReportTarget(s.id)}
                           className={`cursor-pointer select-none ${reported ? "text-gray-400 opacity-60" : "text-blue-400 dark:text-blue-500 hover:text-red-500"}`}
                         >
                           🚩 {reported ? "신고됨" : "신고"}
@@ -2690,6 +2692,45 @@ export default function SearchPanel({
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)]"
               >
                 저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 신고 확인 팝업 — 즉시 신고 방지, 한 번 더 확인 */}
+      {reportTarget !== null && (
+        <div
+          className="fixed inset-0 z-[160] bg-black/50 flex items-center justify-center p-4 animate-[fadeInUp_0.2s_ease-out]"
+          onClick={() => setReportTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">메모 신고</div>
+            <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed mb-1.5">
+              이 글이 <b>욕설·비방·이단</b> 등으로 <b>성도의 믿음과 덕을 세우는 데 해가 된다</b>고 여겨지십니까?
+            </p>
+            <p className="text-xs text-gray-400 leading-relaxed mb-4">
+              그렇다면 신고해 주세요. 서로 다른 두 분이 신고하면 자동으로 가려지고 운영자가 검토합니다.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReportTarget(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  const id = reportTarget;
+                  setReportTarget(null);
+                  if (id !== null) handleReportNote(id);
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600"
+              >
+                신고
               </button>
             </div>
           </div>
