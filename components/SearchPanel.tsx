@@ -246,6 +246,7 @@ export default function SearchPanel({
   const [chapterNotes, setChapterNotes] = useState<VerseNote[]>([]);
   const [sharedNotes, setSharedNotes] = useState<SharedNote[]>([]); // 타인의 공개 메모(목장/전체)
   const [expandedShared, setExpandedShared] = useState<Set<number>>(new Set()); // 펼친 공유 메모 id
+  const [expandedMine, setExpandedMine] = useState<Set<number>>(new Set()); // 펼친 내 메모 (verse 번호)
   const [noteVisibility, setNoteVisibility] = useState<string>("목장"); // 저장 공개 범위 (기본 목장)
   const [noteEditorVerse, setNoteEditorVerse] = useState<BibleVerse | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -299,6 +300,13 @@ export default function SearchPanel({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  const toggleMineExpand = (verseNo: number) =>
+    setExpandedMine((prev) => {
+      const next = new Set(prev);
+      if (next.has(verseNo)) next.delete(verseNo);
+      else next.add(verseNo);
       return next;
     });
   async function handleReportNote(id: number) {
@@ -1416,15 +1424,24 @@ export default function SearchPanel({
             {altText}
           </div>
         )}
-        {note?.note && (
-          <div className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
-            <span className="shrink-0">📝</span>
-            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-              {note.note}
-              <span className="ml-1 text-[10px] text-amber-500/70 whitespace-nowrap">({fmtNoteDate(note.updated_at)})</span>
-            </span>
-          </div>
-        )}
+        {note?.note && (() => {
+          const open = expandedMine.has(verse.verse);
+          return (
+            <div
+              className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1 cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); toggleMineExpand(verse.verse); }}
+            >
+              <span className="shrink-0">📝</span>
+              <div className="min-w-0 flex-1">
+                <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{note.note}</div>
+                {open && (
+                  <div className="text-[10px] text-amber-500/70 mt-0.5">({fmtNoteDate(note.updated_at)})</div>
+                )}
+              </div>
+              <span className="shrink-0 text-amber-400 select-none" aria-hidden>{open ? "▾" : "▸"}</span>
+            </div>
+          );
+        })()}
         {sharedFor(verse).length > 0 && (
           <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
             {sharedFor(verse).map((s) => {
@@ -2374,12 +2391,24 @@ export default function SearchPanel({
                               </div>
                             </div>
 
-                            {note?.note && (
-                              <div className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
-                                <span className="shrink-0">📝</span>
-                                <span className="whitespace-pre-wrap break-words">{note.note}</span>
-                              </div>
-                            )}
+                            {note?.note && (() => {
+                              const open = expandedMine.has(v.verse);
+                              return (
+                                <div
+                                  className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1 cursor-pointer"
+                                  onClick={(e) => { e.stopPropagation(); toggleMineExpand(v.verse); }}
+                                >
+                                  <span className="shrink-0">📝</span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{note.note}</div>
+                                    {open && (
+                                      <div className="text-[10px] text-amber-500/70 mt-0.5">({fmtNoteDate(note.updated_at)})</div>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 text-amber-400 select-none" aria-hidden>{open ? "▾" : "▸"}</span>
+                                </div>
+                              );
+                            })()}
                             {selected && (
                               <span className="float-right text-gray-700 dark:text-gray-300 text-sm">&#10003;</span>
                             )}
