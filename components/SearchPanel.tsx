@@ -41,6 +41,7 @@ import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
 import { useFont, FONTS } from "@/contexts/FontContext";
+import { linkify } from "@/lib/linkify";
 
 export interface NavRequest {
   /** 하단 탭이 요청한 화면 — Phase 2a */
@@ -1449,7 +1450,7 @@ export default function SearchPanel({
             >
               <span className="shrink-0">📝</span>
               <div className="min-w-0 flex-1">
-                <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{note.note}</div>
+                <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{linkify(note.note)}</div>
                 {open && (
                   <div className="text-[10px] text-amber-500/70 mt-0.5">({fmtNoteDate(note.updated_at)})</div>
                 )}
@@ -1474,7 +1475,7 @@ export default function SearchPanel({
                       )}
                       <span className="opacity-70">({fmtNoteDate(s.created_at)})</span>
                     </div>
-                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{s.note}</div>
+                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{linkify(s.note)}</div>
                   </div>
                   <span
                     role="button"
@@ -2416,7 +2417,7 @@ export default function SearchPanel({
                                 >
                                   <span className="shrink-0">📝</span>
                                   <div className="min-w-0 flex-1">
-                                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{note.note}</div>
+                                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{linkify(note.note)}</div>
                                     {open && (
                                       <div className="text-[10px] text-amber-500/70 mt-0.5">({fmtNoteDate(note.updated_at)})</div>
                                     )}
