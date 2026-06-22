@@ -34,7 +34,6 @@ import {
 import { syncOnLogin, pushBookmarks, pushRecent } from "@/lib/userSync";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
-import AdminReportBell from "./AdminReportBell";
 import HomeBlankContent from "./HomeBlankContent";
 import TTSButton from "./TTSButton";
 import { useTts, type TtsTrack } from "@/contexts/TtsContext";
@@ -1691,21 +1690,18 @@ export default function SearchPanel({
       {/* Header — 3열 grid: 좌(브랜드) · 중앙(번역본 셀렉터들) · 우(QuickNavFab 자리 비움) */}
       {!isAddingMore && (
         <div className="grid grid-cols-3 items-start mb-3 gap-2">
-          <div className="flex items-center gap-1.5 justify-self-start shrink-0">
-            <div className="flex flex-col items-center leading-none">
-              <div className="text-gray-900 dark:text-gray-100">
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                </svg>
-              </div>
-              <div
-                className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)] mt-0.5"
-                style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.4px", lineHeight: 1 }}
-              >
-                Yebom
-              </div>
+          <div className="flex flex-col items-center justify-self-start shrink-0 leading-none">
+            <div className="text-gray-900 dark:text-gray-100">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
             </div>
-            <AdminReportBell />
+            <div
+              className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)] mt-0.5"
+              style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.4px", lineHeight: 1 }}
+            >
+              Yebom
+            </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0 justify-self-center">
             <select

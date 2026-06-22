@@ -71,6 +71,16 @@ export default function SettingsSheet({
   // 시트 모드 — full(기본) / fontCompact(본문 보면서 글꼴 조정)
   const [sheetMode, setSheetMode] = useState<"full" | "fontCompact">("full");
 
+  // 관리자 신고 알림 — 미처리 신고/임시숨김 건수 (설정 열릴 때 1회 조회)
+  const [reportCount, setReportCount] = useState(0);
+  useEffect(() => {
+    if (!adminMode) return;
+    fetch("/api/admin/verse-notes")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setReportCount((d.items || []).length); })
+      .catch(() => {});
+  }, [adminMode]);
+
   // ESC 키 닫기
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -253,7 +263,14 @@ export default function SettingsSheet({
                     className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
                   >
                     <span>신고된 메모 관리</span>
-                    <span className="text-[var(--ink-faint)]">›</span>
+                    <span className="flex items-center gap-1.5">
+                      {reportCount > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {reportCount > 99 ? "99+" : reportCount}
+                        </span>
+                      )}
+                      <span className="text-[var(--ink-faint)]">›</span>
+                    </span>
                   </a>
                   </>
                 )}
