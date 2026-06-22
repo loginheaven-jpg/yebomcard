@@ -1370,7 +1370,7 @@ export default function SearchPanel({
           </div>
         )}
         {note?.note && (
-          <div className="mt-1.5 flex items-start gap-1 text-[12px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
+          <div className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
             <span className="shrink-0">📝</span>
             <span className="whitespace-pre-wrap break-words">{note.note}</span>
           </div>
@@ -2283,7 +2283,7 @@ export default function SearchPanel({
                             </div>
 
                             {note?.note && (
-                              <div className="mt-1.5 flex items-start gap-1 text-[12px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
+                              <div className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
                                 <span className="shrink-0">📝</span>
                                 <span className="whitespace-pre-wrap break-words">{note.note}</span>
                               </div>
