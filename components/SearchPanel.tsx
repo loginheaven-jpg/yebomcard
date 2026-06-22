@@ -425,6 +425,22 @@ export default function SearchPanel({
     // URL ?fresh=1 검사: 블랭크 홈으로 시작
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
+      // /share '본문가기' 딥링크: ?goto=version.book.chapter.verse → 해당 절 본문으로
+      const goto = params.get("goto");
+      if (goto) {
+        const [ver, bc, ch, vs] = goto.split(".");
+        if (bc && ch && vs) {
+          bootstrappedRef.current = true;
+          window.history.replaceState(window.history.state, "", "/"); // URL 정리
+          setBookCode(bc);
+          setChapter(parseInt(ch, 10));
+          setRememberedVerse(parseInt(vs, 10));
+          setMode("chapter");
+          setBrowseStep("verse");
+          if (ver) setMainVersion(ver as BibleVersion);
+          return;
+        }
+      }
       if (params.get("fresh") === "1") {
         bootstrappedRef.current = true;
         // URL 정리 (fresh param 제거)

@@ -98,7 +98,7 @@ export default function ShareContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 flex items-center justify-between">
         {/* FIX C: router.replace로 /share entry를 history stack에서 제거 →
             홈에서 multi-step 네비 후 책 선택 시 /share로 튕겨 돌아가는 버그 방지.
             (기존 <a href="/?fresh=1"> 풀 페이지 이동은 bfcache로 /share가 즉시 복원되어 race 발생) */}
@@ -110,6 +110,20 @@ export default function ShareContent() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
           홈으로
+        </button>
+        {/* 본문가기 — 공유 링크로 들어온 절의 본문 화면으로 (검색 결과의 '본문으로'와 동일) */}
+        <button
+          onClick={() =>
+            router.replace(
+              `/?goto=${encodeURIComponent(`${version}.${firstVerse.book_code}.${firstVerse.chapter}.${firstVerse.verse}`)}`,
+            )
+          }
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+          본문가기
         </button>
       </div>
 
