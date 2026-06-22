@@ -27,7 +27,9 @@ import {
   colorTint,
   fetchChapterNotes,
   saveVerseNote,
+  reportNote,
   type VerseNote,
+  type SharedNote,
 } from "@/lib/verse-notes";
 import { syncOnLogin, pushBookmarks, pushRecent } from "@/lib/userSync";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
@@ -242,17 +244,26 @@ export default function SearchPanel({
 
   // ─── 묵상 노트·하이라이트 (로그인 전용, verse_notes) ───
   const [chapterNotes, setChapterNotes] = useState<VerseNote[]>([]);
+  const [sharedNotes, setSharedNotes] = useState<SharedNote[]>([]); // 타인의 공개 메모(목장/전체)
+  const [expandedShared, setExpandedShared] = useState<Set<number>>(new Set()); // 펼친 공유 메모 id
+  const [noteVisibility, setNoteVisibility] = useState<string>("목장"); // 저장 공개 범위 (기본 목장)
   const [noteEditorVerse, setNoteEditorVerse] = useState<BibleVerse | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [reportToast, setReportToast] = useState<string | null>(null);
+  const [reportedIds, setReportedIds] = useState<Set<number>>(new Set());
   useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
 
   // 현재 browse 장의 노트만 로드 (전체 페치 금지 — 쿼리 부하 최소화)
   useEffect(() => {
     if (sessionLoading || !isLoggedIn || mode !== "chapter" || browseStep !== "verse" || !bookCode || !chapter) {
       setChapterNotes([]);
+      setSharedNotes([]);
       return;
     }
-    fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+    fetchChapterNotes(bookCode, chapter).then(({ notes, shared }) => {
+      setChapterNotes(notes);
+      setSharedNotes(shared);
+    });
   }, [sessionLoading, isLoggedIn, mode, browseStep, bookCode, chapter]);
 
   const noteFor = useCallback(
@@ -263,9 +274,40 @@ export default function SearchPanel({
     [chapterNotes]
   );
   const refreshChapterNotes = useCallback(() => {
-    if (bookCode && chapter) return fetchChapterNotes(bookCode, chapter).then(setChapterNotes);
+    if (bookCode && chapter)
+      return fetchChapterNotes(bookCode, chapter).then(({ notes, shared }) => {
+        setChapterNotes(notes);
+        setSharedNotes(shared);
+      });
     return Promise.resolve();
   }, [bookCode, chapter]);
+
+  // 타인 공유 메모 — 절별 조회 + 날짜 포맷 + 펼침 토글 + 신고
+  const sharedFor = useCallback(
+    (v: BibleVerse) => sharedNotes.filter((s) => s.verse === v.verse),
+    [sharedNotes],
+  );
+  const fmtNoteDate = (iso?: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
+  };
+  const toggleSharedExpand = (id: number) =>
+    setExpandedShared((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  async function handleReportNote(id: number) {
+    setReportedIds((prev) => new Set(prev).add(id));
+    const r = await reportNote(id);
+    if (r.ok && r.hidden) setSharedNotes((prev) => prev.filter((s) => s.id !== id));
+    setReportToast(!r.ok ? "신고 처리에 실패했습니다" : r.hidden ? "신고 누적 — 임시 숨김 처리됐습니다" : "신고가 접수되었습니다");
+    window.setTimeout(() => setReportToast(null), 2500);
+  }
 
   // 로컬 chapterNotes 낙관적 upsert — 색/메모를 네트워크 대기 없이 즉시 반영
   function upsertLocalNote(v: BibleVerse, patch: { color?: string | null; note?: string | null }) {
@@ -321,7 +363,9 @@ export default function SearchPanel({
       .catch(() => refreshChapterNotes());
   }
   function openNoteEditor(v: BibleVerse) {
-    setNoteDraft(noteFor(v)?.note ?? "");
+    const ex = noteFor(v);
+    setNoteDraft(ex?.note ?? "");
+    setNoteVisibility(ex?.visibility || "목장"); // 기존 메모는 그 범위 유지, 신규는 기본 목장
     setNoteEditorVerse(v);
   }
   function saveNote() {
@@ -340,6 +384,7 @@ export default function SearchPanel({
       color: existing?.color ?? null,
       note,
       version: mainVersion,
+      visibility: noteVisibility,
     }).then((ok) => { if (!ok) refreshChapterNotes(); });
   }
 
@@ -1372,7 +1417,52 @@ export default function SearchPanel({
         {note?.note && (
           <div className="mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 rounded-md px-2 py-1">
             <span className="shrink-0">📝</span>
-            <span className="whitespace-pre-wrap break-words">{note.note}</span>
+            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+              {note.note}
+              <span className="ml-1 text-[10px] text-amber-500/70 whitespace-nowrap">({fmtNoteDate(note.updated_at)})</span>
+            </span>
+          </div>
+        )}
+        {sharedFor(verse).length > 0 && (
+          <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+            {sharedFor(verse).map((s) => {
+              const open = expandedShared.has(s.id);
+              const reported = reportedIds.has(s.id);
+              return (
+                <div key={s.id} className="flex items-start gap-1 text-[13px] leading-snug text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30 rounded-md px-2 py-1">
+                  <span className="shrink-0">💬</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1 text-[10px] text-blue-500 dark:text-blue-400 mb-0.5">
+                      <span className="font-semibold">{s.user_name || "익명"}</span>
+                      {s.visibility === "목장" && (
+                        <span className="px-1 rounded bg-blue-100 dark:bg-blue-900/50">목장</span>
+                      )}
+                      <span className="opacity-70">({fmtNoteDate(s.created_at)})</span>
+                    </div>
+                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>{s.note}</div>
+                  </div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleSharedExpand(s.id)}
+                    className="shrink-0 cursor-pointer px-1 text-blue-400 select-none"
+                    aria-label={open ? "접기" : "펼치기"}
+                  >
+                    {open ? "▾" : "▸"}
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => !reported && handleReportNote(s.id)}
+                    className={`shrink-0 cursor-pointer px-1 select-none ${reported ? "opacity-30" : "text-blue-400 hover:text-red-500"}`}
+                    title="신고"
+                    aria-label="신고"
+                  >
+                    🚩
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
         {selected && (
@@ -2489,6 +2579,33 @@ export default function SearchPanel({
               placeholder="이 말씀에 대한 묵상을 적어보세요"
               className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--amber)]"
             />
+            {/* 공개 범위 — 홀로/목장/전체 (기본 목장). 메모를 적었을 때만 의미 있음 */}
+            <div className="mt-3">
+              <div className="text-[11px] text-gray-400 mb-1">공개 범위</div>
+              <div className="flex gap-1" role="group" aria-label="공개 범위">
+                {(["홀로", "목장", "전체"] as const).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setNoteVisibility(val)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      noteVisibility === val
+                        ? "bg-[var(--amber)] text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:brightness-95"
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                {noteVisibility === "홀로"
+                  ? "나만 봅니다."
+                  : noteVisibility === "목장"
+                    ? "우리 목장 사람들에게 보입니다."
+                    : "전체 사용자에게 보입니다."}
+              </p>
+            </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setNoteEditorVerse(null)}
@@ -2504,6 +2621,13 @@ export default function SearchPanel({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 신고 결과 토스트 */}
+      {reportToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 z-[200] bg-gray-900/90 text-white text-xs px-3 py-2 rounded-lg shadow-lg">
+          {reportToast}
         </div>
       )}
 

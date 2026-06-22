@@ -232,6 +232,7 @@ export default function SettingsSheet({
                   </button>
                 </div>
                 {adminMode && (
+                  <>
                   <button
                     onClick={onToggleBulkEdit}
                     className={`w-full mt-3 px-3 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center justify-between ${
@@ -247,6 +248,14 @@ export default function SettingsSheet({
                       {bulkEditMode ? "ON" : "OFF"}
                     </span>
                   </button>
+                  <a
+                    href="/admin/reports"
+                    className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
+                  >
+                    <span>신고된 메모 관리</span>
+                    <span className="text-[var(--ink-faint)]">›</span>
+                  </a>
+                  </>
                 )}
               </div>
             ) : (

@@ -25,22 +25,52 @@ export interface VerseNote {
   color?: string | null;
   note?: string | null;
   version?: string | null;
+  /** 공개 범위 — '홀로'|'목장'|'전체' (메모 공유용) */
+  visibility?: string | null;
   updated_at: string;
+}
+
+/** 타인의 공개 메모(목장/전체) — 읽기 전용. 하이라이트 색은 공유하지 않음 */
+export interface SharedNote {
+  id: number;
+  verse: number;
+  note: string;
+  user_id: string;
+  user_name: string | null;
+  group_id: string | null;
+  visibility: string;
+  created_at: string;
 }
 
 export async function fetchChapterNotes(
   bookCode: string,
   chapter: number
-): Promise<VerseNote[]> {
+): Promise<{ notes: VerseNote[]; shared: SharedNote[] }> {
   try {
     const res = await fetch(
       `/api/verse-notes?book=${encodeURIComponent(bookCode)}&chapter=${chapter}`
     );
-    if (!res.ok) return [];
-    const { notes } = await res.json();
-    return notes || [];
+    if (!res.ok) return { notes: [], shared: [] };
+    const data = await res.json();
+    return { notes: data.notes || [], shared: data.shared || [] };
   } catch {
-    return [];
+    return { notes: [], shared: [] };
+  }
+}
+
+/** 타인 메모 신고 — 서로 다른 2명 누적 시 서버가 자동 임시숨김 */
+export async function reportNote(noteId: number): Promise<{ ok: boolean; hidden?: boolean }> {
+  try {
+    const res = await fetch("/api/verse-notes/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_id: noteId }),
+    });
+    if (!res.ok) return { ok: false };
+    const d = await res.json();
+    return { ok: true, hidden: !!d.hidden };
+  } catch {
+    return { ok: false };
   }
 }
 
@@ -51,6 +81,8 @@ export async function saveVerseNote(input: {
   color?: string | null;
   note?: string | null;
   version: BibleVersion;
+  /** 공개 범위 — 메모 저장 시 '홀로'|'목장'|'전체' (기본 목장) */
+  visibility?: string;
 }): Promise<boolean> {
   try {
     const res = await fetch("/api/verse-notes", {

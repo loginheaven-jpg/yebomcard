@@ -6,6 +6,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
+const VISIBILITIES = ["홀로", "목장", "전체"] as const;
+
 async function getSession(): Promise<SessionData | null> {
   try {
     const cookieStore = await cookies();
@@ -20,11 +22,11 @@ async function getSession(): Promise<SessionData | null> {
   }
 }
 
-// GET ?book=&chapter= : 해당 장의 내 노트/하이라이트 (장 단위 페치)
+// GET ?book=&chapter= : 내 노트/하이라이트 + 타인의 공개 메모(목장/전체)
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
-    return NextResponse.json({ notes: [] });
+    return NextResponse.json({ notes: [], shared: [] });
   }
 
   const { searchParams } = new URL(request.url);
@@ -34,19 +36,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "book, chapter가 필요합니다" }, { status: 400 });
   }
 
-  const { data } = await supabaseAdmin
+  // 내 노트(하이라이트 color + 메모 note) — 기존과 동일
+  const { data: mine } = await supabaseAdmin
     .from("verse_notes")
-    .select("id, book_code, chapter, verse, color, note, version, updated_at")
+    .select("id, book_code, chapter, verse, color, note, version, visibility, updated_at")
     .eq("user_id", session.user_id)
     .eq("book_code", book)
     .eq("chapter", chapter)
     .order("verse", { ascending: true });
 
-  return NextResponse.json({ notes: data || [] });
+  // 타인의 공개 메모 — 숨김 제외, 메모 있는 것만. color(하이라이트)는 개인용이라 공유 안 함.
+  const cols = "id, verse, note, user_id, user_name, group_id, visibility, created_at";
+  const base = () =>
+    supabaseAdmin
+      .from("verse_notes")
+      .select(cols)
+      .eq("book_code", book)
+      .eq("chapter", chapter)
+      .eq("hidden", false)
+      .neq("user_id", session.user_id)
+      .not("note", "is", null);
+
+  const { data: pub } = await base().eq("visibility", "전체");
+  let grp: typeof pub = [];
+  if (session.group_id) {
+    const { data } = await base().eq("visibility", "목장").eq("group_id", session.group_id);
+    grp = data || [];
+  }
+  const shared = [...(pub || []), ...(grp || [])].sort((a, b) =>
+    (a.created_at || "").localeCompare(b.created_at || ""),
+  );
+
+  return NextResponse.json({ notes: mine || [], shared });
 }
 
-// POST: 절 하이라이트/메모 저장 — SELECT-then-UPDATE/INSERT.
-//   color·note 둘 다 비면 행 삭제 (빈 행 방지).
+// POST: 절 하이라이트/메모 저장 — SELECT-then-UPDATE/INSERT. color·note 둘 다 비면 행 삭제.
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -57,6 +81,8 @@ export async function POST(request: NextRequest) {
   const { book_code, chapter, verse, version } = body;
   const color: string | null = body.color || null;
   const note: string | null = body.note ? String(body.note).trim() || null : null;
+  // 공개 범위 — 기본 '홀로'(안전). 클라이언트가 메모 저장 시 명시 전달(기본 목장).
+  const visibility: string = VISIBILITIES.includes(body.visibility) ? body.visibility : "홀로";
 
   if (!book_code || !chapter || !verse) {
     return NextResponse.json({ error: "book_code, chapter, verse가 필요합니다" }, { status: 400 });
@@ -83,7 +109,14 @@ export async function POST(request: NextRequest) {
   if (existing?.id) {
     const { error: updateError } = await supabaseAdmin
       .from("verse_notes")
-      .update({ color, note, version: version || null, updated_at: new Date().toISOString() })
+      .update({
+        color,
+        note,
+        version: version || null,
+        visibility,
+        group_id: session.group_id || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", existing.id);
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
@@ -100,6 +133,8 @@ export async function POST(request: NextRequest) {
     color,
     note,
     version: version || null,
+    visibility,
+    group_id: session.group_id || null,
   });
 
   if (insertError && insertError.code !== "23505") {
@@ -108,7 +143,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// DELETE ?book=&chapter=&verse= : 해당 절 노트/하이라이트 제거
+// DELETE ?book=&chapter=&verse= : 해당 절 내 노트/하이라이트 제거
 export async function DELETE(request: NextRequest) {
   const session = await getSession();
   if (!session) {
