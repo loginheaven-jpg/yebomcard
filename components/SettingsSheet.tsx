@@ -28,6 +28,7 @@ interface Props {
   onLogout: () => void;
   // 관리자
   adminMode: boolean;
+  reportCount?: number;
   bulkEditMode: boolean;
   onToggleBulkEdit: () => void;
   // 도구
@@ -49,6 +50,7 @@ export default function SettingsSheet({
   onLogin,
   onLogout,
   adminMode,
+  reportCount = 0,
   bulkEditMode,
   onToggleBulkEdit,
   onOpenHymn,
@@ -70,16 +72,6 @@ export default function SettingsSheet({
 
   // 시트 모드 — full(기본) / fontCompact(본문 보면서 글꼴 조정)
   const [sheetMode, setSheetMode] = useState<"full" | "fontCompact">("full");
-
-  // 관리자 신고 알림 — 미처리 신고/임시숨김 건수 (설정 열릴 때 1회 조회)
-  const [reportCount, setReportCount] = useState(0);
-  useEffect(() => {
-    if (!adminMode) return;
-    fetch("/api/admin/verse-notes")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setReportCount((d.items || []).length); })
-      .catch(() => {});
-  }, [adminMode]);
 
   // ESC 키 닫기
   useEffect(() => {

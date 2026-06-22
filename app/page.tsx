@@ -72,6 +72,7 @@ export default function Home() {
   const [navRequest, setNavRequest] = useState<NavRequest | undefined>();
   const navNonceRef = useRef(0);
   const [bookmarkCount, setBookmarkCount] = useState(0);
+  const [reportCount, setReportCount] = useState(0); // 운영자 미처리 신고 건수 (톱니 점·설정 배지)
 
   // 책갈피 카운트 — 진입 시 + 5초 폴링 (책갈피 추가/삭제는 SearchPanel 안에서 일어남)
   useEffect(() => {
@@ -99,6 +100,22 @@ export default function Home() {
   useEffect(() => {
     if (!adminMode && bulkEditMode) setBulkEditMode(false);
   }, [adminMode, bulkEditMode]);
+
+  // 운영자 미처리 신고 건수 — 설정 톱니 점 배지 + 설정 시트 링크 배지 (마운트 + 창 포커스 시 갱신)
+  useEffect(() => {
+    if (!adminMode) {
+      setReportCount(0);
+      return;
+    }
+    const load = () =>
+      fetch("/api/admin/verse-notes")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d) setReportCount((d.items || []).length); })
+        .catch(() => {});
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [adminMode]);
 
   // 편집 저장 후 selectedVerses 동기화
   const handleVerseUpdated = useCallback((updated: BibleVerse) => {
@@ -423,6 +440,7 @@ export default function Home() {
           }}
           onLogout={async () => { await logout(); }}
           adminMode={adminMode}
+          reportCount={reportCount}
           bulkEditMode={bulkEditMode}
           onToggleBulkEdit={() => setBulkEditMode((v) => !v)}
           onOpenHymn={() => setShowHymn(true)}
@@ -441,6 +459,7 @@ export default function Home() {
           active={activeTab}
           onTabChange={handleTabChange}
           bookmarkCount={bookmarkCount}
+          settingsDot={reportCount > 0}
         />
       )}
     </main>

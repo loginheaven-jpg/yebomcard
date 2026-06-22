@@ -72,6 +72,8 @@ interface Props {
   active: ActiveTab | null;
   onTabChange: (tab: ActiveTab) => void;
   bookmarkCount?: number;
+  /** 설정 탭에 빨간 점 — 운영자 미처리 신고 있을 때 */
+  settingsDot?: boolean;
   /** 미니플레이어 활성 등 하단에 다른 UI 가 있으면 위로 올림 */
   liftPx?: number;
 }
@@ -80,6 +82,7 @@ export default function BottomTabBar({
   active,
   onTabChange,
   bookmarkCount,
+  settingsDot = false,
   liftPx = 0,
 }: Props) {
   return (
@@ -126,6 +129,12 @@ export default function BottomTabBar({
                 >
                   {bookmarkCount > 99 ? "99+" : bookmarkCount}
                 </span>
+              )}
+              {t.id === "settings" && settingsDot && (
+                <span
+                  className="absolute top-2 right-[30%] w-[9px] h-[9px] bg-red-500 rounded-full ring-2 ring-[var(--paper)] dark:ring-gray-900"
+                  aria-hidden
+                />
               )}
             </button>
           );
