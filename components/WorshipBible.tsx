@@ -717,7 +717,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                     }}
                     className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-none"
                   >
-                    {(["nkrv", "rnksv", "easy", "web", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
+                    {(["nkrv", "rnksv", "easy", "nirv", "gnt", "kjv", "web"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
 
                   <select
@@ -750,7 +750,7 @@ export default function WorshipBible({ onClose }: WorshipBibleProps) {
                     className="px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-none"
                   >
                     <option value="none">대역</option>
-                    {(["nkrv", "rnksv", "easy", "web", "kjv", "nirv", "gnt"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
+                    {(["nkrv", "rnksv", "easy", "nirv", "gnt", "kjv", "web"] as const).map((v) => <option key={v} value={v}>{getVersionLabel(v)}</option>)}
                   </select>
                 </div>
 

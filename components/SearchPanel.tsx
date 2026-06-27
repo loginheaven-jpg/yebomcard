@@ -103,8 +103,8 @@ export default function SearchPanel({
   // 통독은 로그인 확정 시에만 표시 (loading 중에도 제외해 hydration mismatch 방지)
   const versionOptions: readonly BibleVersion[] = (
     !sessionLoading && isLoggedIn
-      ? (["nkrv", "rnksv", "easy", "web", "kjv", "nirv", "gnt"] as const)
-      : (["nkrv", "rnksv", "web", "kjv", "nirv", "gnt"] as const)
+      ? (["nkrv", "rnksv", "easy", "nirv", "gnt", "kjv", "web"] as const)
+      : (["nkrv", "rnksv", "nirv", "gnt", "kjv", "web"] as const)
   );
   // 부 옵션 = 전체 옵션 - 주 버전 (동일 선택 방지)
   const subVersionOptions = versionOptions.filter((v) => v !== mainVersion);
@@ -768,7 +768,7 @@ export default function SearchPanel({
     setEditLoading(false);  // 이전 편집의 잔존 로딩 상태 리셋
     setComparisonVerses([]);
     // 다른 모든 버전 동시 fetch (참조용)
-    const ALL = ["nkrv", "rnksv", "easy", "web", "kjv", "nirv", "gnt"];
+    const ALL = ["nkrv", "rnksv", "easy", "nirv", "gnt", "kjv", "web"];
     const others = ALL.filter((v) => v !== verse.version);
     const { data } = await supabase
       .from("bible_verses")
@@ -936,9 +936,9 @@ export default function SearchPanel({
   }
 
   // ─── 말씀 검색 (모든 버전 동시 검색, 결과 있는 버전부터 정렬) ───
-  const PREFERRED_VERSION_ORDER: BibleVersion[] = ["nkrv", "rnksv", "easy", "web", "kjv", "nirv", "gnt"];
+  const PREFERRED_VERSION_ORDER: BibleVersion[] = ["nkrv", "rnksv", "easy", "nirv", "gnt", "kjv", "web"];
   const KOREAN_VERSIONS: BibleVersion[] = ["nkrv", "rnksv", "easy"];
-  const ENGLISH_VERSIONS: BibleVersion[] = ["web", "kjv", "nirv", "gnt"];
+  const ENGLISH_VERSIONS: BibleVersion[] = ["nirv", "gnt", "kjv", "web"];
   const hasKorean = (s: string) => /[가-힯]/.test(s);
   const executeSearch = useCallback(async () => {
     const trimmed = searchInput.trim();
