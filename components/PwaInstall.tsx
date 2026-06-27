@@ -13,6 +13,10 @@ export default function PwaInstall() {
   const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
+    // 서비스워커 등록 — Chrome 설치 가능 조건(beforeinstallprompt 발화) 충족
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
     // 이미 설치됨
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
