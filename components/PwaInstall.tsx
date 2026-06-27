@@ -1,62 +1,52 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
+import { useState, useEffect } from "react";
+import {
+  captureInstallPrompt,
+  clearInstallPrompt,
+  triggerInstall,
+  isStandaloneMode,
+} from "@/lib/pwaInstall";
 
 export default function PwaInstall() {
   const [showInstallBtn, setShowInstallBtn] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const deferredPrompt = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
     // 서비스워커 등록 — Chrome 설치 가능 조건(beforeinstallprompt 발화) 충족
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
-    // 이미 설치됨
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as unknown as { standalone?: boolean }).standalone === true;
-    if (isStandalone || localStorage.getItem("pwa-installed") === "1") return;
 
-    // 인앱 브라우저 감지 → 외부 브라우저로 리다이렉트
     const ua = navigator.userAgent.toLowerCase();
-    const isInApp = /kakaotalk|naver|line|instagram|fbav/i.test(ua);
-    if (isInApp) {
-      const isAndroid = /android/i.test(ua);
-      if (isAndroid) {
-        const url = window.location.href;
-        window.location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
-      }
-      return;
-    }
+    const installed = isStandaloneMode() || localStorage.getItem("pwa-installed") === "1";
 
-    // Android: beforeinstallprompt 이벤트
+    // beforeinstallprompt 는 항상 전역 캡처(설정 '앱으로 설치'에서 재사용). 플로팅 버튼은 미설치일 때만.
     const handler = (e: Event) => {
       e.preventDefault();
-      deferredPrompt.current = e as BeforeInstallPromptEvent;
-      setShowInstallBtn(true);
+      captureInstallPrompt(e);
+      if (!installed) setShowInstallBtn(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
 
-    // 설치 완료 감지
     const installedHandler = () => {
+      clearInstallPrompt();
       localStorage.setItem("pwa-installed", "1");
       setShowInstallBtn(false);
     };
     window.addEventListener("appinstalled", installedHandler);
 
-    // iOS 감지 → 설치 가이드 버튼 표시
-    const isIOS =
-      /iphone|ipad|ipod/i.test(ua) && !("MSStream" in window);
-    const isSafari =
-      /safari/i.test(ua) && !/chrome|crios|fxios/i.test(ua);
-    if (isIOS && isSafari) {
-      setTimeout(() => setShowInstallBtn(true), 2000);
+    if (!installed) {
+      // 인앱 브라우저(카카오/네이버 등) → 외부 Chrome 으로 리다이렉트
+      const isInApp = /kakaotalk|naver|line|instagram|fbav/i.test(ua);
+      if (isInApp && /android/i.test(ua)) {
+        const url = window.location.href;
+        window.location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
+      }
+      // iOS Safari → 설치 가이드 버튼 (2초 후)
+      const isIOS = /iphone|ipad|ipod/i.test(ua) && !("MSStream" in window);
+      const isSafari = /safari/i.test(ua) && !/chrome|crios|fxios/i.test(ua);
+      if (isIOS && isSafari) setTimeout(() => setShowInstallBtn(true), 2000);
     }
 
     return () => {
@@ -65,23 +55,26 @@ export default function PwaInstall() {
     };
   }, []);
 
+  // 플로팅 버튼은 10초만 노출 후 자동으로 사라짐 (닫아도 다음 노출 기회에 다시 뜸)
+  useEffect(() => {
+    if (!showInstallBtn) return;
+    const t = setTimeout(() => setShowInstallBtn(false), 10000);
+    return () => clearTimeout(t);
+  }, [showInstallBtn]);
+
   const handleInstall = async () => {
-    if (deferredPrompt.current) {
-      // Android Chrome
-      await deferredPrompt.current.prompt();
-      const { outcome } = await deferredPrompt.current.userChoice;
-      if (outcome === "accepted") {
-        localStorage.setItem("pwa-installed", "1");
-        setShowInstallBtn(false);
-      }
-      deferredPrompt.current = null;
-    } else {
-      // iOS → 가이드 모달 표시
+    const r = await triggerInstall();
+    if (r === "accepted") {
+      localStorage.setItem("pwa-installed", "1");
+      setShowInstallBtn(false);
+    } else if (r === "unavailable") {
+      // iOS 등 네이티브 프롬프트 불가 → 수동 가이드
       setShowIOSGuide(true);
     }
+    // dismissed → 유지(다음에 다시 노출)
   };
 
-  if (!showInstallBtn) return null;
+  if (!showInstallBtn && !showIOSGuide) return null;
 
   return (
     <>

@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { useTts } from "@/contexts/TtsContext";
+import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
 
 interface Props {
   onClose: () => void;
@@ -484,6 +485,31 @@ export default function SettingsSheet({
                 )}
               </button>
             </div>
+            {/* 앱으로 설치 — 자동 설치 팝업이 불규칙하므로 수동 설치 진입점 제공 */}
+            <button
+              onClick={async () => {
+                if (isStandaloneMode()) {
+                  window.alert("이미 앱으로 설치되어 실행 중입니다.");
+                  return;
+                }
+                const r = await triggerInstall();
+                if (r === "unavailable") {
+                  if (isIOSDevice()) {
+                    window.alert("iPhone/iPad: Safari 하단의 [공유] 버튼 → [홈 화면에 추가]를 눌러 설치하세요.");
+                  } else {
+                    window.alert(
+                      "지금 바로 설치창을 열 수 없습니다.\n브라우저 메뉴(⋮)의 '앱 설치' 또는 '홈 화면에 추가'를 눌러 설치하세요.\n(페이지를 잠시 사용하면 설치 자격이 잡혀 자동 설치창이 뜨기도 합니다)",
+                    );
+                  }
+                }
+              }}
+              className="w-full mt-2 flex items-center justify-center gap-2 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95"
+            >
+              <svg className="w-5 h-5 text-[var(--amber-deep)] dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              <span className="text-sm font-semibold text-[var(--ink)] dark:text-gray-100">앱으로 설치</span>
+            </button>
           </section>
 
           {/* 앱 정보 */}
