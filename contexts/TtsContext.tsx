@@ -47,13 +47,22 @@ export type TtsStatus = "idle" | "loading" | "speaking" | "paused";
 export type TtsSpeed = 0.7 | 0.85 | 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
 export const TTS_SPEEDS: TtsSpeed[] = [0.7, 0.85, 1.0, 1.15, 1.5, 1.75, 2.0];
 
-/** 한국어 ElevenLabs 성우 — m1 남성1(천장성)·m2 남성2(Hunmin)·f1 여성1(김미연)·f2 여성2(Sian) */
-export type KoreanVoice = "m1" | "m2" | "f1" | "f2";
+/**
+ * 한국어 AI 성우 8종 — 성우별 엔진은 app/api/tts/route.ts 의 KOREAN_VOICE_CONFIG 참조.
+ *   m1 천사장(ElevenLabs) · m2 Charon(GCP Chirp) · m3 Watson·m4 Garret·m5 Daddy(Supertone)
+ *   f1 김단아(ElevenLabs) · f2 Aoede(GCP Chirp) · f3 Cindy(Supertone)
+ */
+export type KoreanVoice = "m1" | "m2" | "m3" | "m4" | "m5" | "f1" | "f2" | "f3";
+export const KOREAN_VOICES: KoreanVoice[] = ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3"];
 export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
-  m1: "남성1",
-  m2: "남성2",
-  f1: "여성1",
-  f2: "여성2",
+  m1: "천사장",
+  m2: "Charon",
+  m3: "Watson",
+  m4: "Garret",
+  m5: "Daddy",
+  f1: "김단아",
+  f2: "Aoede",
+  f3: "Cindy",
 };
 
 export interface TtsTrack {
@@ -152,7 +161,7 @@ interface StartParams {
 }
 
 /** 현재 재생 중인 음원의 엔진 식별 */
-export type TtsEngine = "real" | "eleven" | "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
+export type TtsEngine = "real" | "eleven" | "supertone" | "chirp" | "neural2" | "wavenet" | "webspeech" | "unknown";
 
 interface TtsContextValue {
   status: TtsStatus;
@@ -188,6 +197,7 @@ interface TtsContextValue {
 function classifyEngine(voiceName: string): TtsEngine {
   if (!voiceName) return "unknown";
   if (voiceName.startsWith("el:")) return "eleven"; // ElevenLabs (X-TTS-Voice: el:<voiceId>)
+  if (voiceName.startsWith("sup:")) return "supertone"; // Supertone (X-TTS-Voice: sup:<voiceId>)
   if (voiceName.includes("Chirp")) return "chirp";
   if (voiceName.includes("Neural2")) return "neural2";
   if (voiceName.includes("Wavenet")) return "wavenet";
@@ -285,7 +295,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       ),
     );
     const kv = readStorage<KoreanVoice>(LS.koreanVoice, "m1", (s) =>
-      (["m1", "m2", "f1", "f2"] as string[]).includes(s) ? (s as KoreanVoice) : "m1",
+      (KOREAN_VOICES as string[]).includes(s) ? (s as KoreanVoice) : "m1",
     );
     setKoreanVoiceState(kv);
     koreanVoiceRef.current = kv;

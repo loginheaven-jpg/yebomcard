@@ -1774,7 +1774,7 @@ export default function SearchPanel({
               Yebom
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 justify-self-center">
+          <div className={`flex items-center gap-1.5 shrink-0 justify-self-center ${tts.status !== "idle" ? "hidden" : ""}`}>
             <select
               value={mainVersion}
               onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
@@ -1840,8 +1840,9 @@ export default function SearchPanel({
             </select>
             {/* 화면 설정 아이콘 — Phase 2b 에서 하단 5탭 "설정" 으로 흡수 (사용자 #5) */}
           </div>
-          {/* 우측 컬럼: 글자 크기 '가' — 버전 셀렉터는 col-2 정중앙, '가'는 우측으로 분리해 좌우 균형 */}
-          <div className="relative shrink-0 justify-self-end">
+          {/* 우측 컬럼: 글자 크기 '가' — 버전 셀렉터는 col-2 정중앙, '가'는 우측으로 분리해 좌우 균형.
+              읽기(TTS) 중엔 우상단 미니플레이어와 겹치므로 숨김(사용자 승인: 읽기 중 대역/폰트 가림 허용) */}
+          <div className={`relative shrink-0 justify-self-end ${tts.status !== "idle" ? "hidden" : ""}`}>
             <button
               type="button"
               onClick={() => setFontStepOpen((v) => !v)}

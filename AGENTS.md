@@ -36,9 +36,13 @@
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
 ### TTS 파이프라인
-- `TtsContext` + `TTSMiniPlayer`. 3단 폴백: Cloud TTS (Chirp3-HD → Neural2) → WebSpeech
-- 영문 분기: `en-US` / `en-GB` accent (사용자 토글)
-- 캐시 키 v5: `version-book-ch-vs-voice-speed-accent`
+- `TtsContext` + `TTSMiniPlayer`(속도·재생/정지만). 성우/발음/자동다음장/절번호 선택은 `SettingsSheet` 로 이관.
+- **한국어 성우 8종 — 성우별 엔진 라우팅**(`app/api/tts/route.ts` `KOREAN_VOICE_CONFIG`):
+  - m1 천사장·f1 김단아 = ElevenLabs / m2 Charon·f2 Aoede = GCP Chirp3-HD / m3 Watson·m4 Garret·m5 Daddy(클론)·f3 Cindy = Supertone
+  - ElevenLabs·Supertone 실패 시 GCP Neural2→WaveNet→WebSpeech 폴백
+  - Supertone: 요청당 300자 제한 → `splitForSupertone` 문장분할+이어붙이기, 속도는 `voice_settings.speed`, 클론은 `model=supertonic_api_3`+style 생략
+- 영문: GCP Chirp3-HD(`en-US`/`en-GB` accent) → Neural2 → WebSpeech
+- 캐시 키: `version-book-ch-vs-voice-speed-accent` (한국어는 voice 슬롯에 koreanVoice). 엔진 재매핑 시 `ttsCache.ts` `DB_VERSION` bump
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
 ### 데이터 (Supabase)
@@ -81,6 +85,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 SESSION_SECRET                 # iron-session
 GCP_SERVICE_ACCOUNT_JSON       # Cloud TTS (base64)
+ELEVENLABS_API_KEY             # 한국어 성우 m1 천사장/f1 김단아 (로컬은 11LABS 도 인식)
+SUPERTONE_API_KEY              # 한국어 성우 m3 Watson/m4 Garret/m5 Daddy(클론)/f3 Cindy
 R2_ACCOUNT_ID                  # 영문 음원 호스팅 (옵션)
 R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY

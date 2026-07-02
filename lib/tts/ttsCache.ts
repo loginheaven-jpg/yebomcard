@@ -13,7 +13,9 @@ const DB_NAME = "yebom_tts_cache";
 // v7: 한국어 온디맨드를 ElevenLabs 성우로 전환(구약 Hunmin/Sian·신약 천장성/김미연) → 기존 한국어 캐시 무효화
 // v8: 신/구약 구분 폐지 + 한국어 성우 4종(m1/m2/f1/f2) 선택 → 캐시 키에 koreanVoice 반영, 기존 무효화
 // v9: 본문 띄어쓰기 교정 완료(easy/rnksv) → 교정된 본문으로 재낭독하도록 기존 한국어 캐시 무효화
-const DB_VERSION = 9;
+// v10: 한국어 성우 8종 재편(m1 천사장/f1 김단아=ElevenLabs, m2·f2=GCP Chirp, m3~m5·f3=Supertone).
+//      m2/f2 는 같은 키로 엔진이 ElevenLabs→Chirp 로 바뀌어 기존 캐시가 stale → 전체 무효화 필요.
+const DB_VERSION = 10;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
@@ -84,13 +86,13 @@ export interface TtsCacheKey {
   speed: number;
   /** 영문 accent — "us"|"gb". 한국어 트랙은 "ko" 고정. */
   accent?: "us" | "gb" | "ko";
-  /** 한국어 ElevenLabs 성우(m1/m2/f1/f2). 있으면 voice 슬롯 대신 사용 → 4성우 캐시 구분 */
+  /** 한국어 성우(m1~m5/f1~f3). 있으면 voice 슬롯 대신 사용 → 8성우 캐시 구분 */
   koreanVoice?: string;
 }
 
 export function makeCacheKey(k: TtsCacheKey): string {
   const acc = k.accent ?? "us";
-  // 한국어는 4성우(m1/m2/f1/f2)를, 영문은 voice(male/female)를 키 슬롯에 사용
+  // 한국어는 8성우(m1~m5/f1~f3)를, 영문은 voice(male/female)를 키 슬롯에 사용
   const v = k.koreanVoice ?? k.voice;
   return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${v}-${k.speed}-${acc}`;
 }

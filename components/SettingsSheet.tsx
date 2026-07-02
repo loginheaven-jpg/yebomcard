@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
-import { useTts } from "@/contexts/TtsContext";
+import { useTts, KOREAN_VOICE_LABELS, type KoreanVoice } from "@/contexts/TtsContext";
 import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
 
 interface Props {
@@ -423,11 +423,89 @@ export default function SettingsSheet({
             </div>
           </section>
 
-          {/* 음성 — TTS 미니플레이어와 동기 */}
+          {/* 음성 — 낭독 성우/발음 선택 (재생속도·재생/정지는 미니플레이어) */}
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">음성</div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-3">
-              {/* 재생속도·합성음성(남녀/4성우)·영문음성(미/영)은 미니플레이어 + 유형별 기본값으로 결정 → 설정에서 제거 */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-4">
+              {/* 한국어 낭독 성우 (8종) */}
+              <div>
+                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">한국어 낭독 성우</div>
+                <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">남성</div>
+                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+                  {(["m1", "m2", "m3", "m4", "m5"] as KoreanVoice[]).map((kv) => (
+                    <button
+                      key={kv}
+                      onClick={() => tts.setKoreanVoice(kv)}
+                      aria-pressed={tts.koreanVoice === kv}
+                      className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
+                        tts.koreanVoice === kv
+                          ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
+                          : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
+                      }`}
+                    >
+                      {KOREAN_VOICE_LABELS[kv]}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">여성</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["f1", "f2", "f3"] as KoreanVoice[]).map((kv) => (
+                    <button
+                      key={kv}
+                      onClick={() => tts.setKoreanVoice(kv)}
+                      aria-pressed={tts.koreanVoice === kv}
+                      className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
+                        tts.koreanVoice === kv
+                          ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
+                          : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
+                      }`}
+                    >
+                      {KOREAN_VOICE_LABELS[kv]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 영문 낭독 — 성별 + 발음 */}
+              <div>
+                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-1.5">영문 낭독</div>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex bg-[var(--paper-2)] dark:bg-gray-700 rounded-lg p-1">
+                    {(["male", "female"] as const).map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => tts.setVoice(g)}
+                        aria-pressed={tts.voice === g}
+                        className={`flex-1 py-1.5 text-xs rounded-md transition-all font-medium ${
+                          tts.voice === g
+                            ? "bg-[var(--amber)] text-white shadow-sm"
+                            : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
+                        }`}
+                      >
+                        {g === "male" ? "남성" : "여성"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex-1 flex bg-[var(--paper-2)] dark:bg-gray-700 rounded-lg p-1">
+                    {(["us", "gb"] as const).map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => tts.setEnglishAccent(a)}
+                        aria-pressed={tts.englishAccent === a}
+                        className={`flex-1 py-1.5 text-xs rounded-md transition-all font-medium ${
+                          tts.englishAccent === a
+                            ? "bg-[var(--amber)] text-white shadow-sm"
+                            : "text-[var(--ink-soft)] dark:text-gray-400 hover:bg-white/50"
+                        }`}
+                      >
+                        {a === "us" ? "미국식" : "영국식"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 재생 옵션 */}
               <label className="flex items-center justify-between gap-2 cursor-pointer">
                 <span className="text-sm text-[var(--ink)] dark:text-gray-100">자동 다음 장 진행</span>
                 <input

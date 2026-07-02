@@ -16,7 +16,7 @@ export interface CloudTtsParams {
   lang?: TTSLang;
   /** 영문 발음 — 기본 "us". lang="ko" 시 무시됨. */
   accent?: TTSAccent;
-  /** 한국어 ElevenLabs 성우 선택 — m1 천장성/m2 Hunmin/f1 김미연/f2 Sian (lang="ko" 시) */
+  /** 한국어 성우 선택 — m1~m5/f1~f3 (lang="ko" 시). 엔진 매핑은 /api/tts KOREAN_VOICE_CONFIG */
   koreanVoice?: string;
   signal?: AbortSignal;
 }

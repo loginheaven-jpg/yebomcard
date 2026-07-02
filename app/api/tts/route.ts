@@ -86,22 +86,49 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
-// ── ElevenLabs 한국어 온디맨드 (rnksv 등) ──────────────────────────────
-// Vercel 배포 시 ELEVENLABS_API_KEY 환경변수 필요(로컬은 .env.local 의 11LABS 도 인식).
+// ── 한국어 AI 성우 8종 — 성우별 엔진 라우팅 ──────────────────────────────
+// m1 천사장/f1 김단아 = ElevenLabs, m2 Charon/f2 Aoede = GCP Chirp3-HD,
+// m3 Watson/m4 Garret/m5 Daddy(클론)/f3 Cindy = Supertone.
+// ElevenLabs·Supertone 실패 시 하단 GCP Neural2→WaveNet 폴백으로 낙하.
+// Vercel 배포 시 ELEVENLABS_API_KEY / SUPERTONE_API_KEY 환경변수 필요(로컬은 .env.local).
 const EL_API_KEY = process.env.ELEVENLABS_API_KEY || process.env["11LABS"] || "";
-// 한국어 ElevenLabs 성우 4종 (신약/구약 구분 없음). 클라이언트가 koreanVoice 로 선택.
-const KOREAN_VOICES: Record<string, string> = {
-  m1: "657hGmxIvJTkmFa17K9v", // 남성1 천장성
-  m2: "MpbDJfQJUYUnp0i1QvOZ", // 남성2 Hunmin
-  f1: "vDA1h0ZXkQiojUReMmR9", // 여성1 김미연
-  f2: "5n5gqmaQi9Ewevrz7bOS", // 여성2 Sian
-};
-function elevenVoiceId(koreanVoice: string): string {
-  return KOREAN_VOICES[koreanVoice] || KOREAN_VOICES.m1;
+const SUPERTONE_API_KEY = process.env.SUPERTONE_API_KEY || "";
+const SUPERTONE_TTS_URL = "https://supertoneapi.com/v1/text-to-speech";
+
+type KoreanVoiceEngine = "eleven" | "chirp" | "supertone";
+interface KoreanVoiceConfig {
+  engine: KoreanVoiceEngine;
+  gender: "male" | "female"; // GCP 폴백 성별
+  elevenId?: string; // engine=eleven
+  chirpName?: string; // engine=chirp (GCP Chirp3-HD 음성 이름)
+  supId?: string; // engine=supertone (voice_id)
+  supModel?: string; // sona_speech_2 | supertonic_api_3(클론)
+  supStyle?: string; // 클론 보이스는 style 미지정 (있으면 400)
 }
-async function synthElevenLabs(text: string, koreanVoice: string, speed: number): Promise<ArrayBuffer | null> {
-  if (!EL_API_KEY) return null;
-  const voiceId = elevenVoiceId(koreanVoice);
+const KOREAN_VOICE_CONFIG: Record<string, KoreanVoiceConfig> = {
+  m1: { engine: "eleven", gender: "male", elevenId: "657hGmxIvJTkmFa17K9v" }, // 천사장
+  m2: { engine: "chirp", gender: "male", chirpName: "ko-KR-Chirp3-HD-Charon" }, // Charon
+  m3: { engine: "supertone", gender: "male", supId: "95be956023597487733bbb", supModel: "sona_speech_2", supStyle: "neutral" }, // Watson
+  m4: { engine: "supertone", gender: "male", supId: "ff700760946618e1dcf7bd", supModel: "sona_speech_2", supStyle: "neutral" }, // Garret
+  m5: { engine: "supertone", gender: "male", supId: "qpmBg3YZ249rKgdPLGp75w", supModel: "supertonic_api_3" }, // Daddy(클론, style 없음)
+  f1: { engine: "eleven", gender: "female", elevenId: "vDA1h0ZXkQiojUReMmR9" }, // 김단아
+  f2: { engine: "chirp", gender: "female", chirpName: "ko-KR-Chirp3-HD-Aoede" }, // Aoede
+  f3: { engine: "supertone", gender: "female", supId: "39f27eaab088024ff6f9ac", supModel: "sona_speech_2", supStyle: "neutral" }, // Cindy
+};
+
+function ttsAudioResponse(body: ArrayBuffer | Buffer, voiceTag: string): NextResponse {
+  return new NextResponse(body as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "public, max-age=86400",
+      "X-TTS-Voice": voiceTag,
+    },
+  });
+}
+
+async function synthElevenLabs(text: string, voiceId: string, speed: number): Promise<ArrayBuffer | null> {
+  if (!EL_API_KEY || !voiceId) return null;
   const spd = Math.min(1.2, Math.max(0.7, speed || 1)); // ElevenLabs speed 범위 0.7~1.2
   try {
     const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -117,6 +144,61 @@ async function synthElevenLabs(text: string, koreanVoice: string, speed: number)
     return await r.arrayBuffer(); // ArrayBuffer 는 BodyInit — NextResponse 에 그대로 전달 가능
   } catch (e) {
     console.error("[ElevenLabs] exception", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// Supertone 은 요청당 300자 제한 → 문장 단위로 분할해 각각 합성 후 이어붙임.
+// 한 문장도 300자 초과면 길이로 하드 분할(성경 단문에선 사실상 발생 안 함).
+function splitForSupertone(text: string, max = 300): string[] {
+  const t = text.trim();
+  if (t.length <= max) return [t];
+  const sentences = t.match(/[^.!?。？！]+[.!?。？！]*\s*/g) ?? [t];
+  const chunks: string[] = [];
+  let cur = "";
+  for (const s of sentences) {
+    if ((cur + s).length > max) {
+      if (cur.trim()) { chunks.push(cur.trim()); cur = ""; }
+      if (s.length > max) {
+        for (let i = 0; i < s.length; i += max) chunks.push(s.slice(i, i + max).trim());
+      } else {
+        cur = s;
+      }
+    } else {
+      cur += s;
+    }
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks.filter(Boolean);
+}
+
+// Supertone 합성. 재생 속도는 voice_settings.speed 로 전달(최상위 speed 는 무시됨).
+async function synthSupertone(text: string, cfg: KoreanVoiceConfig, speed: number): Promise<Buffer | null> {
+  if (!SUPERTONE_API_KEY || !cfg.supId) return null;
+  const spd = Math.min(2, Math.max(0.5, speed || 1)); // Supertone speed 범위 0.5~2
+  const chunks = splitForSupertone(text, 300);
+  try {
+    const parts: Buffer[] = [];
+    for (const chunk of chunks) {
+      const body: Record<string, unknown> = {
+        text: chunk,
+        language: "ko",
+        model: cfg.supModel || "sona_speech_2",
+        output_format: "mp3",
+        voice_settings: { speed: spd },
+      };
+      if (cfg.supStyle) body.style = cfg.supStyle; // 클론(supStyle 없음)은 생략해야 성공
+      const r = await fetch(`${SUPERTONE_TTS_URL}/${cfg.supId}?output_format=mp3`, {
+        method: "POST",
+        headers: { "x-sup-api-key": SUPERTONE_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { console.error("[Supertone]", r.status, (await r.text()).slice(0, 150)); return null; }
+      parts.push(Buffer.from(await r.arrayBuffer()));
+    }
+    return parts.length === 1 ? parts[0] : Buffer.concat(parts);
+  } catch (e) {
+    console.error("[Supertone] exception", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -141,28 +223,31 @@ export async function POST(req: NextRequest) {
     const isMale = voice === "male";
     const isEng = lang === "en";
 
-    // 한국어 온디맨드(주로 rnksv): ElevenLabs 한국어 성우 1순위 — 신/구약 구분 없이
-    // koreanVoice(m1 천장성/m2 Hunmin/f1 김미연/f2 Sian) 선택. 키 없음·실패 시 GCP(Neural2→WaveNet) 폴백.
+    // 한국어: 성우별 엔진 라우팅. m1/f1=ElevenLabs, m3~m5/f3=Supertone 을 1순위로 시도하고
+    // 실패 시 아래 GCP Neural2→WaveNet 폴백으로 낙하. m2/f2(Chirp)는 candidates 1순위로 처리.
+    let koreanCfg: KoreanVoiceConfig | null = null;
     if (!isEng) {
       const kv = koreanVoice || "m1";
-      const el = await synthElevenLabs(ttsText, kv, speed ?? 1);
-      if (el) {
-        return new NextResponse(el, {
-          status: 200,
-          headers: {
-            "Content-Type": "audio/mpeg",
-            "Cache-Control": "public, max-age=86400",
-            "X-TTS-Voice": `el:${elevenVoiceId(kv)}`,
-          },
-        });
+      koreanCfg = KOREAN_VOICE_CONFIG[kv] ?? KOREAN_VOICE_CONFIG.m1;
+      if (koreanCfg.engine === "eleven") {
+        const el = await synthElevenLabs(ttsText, koreanCfg.elevenId ?? "", speed ?? 1);
+        if (el) return ttsAudioResponse(el, `el:${koreanCfg.elevenId}`);
+        console.error("[TTS] ElevenLabs 실패 → GCP 폴백");
+      } else if (koreanCfg.engine === "supertone") {
+        const sup = await synthSupertone(ttsText, koreanCfg, speed ?? 1);
+        if (sup) return ttsAudioResponse(sup, `sup:${koreanCfg.supId}`);
+        console.error("[TTS] Supertone 실패 → GCP 폴백");
       }
-      console.error("[TTS] ElevenLabs 미설정/실패 → GCP 폴백");
     }
 
     const isGb = isEng && accent === "gb";
     const languageCode = isEng ? (isGb ? "en-GB" : "en-US") : "ko-KR";
-    // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백. 한국어: Chirp 가 띄어쓰기/억양을 흘려
-    // 읽어 실용성↓ → Neural2 1순위 → WaveNet 폴백 (한국어 전용 모델이라 끊어읽기 정확)
+    // 한국어 폴백 성별은 성우 config 기준(클라이언트 voice 슬롯과 동일하지만 명시적으로).
+    const koMale = koreanCfg ? koreanCfg.gender === "male" : isMale;
+    const koNeural = koMale ? "ko-KR-Neural2-C" : "ko-KR-Neural2-A";
+    const koWave = koMale ? "ko-KR-Wavenet-C" : "ko-KR-Wavenet-A";
+    // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백. 한국어: m2/f2 는 Chirp 1순위(사용자 선택),
+    // 그 외(eleven/supertone 실패)는 Neural2 1순위 → WaveNet 폴백.
     const candidates = isEng
       ? (isGb
           ? (isMale
@@ -171,9 +256,9 @@ export async function POST(req: NextRequest) {
           : (isMale
               ? ["en-US-Chirp3-HD-Charon", "en-US-Neural2-D"]
               : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"]))
-      : (isMale
-          ? ["ko-KR-Neural2-C", "ko-KR-Wavenet-C"]
-          : ["ko-KR-Neural2-A", "ko-KR-Wavenet-A"]);
+      : (koreanCfg?.engine === "chirp" && koreanCfg.chirpName
+          ? [koreanCfg.chirpName, koNeural, koWave]
+          : [koNeural, koWave]);
 
     const token = await getAccessToken();
 

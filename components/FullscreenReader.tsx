@@ -958,8 +958,9 @@ export default function FullscreenReader({
         </div>
       </footer>
       {/* 읽기 중 하단 플레이어 — 전체화면(z-1000) 내부에 렌더해야 전역 미니플레이어(z-50)가 가려지지 않음.
-          status==="idle" 이면 스스로 렌더 안 함 → 읽기 중에만 노출. footer 위(bottom 70px)에 자리. */}
-      <TTSMiniPlayer />
+          status==="idle" 이면 스스로 렌더 안 함 → 읽기 중에만 노출. footer 위(bottom 70px)에 자리.
+          전체화면은 읽기 버튼이 footer 라 dockBottom 으로 하단 중앙 유지(버튼과 근접). */}
+      <TTSMiniPlayer dockBottom />
     </div>
   );
 }
