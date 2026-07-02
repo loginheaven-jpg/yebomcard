@@ -283,6 +283,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const prefetchAbortRef = useRef<AbortController | null>(null);
   const webSpeechRef = useRef<WebSpeechController | null>(null);
   const playGenRef = useRef(0);
   const playIndexRef = useRef<(i: number) => void>(() => {});
@@ -379,6 +380,59 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     setEnglishAccentState(a);
     englishAccentRef.current = a;
     writeStorage(LS.englishAccent, a);
+  }, []);
+
+  // 다음 절 미리 합성(프리페치) — 현재 절 재생 중 백그라운드로 합성·캐시해 절 사이 무음 간격 제거.
+  // 재생 큐/오디오는 건드리지 않고 IndexedDB 캐시만 채운다(다음 playIndex 가 캐시 적중).
+  const prefetchIndex = useCallback(async (idx: number) => {
+    const tracks = queueRef.current;
+    if (idx < 0 || idx >= tracks.length) return;
+    const track = tracks[idx];
+    if (track.mp3Url) return; // 녹음 음원(장 통째)은 프리페치 대상 아님
+    const isEng = isEnglishVersion(track.version);
+    const kv = koreanVoiceRef.current;
+    const v: TTSVoice = isEng ? voiceRef.current : kv.startsWith("m") ? "male" : "female";
+    const sp = speedRef.current;
+    const isAnnouncement = track.verse === 0;
+    const cacheKey = makeCacheKey({
+      version: track.version,
+      bookCode: track.bookCode,
+      chapter: track.chapter,
+      verse: track.verse,
+      voice: v,
+      speed: sp,
+      accent: isEng ? englishAccentRef.current : "ko",
+      koreanVoice: isEng ? undefined : kv,
+    });
+    try {
+      const cached = await getCachedAudio(cacheKey);
+      if (cached) return; // 이미 캐시됨 → 프리페치 불필요
+    } catch {
+      /* 캐시 조회 실패 시 그냥 프리페치 진행 */
+    }
+    const playableText =
+      !isAnnouncement && readVerseNumberRef.current
+        ? isEng
+          ? `Verse ${track.verse}. ${track.text}`
+          : `${track.verse}절. ${track.text}`
+        : track.text;
+    prefetchAbortRef.current?.abort(); // 항상 1건만 진행
+    const ctrl = new AbortController();
+    prefetchAbortRef.current = ctrl;
+    try {
+      const result = await fetchCloudTtsAudio({
+        text: playableText,
+        voice: v,
+        speed: sp,
+        lang: isEng ? "en" : "ko",
+        accent: englishAccentRef.current,
+        koreanVoice: isEng ? undefined : kv,
+        signal: ctrl.signal,
+      });
+      void putCachedAudio(cacheKey, result.blob, result.voiceUsed);
+    } catch {
+      /* 프리페치 실패/취소는 무시 — 실제 재생 시 정상 경로로 재시도 */
+    }
   }, []);
 
   const playIndex = useCallback(
@@ -574,6 +628,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         if (playGenRef.current !== gen) return;
         setStatus("speaking");
         statusRef.current = "speaking";
+        // 재생 시작과 동시에 다음 절 미리 합성 → 절 사이 무음 간격 제거
+        void prefetchIndex(idx + 1);
       } catch {
         if (playGenRef.current !== gen) return;
         cleanupAudio();
@@ -581,7 +637,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         statusRef.current = "idle";
       }
     },
-    [cleanupAudio],
+    [cleanupAudio, prefetchIndex],
   );
 
   useEffect(() => {
@@ -641,6 +697,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     playGenRef.current++;
     cleanupAudio();
+    prefetchAbortRef.current?.abort();
     queueRef.current = [];
     indexRef.current = -1;
     loadNextChapterRef.current = null;
@@ -684,9 +741,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return () => {
-      // 언마운트 시 진행 중인 fetch/audio 모두 abort. ref 쓰기만 하므로 안전.
+      // 언마운트 시 진행 중인 fetch/audio/프리페치 모두 abort. ref 쓰기만 하므로 안전.
       playGenRef.current++;
       cleanupAudio();
+      prefetchAbortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
