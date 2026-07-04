@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
-import { useTts, KOREAN_VOICE_LABELS, type KoreanVoice } from "@/contexts/TtsContext";
+import { useTts, KOREAN_VOICE_LABELS, koreanVoiceStatusFrom, type KoreanVoice } from "@/contexts/TtsContext";
 import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
 
 interface Props {
@@ -66,6 +66,34 @@ export default function SettingsSheet({
   const tts = useTts();
   const sheetRef = useRef<HTMLDivElement>(null);
   const currentFont = FONTS.find((f) => f.key === fontKey) ?? FONTS[0];
+
+  // 한국어 성우 버튼 — 소진/장애 성우는 disable + 사유 뱃지
+  const renderKoreanVoiceBtn = (kv: KoreanVoice) => {
+    const st = koreanVoiceStatusFrom(kv, tts.ttsHealth);
+    const selected = tts.koreanVoice === kv;
+    return (
+      <button
+        key={kv}
+        onClick={() => {
+          if (!st.down) tts.setKoreanVoice(kv);
+        }}
+        disabled={st.down}
+        aria-pressed={selected}
+        className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
+          st.down
+            ? "bg-[var(--paper)] dark:bg-gray-800 border-[var(--line)] dark:border-gray-700 text-[var(--ink-faint)] dark:text-gray-600 cursor-not-allowed"
+            : selected
+              ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
+              : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
+        }`}
+      >
+        {KOREAN_VOICE_LABELS[kv]}
+        {st.down && (
+          <span className="ml-1 text-[9px] font-semibold text-red-500 dark:text-red-400">{st.reasonLabel}</span>
+        )}
+      </button>
+    );
+  };
 
   // Phase 3 — 그립 드래그로 시트 닫기 (dy > 80px)
   const dragStartRef = useRef<{ y: number } | null>(null);
@@ -427,42 +455,16 @@ export default function SettingsSheet({
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">음성</div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-4">
-              {/* 한국어 낭독 성우 (8종) */}
+              {/* 한국어 낭독 성우 (8종) — 소진/장애 성우는 disable + 뱃지 */}
               <div>
                 <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">한국어 낭독 성우</div>
-                <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">남성</div>
-                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
-                  {(["m1", "m2", "m3", "m4", "m5"] as KoreanVoice[]).map((kv) => (
-                    <button
-                      key={kv}
-                      onClick={() => tts.setKoreanVoice(kv)}
-                      aria-pressed={tts.koreanVoice === kv}
-                      className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
-                        tts.koreanVoice === kv
-                          ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
-                          : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
-                      }`}
-                    >
-                      {KOREAN_VOICE_LABELS[kv]}
-                    </button>
-                  ))}
-                </div>
                 <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">여성</div>
+                <div className="grid grid-cols-3 gap-1.5 mb-2.5">
+                  {(["f2", "f3", "f1"] as KoreanVoice[]).map(renderKoreanVoiceBtn)}
+                </div>
+                <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">남성</div>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(["f1", "f2", "f3"] as KoreanVoice[]).map((kv) => (
-                    <button
-                      key={kv}
-                      onClick={() => tts.setKoreanVoice(kv)}
-                      aria-pressed={tts.koreanVoice === kv}
-                      className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
-                        tts.koreanVoice === kv
-                          ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
-                          : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
-                      }`}
-                    >
-                      {KOREAN_VOICE_LABELS[kv]}
-                    </button>
-                  ))}
+                  {(["m2", "m3", "m4", "m1", "m5"] as KoreanVoice[]).map(renderKoreanVoiceBtn)}
                 </div>
               </div>
 

@@ -36,13 +36,18 @@
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
 ### TTS 파이프라인
-- `TtsContext` + `TTSMiniPlayer`(속도·재생/정지만). 성우/발음/자동다음장/절번호 선택은 `SettingsSheet` 로 이관.
+- `TtsContext` + `TTSMiniPlayer`(속도·재생/정지 + **한국어 성우 선택** 팝오버). 발음/자동다음장/절번호는 `SettingsSheet`(성우도 병행).
 - **한국어 성우 8종 — 성우별 엔진 라우팅**(`app/api/tts/route.ts` `KOREAN_VOICE_CONFIG`):
-  - m1 천사장·f1 김단아 = ElevenLabs / m2 Charon·f2 Aoede = GCP Chirp3-HD / m3 Watson·m4 Garret·m5 Daddy(클론)·f3 Cindy = Supertone
-  - ElevenLabs·Supertone 실패 시 GCP Neural2→WaveNet→WebSpeech 폴백
+  - 라벨/순서(`TtsContext` `KOREAN_VOICE_LABELS`/`KOREAN_VOICE_ORDER`): 여 생생(f2)·지성(f3)·김단아(f1) / 남 활력(m2)·감미(m3)·품격(m4)·천사장(m1)·할부지(m5)
+  - 엔진: 천사장·김단아=ElevenLabs / 활력·생생=GCP Chirp3-HD / 감미·품격·할부지(클론)·지성=Supertone
+  - **폴백 순서**: 1순위 엔진 → GCP **Chirp3-HD(성별)** → Neural2 → WaveNet → WebSpeech (Chirp 를 2순위로 통일, 음질 우선)
   - Supertone: 요청당 300자 제한 → `splitForSupertone` 문장분할+이어붙이기, 속도는 `voice_settings.speed`, 클론은 `model=supertonic_api_3`+style 생략
+  - **기본 성우**: 저장값 없으면 홀수날 생생/짝수날 활력(둘 다 Chirp=항상 가용)
+- **서킷 브레이커 + 헬스**(`lib/tts/engineHealth.ts`, `app/api/tts/health`):
+  - ElevenLabs/Supertone 가 401/402/403/429/타임아웃이면 해당 엔진을 쿨다운(10분) `down` 표시 → 그 동안 1순위 시도 건너뛰고 폴백 직행(매 절 실패 왕복 제거). 성공 시 자동 복구.
+  - `/api/tts/health`(5분 캐시): EL `subscription`·Supertone `/credits` 로 잔여 판단 + 브레이커 병합 → 클라(`ttsHealth`)가 소진/장애 성우를 **disable+뱃지**(소진/키오류/미설정/지연). `koreanVoiceStatusFrom`.
 - 영문: GCP Chirp3-HD(`en-US`/`en-GB` accent) → Neural2 → WebSpeech
-- 캐시 키: `version-book-ch-vs-voice-speed-accent` (한국어는 voice 슬롯에 koreanVoice). 엔진 재매핑 시 `ttsCache.ts` `DB_VERSION` bump
+- 캐시 키: `version-book-ch-vs-voice-speed-accent` (한국어는 voice 슬롯에 koreanVoice). 엔진 재매핑 시 `ttsCache.ts` `DB_VERSION` bump. 다음 절 프리페치(`prefetchIndex`)로 절 사이 무음 제거.
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
 ### 데이터 (Supabase)

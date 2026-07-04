@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
+import { markEngineDown, clearEngineDown, isEngineDown } from "@/lib/tts/engineHealth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -140,10 +141,16 @@ async function synthElevenLabs(text: string, voiceId: string, speed: number): Pr
         voice_settings: { stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true, speed: spd },
       }),
     });
-    if (!r.ok) { console.error("[ElevenLabs]", r.status, (await r.text()).slice(0, 150)); return null; }
+    if (!r.ok) {
+      console.error("[ElevenLabs]", r.status, (await r.text()).slice(0, 150));
+      if ([401, 402, 403, 429].includes(r.status)) markEngineDown("elevenlabs"); // 쿼터/인증/레이트 → 브레이커
+      return null;
+    }
+    clearEngineDown("elevenlabs"); // 성공 → 복구
     return await r.arrayBuffer(); // ArrayBuffer 는 BodyInit — NextResponse 에 그대로 전달 가능
   } catch (e) {
     console.error("[ElevenLabs] exception", e instanceof Error ? e.message : e);
+    markEngineDown("elevenlabs"); // 네트워크/타임아웃 → 브레이커
     return null;
   }
 }
@@ -193,12 +200,18 @@ async function synthSupertone(text: string, cfg: KoreanVoiceConfig, speed: numbe
         headers: { "x-sup-api-key": SUPERTONE_API_KEY, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!r.ok) { console.error("[Supertone]", r.status, (await r.text()).slice(0, 150)); return null; }
+      if (!r.ok) {
+        console.error("[Supertone]", r.status, (await r.text()).slice(0, 150));
+        if ([401, 402, 403, 429].includes(r.status)) markEngineDown("supertone"); // 크레딧/인증/레이트 → 브레이커
+        return null;
+      }
       parts.push(Buffer.from(await r.arrayBuffer()));
     }
+    clearEngineDown("supertone"); // 성공 → 복구
     return parts.length === 1 ? parts[0] : Buffer.concat(parts);
   } catch (e) {
     console.error("[Supertone] exception", e instanceof Error ? e.message : e);
+    markEngineDown("supertone"); // 네트워크/타임아웃 → 브레이커
     return null;
   }
 }
@@ -229,14 +242,23 @@ export async function POST(req: NextRequest) {
     if (!isEng) {
       const kv = koreanVoice || "m1";
       koreanCfg = KOREAN_VOICE_CONFIG[kv] ?? KOREAN_VOICE_CONFIG.m1;
+      // 서킷 브레이커: 최근 실패로 down 이면 1순위 엔진을 건너뛰고 곧장 폴백(무의미한 왕복 제거).
       if (koreanCfg.engine === "eleven") {
-        const el = await synthElevenLabs(ttsText, koreanCfg.elevenId ?? "", speed ?? 1);
-        if (el) return ttsAudioResponse(el, `el:${koreanCfg.elevenId}`);
-        console.error("[TTS] ElevenLabs 실패 → GCP 폴백");
+        if (isEngineDown("elevenlabs")) {
+          console.error("[TTS] ElevenLabs down(브레이커) → GCP 폴백 직행");
+        } else {
+          const el = await synthElevenLabs(ttsText, koreanCfg.elevenId ?? "", speed ?? 1);
+          if (el) return ttsAudioResponse(el, `el:${koreanCfg.elevenId}`);
+          console.error("[TTS] ElevenLabs 실패 → GCP 폴백");
+        }
       } else if (koreanCfg.engine === "supertone") {
-        const sup = await synthSupertone(ttsText, koreanCfg, speed ?? 1);
-        if (sup) return ttsAudioResponse(sup, `sup:${koreanCfg.supId}`);
-        console.error("[TTS] Supertone 실패 → GCP 폴백");
+        if (isEngineDown("supertone")) {
+          console.error("[TTS] Supertone down(브레이커) → GCP 폴백 직행");
+        } else {
+          const sup = await synthSupertone(ttsText, koreanCfg, speed ?? 1);
+          if (sup) return ttsAudioResponse(sup, `sup:${koreanCfg.supId}`);
+          console.error("[TTS] Supertone 실패 → GCP 폴백");
+        }
       }
     }
 
@@ -244,10 +266,12 @@ export async function POST(req: NextRequest) {
     const languageCode = isEng ? (isGb ? "en-GB" : "en-US") : "ko-KR";
     // 한국어 폴백 성별은 성우 config 기준(클라이언트 voice 슬롯과 동일하지만 명시적으로).
     const koMale = koreanCfg ? koreanCfg.gender === "male" : isMale;
+    // 한국어 폴백 순서: GCP Chirp3-HD(음질 우선) → Neural2 → WaveNet.
+    // m2/f2 는 Chirp 가 1순위이기도 하며(위에서 primary 시도 안 함) 여기서 첫 후보로 처리됨.
+    const koChirp = koMale ? "ko-KR-Chirp3-HD-Charon" : "ko-KR-Chirp3-HD-Aoede";
     const koNeural = koMale ? "ko-KR-Neural2-C" : "ko-KR-Neural2-A";
     const koWave = koMale ? "ko-KR-Wavenet-C" : "ko-KR-Wavenet-A";
-    // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백. 한국어: m2/f2 는 Chirp 1순위(사용자 선택),
-    // 그 외(eleven/supertone 실패)는 Neural2 1순위 → WaveNet 폴백.
+    // 영문: Chirp3-HD(녹음급) 1순위 → Neural2 폴백.
     const candidates = isEng
       ? (isGb
           ? (isMale
@@ -256,9 +280,7 @@ export async function POST(req: NextRequest) {
           : (isMale
               ? ["en-US-Chirp3-HD-Charon", "en-US-Neural2-D"]
               : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"]))
-      : (koreanCfg?.engine === "chirp" && koreanCfg.chirpName
-          ? [koreanCfg.chirpName, koNeural, koWave]
-          : [koNeural, koWave]);
+      : [koChirp, koNeural, koWave];
 
     const token = await getAccessToken();
 

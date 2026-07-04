@@ -56,14 +56,57 @@ export type KoreanVoice = "m1" | "m2" | "m3" | "m4" | "m5" | "f1" | "f2" | "f3";
 export const KOREAN_VOICES: KoreanVoice[] = ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3"];
 export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   m1: "천사장",
-  m2: "Charon",
-  m3: "Watson",
-  m4: "Garret",
-  m5: "Daddy",
+  m2: "활력",
+  m3: "감미",
+  m4: "품격",
+  m5: "할부지",
   f1: "김단아",
-  f2: "Aoede",
-  f3: "Cindy",
+  f2: "생생",
+  f3: "지성",
 };
+/** 선택 목록 표시 순서 — 여성(생생·지성·김단아) 먼저, 남성(활력·감미·품격·천사장·할부지) */
+export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f2", "f3", "f1", "m2", "m3", "m4", "m1", "m5"];
+/** 성우별 1순위 엔진 — route.ts KOREAN_VOICE_CONFIG 와 일치. chirp 는 GCP 라 항상 가용 */
+export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supertone"> = {
+  m1: "eleven",
+  m2: "chirp",
+  m3: "supertone",
+  m4: "supertone",
+  m5: "supertone",
+  f1: "eleven",
+  f2: "chirp",
+  f3: "supertone",
+};
+export function koreanVoiceGender(kv: KoreanVoice): "male" | "female" {
+  return kv.startsWith("m") ? "male" : "female";
+}
+
+type EngineHealth = { ok: boolean; reason?: string };
+export interface TtsHealth {
+  elevenlabs: EngineHealth;
+  supertone: EngineHealth;
+}
+const DEFAULT_HEALTH: TtsHealth = { elevenlabs: { ok: true }, supertone: { ok: true } };
+
+/** 성우가 소진/장애로 사실상 폴백 재생될지 + 뱃지 라벨. chirp(GCP)는 항상 정상. */
+export function koreanVoiceStatusFrom(
+  kv: KoreanVoice,
+  health: TtsHealth,
+): { down: boolean; reasonLabel: string } {
+  const eng = KOREAN_VOICE_ENGINE[kv];
+  if (eng === "chirp") return { down: false, reasonLabel: "" };
+  const s = eng === "eleven" ? health.elevenlabs : health.supertone;
+  if (s.ok) return { down: false, reasonLabel: "" };
+  const reasonLabel =
+    s.reason === "quota"
+      ? "소진"
+      : s.reason === "auth"
+        ? "키오류"
+        : s.reason === "nokey"
+          ? "미설정"
+          : "지연";
+  return { down: true, reasonLabel };
+}
 
 export interface TtsTrack {
   text: string;
@@ -181,6 +224,8 @@ interface TtsContextValue {
   engine: TtsEngine;
   /** 서버가 실제 사용한 voice 이름 (예: ko-KR-Chirp3-HD-Aoede) */
   engineVoice: string;
+  /** 엔진 헬스(크레딧 소진/장애) — 성우 disable·뱃지용. koreanVoiceStatusFrom 과 함께 사용 */
+  ttsHealth: TtsHealth;
   start: (p: StartParams) => void;
   stop: () => void;
   pause: () => void;
@@ -268,6 +313,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const [engineVoice, setEngineVoice] = useState("");
   const [englishAccent, setEnglishAccentState] = useState<TTSAccent>("gb");
   const englishAccentRef = useRef<TTSAccent>("gb");
+  const [ttsHealth, setTtsHealth] = useState<TtsHealth>(DEFAULT_HEALTH);
 
   const queueRef = useRef<TtsTrack[]>([]);
   const indexRef = useRef(-1);
@@ -295,8 +341,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         s === "female" ? "female" : "male",
       ),
     );
-    const kv = readStorage<KoreanVoice>(LS.koreanVoice, "m1", (s) =>
-      (KOREAN_VOICES as string[]).includes(s) ? (s as KoreanVoice) : "m1",
+    // 기본 성우: 저장값 없으면 홀수날 생생(f2)/짝수날 활력(m2) — 둘 다 GCP Chirp 라 항상 가용
+    const dayDefault: KoreanVoice = new Date().getDate() % 2 === 1 ? "f2" : "m2";
+    const kv = readStorage<KoreanVoice>(LS.koreanVoice, dayDefault, (s) =>
+      (KOREAN_VOICES as string[]).includes(s) ? (s as KoreanVoice) : dayDefault,
     );
     setKoreanVoiceState(kv);
     koreanVoiceRef.current = kv;
@@ -311,6 +359,27 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     setEnglishAccentState(acc);
     englishAccentRef.current = acc;
   }, []);
+
+  // 엔진 헬스(크레딧 소진/장애) 조회 — 소진 성우 disable·뱃지용. 마운트 + 5분 주기 + 재생 시작 시.
+  const refreshHealth = useCallback(async () => {
+    try {
+      const r = await fetch("/api/tts/health");
+      if (!r.ok) return;
+      const j = await r.json();
+      const e = j?.engines ?? {};
+      setTtsHealth({
+        elevenlabs: { ok: e.elevenlabs?.ok !== false, reason: e.elevenlabs?.reason },
+        supertone: { ok: e.supertone?.ok !== false, reason: e.supertone?.reason },
+      });
+    } catch {
+      /* 헬스 조회 실패는 무시 — 기본(정상)으로 둠 */
+    }
+  }, []);
+  useEffect(() => {
+    refreshHealth();
+    const id = setInterval(refreshHealth, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [refreshHealth]);
 
   useEffect(() => {
     voiceRef.current = voice;
@@ -648,6 +717,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     async (p: StartParams) => {
       if (!p.tracks || p.tracks.length === 0) return;
       loadNextChapterRef.current = p.loadNextChapter ?? null;
+      void refreshHealth(); // 재생 시작 시 엔진 상태 갱신(소진 성우 즉시 반영)
       setIsWebSpeechFallback(false);
       // 새 재생 세션: 직전 재생(녹음 등) 엔진 배지 잔상 제거 — 트랙 해석 후 다시 채움.
       // (녹음 음원은 mp3Url 즉시 "real" 로 재설정되므로 깜빡임 없음)
@@ -691,7 +761,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       }
       playIndex(startIdx);
     },
-    [playIndex],
+    [playIndex, refreshHealth],
   );
 
   const stop = useCallback(() => {
@@ -764,6 +834,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       englishAccent,
       engine,
       engineVoice,
+      ttsHealth,
       start,
       stop,
       pause,
@@ -790,6 +861,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       englishAccent,
       engine,
       engineVoice,
+      ttsHealth,
       start,
       stop,
       pause,
