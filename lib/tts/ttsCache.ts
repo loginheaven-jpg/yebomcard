@@ -15,7 +15,9 @@ const DB_NAME = "yebom_tts_cache";
 // v9: 본문 띄어쓰기 교정 완료(easy/rnksv) → 교정된 본문으로 재낭독하도록 기존 한국어 캐시 무효화
 // v10: 한국어 성우 8종 재편(m1 천사장/f1 김단아=ElevenLabs, m2·f2=GCP Chirp, m3~m5·f3=Supertone).
 //      m2/f2 는 같은 키로 엔진이 ElevenLabs→Chirp 로 바뀌어 기존 캐시가 stale → 전체 무효화 필요.
-const DB_VERSION = 10;
+// v11: 비용 절감 — 합성은 1.0x 로만 하고 속도는 재생 시 playbackRate 로 적용(캐시 키에서 speed 제거).
+//      기존 speed-baked 캐시를 무효화하고 (절·성우)당 1개 항목으로 통합.
+const DB_VERSION = 11;
 const STORE = "audios";
 const MAX_ENTRIES = 500;
 const BATCH_EVICT = 50;
@@ -92,9 +94,10 @@ export interface TtsCacheKey {
 
 export function makeCacheKey(k: TtsCacheKey): string {
   const acc = k.accent ?? "us";
-  // 한국어는 8성우(m1~m5/f1~f3)를, 영문은 voice(male/female)를 키 슬롯에 사용
+  // 한국어는 8성우(m1~m5/f1~f3)를, 영문은 voice(male/female)를 키 슬롯에 사용.
+  // speed 는 키에서 제외 — 합성은 1.0x 로만 하고 재생 시 playbackRate 로 배속(성우당 1개 항목).
   const v = k.koreanVoice ?? k.voice;
-  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${v}-${k.speed}-${acc}`;
+  return `${k.version}-${k.bookCode}-${k.chapter}-${k.verse}-${v}-${acc}`;
 }
 
 export interface CachedAudio {

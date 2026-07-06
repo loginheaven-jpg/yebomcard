@@ -389,11 +389,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   }, [koreanVoice]);
   useEffect(() => {
     speedRef.current = speed;
-    // 장 단위 mp3 재생 중이면 즉시 playbackRate 반영 (TTS 합성 모드는 다음 절부터 적용됨)
-    if (audioRef.current && currentTrack?.mp3Url) {
+    // 녹음/합성 모두 playbackRate 로 즉시 배속 반영 (합성은 항상 1.0x 로 만들고 재생 속도만 조절 → 비용 절감)
+    if (audioRef.current) {
       audioRef.current.playbackRate = speed;
     }
-  }, [speed, currentTrack?.mp3Url]);
+  }, [speed]);
   useEffect(() => {
     autoNextRef.current = autoNext;
   }, [autoNext]);
@@ -492,7 +492,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       const result = await fetchCloudTtsAudio({
         text: playableText,
         voice: v,
-        speed: sp,
+        speed: 1, // 합성은 항상 1.0x (프리페치) — 재생 시 playbackRate 로 배속
         lang: isEng ? "en" : "ko",
         accent: englishAccentRef.current,
         koreanVoice: isEng ? undefined : kv,
@@ -624,7 +624,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           const result = await fetchCloudTtsAudio({
             text: playableText,
             voice: v,
-            speed: sp,
+            speed: 1, // 합성은 항상 1.0x — 재생 속도는 playbackRate 로(캐시/비용 절감)
             lang: isEng ? "en" : "ko",
             accent: englishAccentRef.current,
             koreanVoice: isEng ? undefined : kv,
@@ -680,6 +680,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       const url = URL.createObjectURL(blob);
       objectUrlRef.current = url;
       const audio = new Audio(url);
+      audio.playbackRate = speedRef.current; // 합성음은 1.0x 로 만들어졌으므로 재생 속도는 여기서
       audioRef.current = audio;
       audio.onended = () => {
         if (playGenRef.current !== gen) return;

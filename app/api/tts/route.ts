@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
 import { markEngineDown, clearEngineDown, isEngineDown } from "@/lib/tts/engineHealth";
+import { getR2Audio, putR2Audio } from "@/lib/tts/r2Cache";
+
+// 공유 캐시 키 버전 — 성우↔엔진 매핑을 바꾸면 올려서 일괄 무효화(본문 변경은 sha1 로 자동 무효화).
+const TTS_CACHE_VERSION = "v1";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,13 +121,18 @@ const KOREAN_VOICE_CONFIG: Record<string, KoreanVoiceConfig> = {
   f3: { engine: "supertone", gender: "female", supId: "39f27eaab088024ff6f9ac", supModel: "sona_speech_2", supStyle: "neutral" }, // Cindy
 };
 
-function ttsAudioResponse(body: ArrayBuffer | Buffer, voiceTag: string): NextResponse {
+function ttsAudioResponse(
+  body: ArrayBuffer | Buffer,
+  voiceTag: string,
+  cache: "hit" | "miss" = "miss",
+): NextResponse {
   return new NextResponse(body as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": "audio/mpeg",
       "Cache-Control": "public, max-age=86400",
       "X-TTS-Voice": voiceTag,
+      "X-TTS-Cache": cache, // hit = R2 공유 캐시 서빙(합성 안 함), miss = 신규 합성
     },
   });
 }
@@ -218,7 +227,8 @@ async function synthSupertone(text: string, cfg: KoreanVoiceConfig, speed: numbe
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, speed, voice, lang, accent, pitch, volumeGainDb, koreanVoice } = await req.json();
+    // speed 는 더 이상 서버에서 사용 안 함 — 합성은 항상 1.0x, 재생 속도는 클라이언트 playbackRate.
+    const { text, voice, lang, accent, pitch, volumeGainDb, koreanVoice } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
@@ -236,8 +246,20 @@ export async function POST(req: NextRequest) {
     const isMale = voice === "male";
     const isEng = lang === "en";
 
+    // ── 공유 캐시(R2) 조회 — hit 시 합성 없이 서빙. 콘텐츠 주소화(본문 sha1)로 절·성우당 전역 1회만 합성 ──
+    const voiceKey = isEng
+      ? `${accent === "gb" ? "gb" : "us"}-${isMale ? "male" : "female"}`
+      : koreanVoice || "m1";
+    const textHash = crypto.createHash("sha1").update(ttsText).digest("hex");
+    const r2Key = `tts/${TTS_CACHE_VERSION}/${isEng ? "en" : "ko"}/${voiceKey}/${textHash}.mp3`;
+    const cachedR2 = await getR2Audio(r2Key);
+    if (cachedR2) {
+      return ttsAudioResponse(cachedR2.buffer, cachedR2.voice || "r2", "hit");
+    }
+
     // 한국어: 성우별 엔진 라우팅. m1/f1=ElevenLabs, m3~m5/f3=Supertone 을 1순위로 시도하고
-    // 실패 시 아래 GCP Neural2→WaveNet 폴백으로 낙하. m2/f2(Chirp)는 candidates 1순위로 처리.
+    // 실패 시 아래 GCP Chirp→Neural2→WaveNet 폴백으로 낙하. m2/f2(Chirp)는 candidates 1순위로 처리.
+    // 합성 성공 시 R2 에 업로드(canonical=요청 성우의 1순위 엔진 산출물만 — 폴백은 캐시 안 함).
     let koreanCfg: KoreanVoiceConfig | null = null;
     if (!isEng) {
       const kv = koreanVoice || "m1";
@@ -247,16 +269,22 @@ export async function POST(req: NextRequest) {
         if (isEngineDown("elevenlabs")) {
           console.error("[TTS] ElevenLabs down(브레이커) → GCP 폴백 직행");
         } else {
-          const el = await synthElevenLabs(ttsText, koreanCfg.elevenId ?? "", speed ?? 1);
-          if (el) return ttsAudioResponse(el, `el:${koreanCfg.elevenId}`);
+          const el = await synthElevenLabs(ttsText, koreanCfg.elevenId ?? "", 1);
+          if (el) {
+            void putR2Audio(r2Key, Buffer.from(el), `el:${koreanCfg.elevenId}`);
+            return ttsAudioResponse(el, `el:${koreanCfg.elevenId}`);
+          }
           console.error("[TTS] ElevenLabs 실패 → GCP 폴백");
         }
       } else if (koreanCfg.engine === "supertone") {
         if (isEngineDown("supertone")) {
           console.error("[TTS] Supertone down(브레이커) → GCP 폴백 직행");
         } else {
-          const sup = await synthSupertone(ttsText, koreanCfg, speed ?? 1);
-          if (sup) return ttsAudioResponse(sup, `sup:${koreanCfg.supId}`);
+          const sup = await synthSupertone(ttsText, koreanCfg, 1);
+          if (sup) {
+            void putR2Audio(r2Key, sup, `sup:${koreanCfg.supId}`);
+            return ttsAudioResponse(sup, `sup:${koreanCfg.supId}`);
+          }
           console.error("[TTS] Supertone 실패 → GCP 폴백");
         }
       }
@@ -292,7 +320,7 @@ export async function POST(req: NextRequest) {
       const isChirp = voiceName.includes("Chirp");
       const audioConfig: Record<string, unknown> = {
         audioEncoding: "MP3",
-        speakingRate: speed ?? 1.0,
+        speakingRate: 1.0, // 항상 1.0x 합성 — 재생 속도는 클라이언트 playbackRate
         volumeGainDb: volumeGainDb ?? 0,
       };
       if (!isChirp) {
@@ -337,14 +365,11 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(audioContent, "base64");
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Cache-Control": "public, max-age=86400",
-        "X-TTS-Voice": usedVoice,
-      },
-    });
+    // canonical(요청 성우의 1순위 산출물)만 공유 캐시에 저장 — 영문/한국어 Chirp(m2·f2)는 Chirp 가 1순위.
+    // 한국어 eleven/supertone 이 여기까지 온 건 폴백이므로 캐시 안 함(엔진 복구 시 진짜 음색으로 재합성).
+    const canonical = isEng || koreanCfg?.engine === "chirp";
+    if (canonical) void putR2Audio(r2Key, buffer, usedVoice);
+    return ttsAudioResponse(buffer, usedVoice);
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "TTS generation failed";
