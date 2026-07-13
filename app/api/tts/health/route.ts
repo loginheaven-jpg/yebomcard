@@ -11,6 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { isEngineDown, markEngineDown, clearEngineDown } from "@/lib/tts/engineHealth";
+import { r2CacheEnabled, probeR2Write } from "@/lib/tts/r2Cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,8 @@ const EL_API_KEY = process.env.ELEVENLABS_API_KEY || process.env["11LABS"] || ""
 const SUPERTONE_API_KEY = process.env.SUPERTONE_API_KEY || "";
 
 type EngineStatus = { ok: boolean; reason?: string; remaining?: number };
-let cache: { at: number; el: EngineStatus; sup: EngineStatus } | null = null;
+type R2Status = { enabled: boolean; writable: boolean };
+let cache: { at: number; el: EngineStatus; sup: EngineStatus; r2: R2Status } | null = null;
 const TTL_MS = 5 * 60 * 1000;
 
 async function checkElevenLabs(): Promise<EngineStatus> {
@@ -57,8 +59,12 @@ async function checkSupertone(): Promise<EngineStatus> {
 export async function GET() {
   const nowMs = Date.now();
   if (!cache || nowMs - cache.at > TTL_MS) {
-    const [el, sup] = await Promise.all([checkElevenLabs(), checkSupertone()]);
-    cache = { at: nowMs, el, sup };
+    const [el, sup, r2Writable] = await Promise.all([
+      checkElevenLabs(),
+      checkSupertone(),
+      probeR2Write(), // 공유 캐시 쓰기 권한 실검증(작은 마커 PUT)
+    ]);
+    cache = { at: nowMs, el, sup, r2: { enabled: r2CacheEnabled(), writable: r2Writable } };
     // 사전 점검 결과로 브레이커도 갱신(같은 웜 인스턴스면 synth 경로가 첫 실패 왕복도 아낌)
     if (el.ok) clearEngineDown("elevenlabs");
     else markEngineDown("elevenlabs");
@@ -75,6 +81,8 @@ export async function GET() {
         supertone: { ok: supOk, reason: supOk ? undefined : cache.sup.reason ?? "down" },
         gcp: { ok: true },
       },
+      // 공유 캐시 상태 — enabled=R2 자격 존재, writable=실제 쓰기 성공. 둘 다 true 여야 비용 절감 작동.
+      r2: cache.r2,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

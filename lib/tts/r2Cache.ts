@@ -32,10 +32,45 @@ export function r2CacheEnabled(): boolean {
   return getClient() !== null;
 }
 
+let lastWarnAt = 0;
+/** R2 미설정 상태에서 합성이 일어나면 주기적(10분)으로 경고 — silent no-op 로 비용 새는 것 방지 */
+function warnDisabledThrottled(): void {
+  const t = Date.now();
+  if (t - lastWarnAt > 10 * 60 * 1000) {
+    lastWarnAt = t;
+    console.warn(
+      "[R2] 공유 캐시 비활성(R2_* env 미설정) — 매 합성이 저장되지 않아 비용 절감 안 됨. 배포처(Vercel) 환경변수 확인 필요.",
+    );
+  }
+}
+
+/** 실제 쓰기 권한 검증 — 작은 마커 객체를 PUT 시도(성공=writable). health 에서 5분 캐시로 호출. */
+export async function probeR2Write(): Promise<boolean> {
+  const c = getClient();
+  if (!c) return false;
+  try {
+    await c.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: "tts/_healthcheck",
+        Body: Buffer.from("ok"),
+        ContentType: "text/plain",
+        CacheControl: "no-store",
+      }),
+    );
+    return true;
+  } catch {
+    return false; // 읽기 전용 토큰/권한 부족 등
+  }
+}
+
 /** 공유 캐시 조회. hit → { buffer, voice(저장 시 X-TTS-Voice) }, miss/미설정 → null */
 export async function getR2Audio(key: string): Promise<{ buffer: Buffer; voice: string } | null> {
   const c = getClient();
-  if (!c) return null;
+  if (!c) {
+    warnDisabledThrottled(); // R2 미설정 → 이 요청은 합성 후 비저장. 경고 노출.
+    return null;
+  }
   try {
     const r = await c.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
     if (!r.Body) return null;
