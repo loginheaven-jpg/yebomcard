@@ -70,6 +70,8 @@ interface SearchPanelProps {
   onOpenScrap?: () => void;
   /** 스크랩 카운트 — 책갈피 메뉴 안 스크랩 버튼 배지 표시 (Phase 2b 후속) */
   scrapCount?: number;
+  /** 본문(장 읽기) 화면 여부 알림 — 하단 탭바 자동 숨김 제어 (app/page.tsx) */
+  onReadingViewChange?: (reading: boolean) => void;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -97,6 +99,7 @@ export default function SearchPanel({
   fullscreenRequestNonce,
   onOpenScrap,
   scrapCount,
+  onReadingViewChange,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading } = useSession();
   const adminMode = isAdmin(session);
@@ -666,6 +669,12 @@ export default function SearchPanel({
   }
   const totalBookmarkCount = (recent ? 1 : 0) + bookmarks.length;
   const canAddCurrent = mode === "chapter" && browseStep === "verse" && !!bookCode && !!chapter;
+
+  // 본문(장 읽기) 화면 여부를 상위에 알림 — 하단 탭바 자동 숨김 제어
+  const isReadingView = mode === "chapter" && browseStep === "verse" && !isAddingMore;
+  useEffect(() => {
+    onReadingViewChange?.(isReadingView);
+  }, [isReadingView, onReadingViewChange]);
   const isCurrentInBookmarks = canAddCurrent && bookmarks.some(
     (b) => b.book_code === bookCode && b.chapter === chapter && b.version === mainVersion
   );

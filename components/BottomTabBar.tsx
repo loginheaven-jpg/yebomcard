@@ -76,6 +76,12 @@ interface Props {
   settingsDot?: boolean;
   /** 미니플레이어 활성 등 하단에 다른 UI 가 있으면 위로 올림 */
   liftPx?: number;
+  /** 본문 몰입 - 아래로 내려 감춤(얇은 손잡이만 남김) */
+  hidden?: boolean;
+  /** 감춘 상태에서 하단 손잡이를 누르면 호출 */
+  onReveal?: () => void;
+  /** 탭바를 만지는 동안 자동 숨김 타이머 재무장 */
+  onInteract?: () => void;
 }
 
 export default function BottomTabBar({
@@ -84,15 +90,23 @@ export default function BottomTabBar({
   bookmarkCount,
   settingsDot = false,
   liftPx = 0,
+  hidden = false,
+  onReveal,
+  onInteract,
 }: Props) {
   return (
+    <>
     <nav
       role="tablist"
       aria-label="주 네비게이션"
-      className="fixed inset-x-0 z-30 bg-[var(--paper)] dark:bg-gray-900 border-t border-[var(--line)] dark:border-gray-700"
+      aria-hidden={hidden || undefined}
+      onPointerDown={onInteract}
+      className="fixed inset-x-0 z-30 bg-[var(--paper)] dark:bg-gray-900 border-t border-[var(--line)] dark:border-gray-700 transition-transform duration-200 ease-out"
       style={{
         bottom: liftPx,
         paddingBottom: "env(safe-area-inset-bottom, 0)",
+        transform: hidden ? "translateY(100%)" : "translateY(0)",
+        pointerEvents: hidden ? "none" : undefined,
       }}
     >
       <div className="grid grid-cols-5 max-w-2xl mx-auto">
@@ -141,5 +155,27 @@ export default function BottomTabBar({
         })}
       </div>
     </nav>
+    {/* 감춤 상태의 리빌 존 + 얇은 손잡이.
+        iOS 홈 인디케이터(safe-area) 바로 위에 두어 시스템 스와이프와 충돌하지 않게 함.
+        스와이프가 아닌 탭(onPointerDown)으로만 반응. */}
+    {hidden && (
+      <button
+        type="button"
+        aria-label="메뉴 표시"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          onReveal?.();
+        }}
+        className="fixed inset-x-0 z-30 flex items-start justify-center bg-transparent border-0 p-0 cursor-pointer"
+        style={{ bottom: "env(safe-area-inset-bottom, 0)", height: 28 }}
+      >
+        <span
+          aria-hidden
+          className="mt-1.5 block rounded-full bg-gray-400/60 dark:bg-gray-500/60"
+          style={{ width: 36, height: 4 }}
+        />
+      </button>
+    )}
+    </>
   );
 }

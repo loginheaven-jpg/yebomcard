@@ -24,6 +24,9 @@ import { useFont } from "@/contexts/FontContext";
 
 const MAIN_VERSION_KEY = "yebom_main_version";
 const SUB_VERSION_KEY = "yebom_sub_version";
+const AUTOHIDE_TABBAR_KEY = "yebom_autohide_tabbar";
+/** 본문에서 무조작 시 하단 탭바를 감추기까지의 시간 */
+const TABBAR_HIDE_MS = 3000;
 
 export default function Home() {
   const { session, isLoggedIn, logout } = useSession();
@@ -66,6 +69,62 @@ export default function Home() {
   const { showFontSettings, setShowFontSettings } = useFont();
   const [showSettingsSheet, setShowSettingsSheet] = useState(false);
   const [fullscreenRequestNonce, setFullscreenRequestNonce] = useState(0);
+
+  // ─── 본문 몰입: 하단 탭바 자동 숨김 ───
+  // 본문(장 읽기) 화면에서만 동작. 무조작 3초 → 아래로 슬라이드 감춤(얇은 손잡이만 남음).
+  // 복귀: 하단 손잡이 탭 + 위로 스크롤. 본문은 내부 컨테이너 스크롤이라 capture 로 수집.
+  const [autoHideTabBar, setAutoHideTabBar] = useState(true);
+  const [isReadingView, setIsReadingView] = useState(false);
+  const [tabBarHidden, setTabBarHidden] = useState(false);
+  const tabBarTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(AUTOHIDE_TABBAR_KEY);
+      if (v !== null) setAutoHideTabBar(v === "1");
+    } catch {}
+  }, []);
+
+  const changeAutoHideTabBar = useCallback((on: boolean) => {
+    setAutoHideTabBar(on);
+    try { localStorage.setItem(AUTOHIDE_TABBAR_KEY, on ? "1" : "0"); } catch {}
+  }, []);
+
+  const armTabBarHide = useCallback((enabled: boolean) => {
+    if (tabBarTimer.current) clearTimeout(tabBarTimer.current);
+    tabBarTimer.current = null;
+    if (!enabled) return;
+    tabBarTimer.current = setTimeout(() => setTabBarHidden(true), TABBAR_HIDE_MS);
+  }, []);
+
+  /** 탭바 표시 + (본문·설정 ON 이면) 다시 감출 타이머 재무장 */
+  const revealTabBar = useCallback(() => {
+    setTabBarHidden(false);
+    armTabBarHide(autoHideTabBar && isReadingView);
+  }, [armTabBarHide, autoHideTabBar, isReadingView]);
+
+  // 본문 진입/이탈 · 설정 변경 시 재평가
+  useEffect(() => {
+    setTabBarHidden(false);
+    armTabBarHide(autoHideTabBar && isReadingView);
+    return () => { if (tabBarTimer.current) clearTimeout(tabBarTimer.current); };
+  }, [autoHideTabBar, isReadingView, armTabBarHide]);
+
+  // 위로 스크롤하면 다시 표시 (scroll 은 버블링하지 않으므로 capture 단계에서 수집)
+  useEffect(() => {
+    if (!(autoHideTabBar && isReadingView)) return;
+    const lastTop = new WeakMap<EventTarget, number>();
+    const onScroll = (e: Event) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      const prev = lastTop.get(t) ?? t.scrollTop;
+      const cur = t.scrollTop;
+      lastTop.set(t, cur);
+      if (cur < prev - 4) revealTabBar(); // 위로 스크롤 → 표시
+    };
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [autoHideTabBar, isReadingView, revealTabBar]);
 
   // ─── Phase 2a 하단 5탭 ───
   const [activeTab, setActiveTab] = useState<ActiveTab | null>(null);
@@ -340,6 +399,7 @@ export default function Home() {
             if (ensureLogin("스크랩")) setShowScrap(true);
           }}
           scrapCount={scrapCount}
+          onReadingViewChange={setIsReadingView}
         />
       </div>
 
@@ -449,6 +509,8 @@ export default function Home() {
           canCreateCard={selectedVerses.length > 0}
           onOpenFullscreen={() => setFullscreenRequestNonce((n) => n + 1)}
           canOpenFullscreen={view === "search"}
+          autoHideTabBar={autoHideTabBar}
+          onAutoHideTabBarChange={changeAutoHideTabBar}
           onExit={() => setShowExitConfirm(true)}
         />
       )}
@@ -460,6 +522,9 @@ export default function Home() {
           onTabChange={handleTabChange}
           bookmarkCount={bookmarkCount}
           settingsDot={reportCount > 0}
+          hidden={tabBarHidden}
+          onReveal={revealTabBar}
+          onInteract={revealTabBar}
         />
       )}
     </main>

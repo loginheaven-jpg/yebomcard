@@ -40,6 +40,9 @@ interface Props {
   // 읽기 모드
   onOpenFullscreen: () => void;
   canOpenFullscreen: boolean;
+  /** 본문 볼 때 하단 탭바 자동 숨김 */
+  autoHideTabBar: boolean;
+  onAutoHideTabBarChange: (on: boolean) => void;
   // 앱
   onExit: () => void;
 }
@@ -60,6 +63,8 @@ export default function SettingsSheet({
   canCreateCard,
   onOpenFullscreen,
   canOpenFullscreen,
+  autoHideTabBar,
+  onAutoHideTabBarChange,
   onExit,
 }: Props) {
   const { fontSize, setFontSize, fontKey, setFontKey, theme, setTheme } = useFont();
@@ -447,6 +452,21 @@ export default function SettingsSheet({
                     </button>
                   ))}
                 </div>
+              </div>
+              {/* 본문 몰입 — 하단 메뉴 자동 숨김 */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span>
+                    <span className="block text-sm text-[var(--ink)] dark:text-gray-100">본문 볼 때 하단 메뉴 자동 숨김</span>
+                    <span className="block text-[11px] text-[var(--ink-faint)] dark:text-gray-500 mt-0.5">화면 맨 아래를 살짝 누르면 다시 나옵니다</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={autoHideTabBar}
+                    onChange={(e) => onAutoHideTabBarChange(e.target.checked)}
+                    className="w-4 h-4 shrink-0"
+                  />
+                </label>
               </div>
             </div>
           </section>

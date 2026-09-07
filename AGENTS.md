@@ -33,6 +33,7 @@
 ### 하단 5탭 IA
 - `BottomTabBar` (목차/검색/읽기/책갈피/설정) — `view==="search"` 일 때만 렌더
 - `SettingsSheet` — 계정/찬송가/예배성경/카드빌더/풀스크린/관리자/종료 통합
+- **본문 몰입 — 하단 탭바 자동 숨김**: 본문(`browseStep==="verse"`)에서 무조작 3초 → 아래로 슬라이드 감춤(얇은 손잡이만 남김). 복귀 = 하단 손잡이 탭 + 위로 스크롤(본문은 내부 컨테이너 스크롤이라 `window` **capture** 로 수집). 리빌 존은 `safe-area-inset-bottom` 위 28px 에 두어 iOS 홈 인디케이터 제스처와 분리. 상태는 `app/page.tsx` 소유(`tabBarHidden`), SearchPanel 은 `onReadingViewChange` 로 본문 여부만 보고. 설정 토글 `본문 볼 때 하단 메뉴 자동 숨김`(기본 ON, `yebom_autohide_tabbar`). 숨겨도 본문 컨테이너 높이(`browseScrollMaxH`)는 그대로 두어 **리플로우 없음**
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
 ### TTS 파이프라인
