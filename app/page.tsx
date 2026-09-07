@@ -400,6 +400,7 @@ export default function Home() {
           }}
           scrapCount={scrapCount}
           onReadingViewChange={setIsReadingView}
+          tabBarHidden={tabBarHidden}
         />
       </div>
 

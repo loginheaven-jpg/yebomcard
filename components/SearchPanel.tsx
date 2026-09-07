@@ -72,6 +72,8 @@ interface SearchPanelProps {
   scrapCount?: number;
   /** 본문(장 읽기) 화면 여부 알림 — 하단 탭바 자동 숨김 제어 (app/page.tsx) */
   onReadingViewChange?: (reading: boolean) => void;
+  /** 하단 탭바가 감춰진 상태 — 그만큼 본문 스크롤 영역을 아래로 확장 */
+  tabBarHidden?: boolean;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -100,6 +102,7 @@ export default function SearchPanel({
   onOpenScrap,
   scrapCount,
   onReadingViewChange,
+  tabBarHidden = false,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading } = useSession();
   const adminMode = isAdmin(session);
@@ -686,9 +689,16 @@ export default function SearchPanel({
   const tts = useTts();
   // 재생 중 미니플레이어(하단 고정 오버레이)가 본문 끝줄을 가리지 않도록 스크롤 영역 하단 예약을 늘림
   const playerActive = tts.status !== "idle";
-  const browseScrollMaxH = playerActive
-    ? "max-h-[calc(100dvh-272px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-222px)]"
-    : "max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)]";
+  // 하단 탭바(높이 약 56px)가 감춰지면 그만큼 본문 영역을 아래로 확장.
+  // 컨테이너 폭은 그대로라 글자가 다시 흐르지 않고, 아래쪽이 더 보일 뿐임.
+  const browseMaxHClass = playerActive
+    ? (tabBarHidden
+        ? "max-h-[calc(100dvh-216px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-166px)]"
+        : "max-h-[calc(100dvh-272px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-222px)]")
+    : (tabBarHidden
+        ? "max-h-[calc(100dvh-144px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-94px)]"
+        : "max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)]");
+  const browseScrollMaxH = `${browseMaxHClass} transition-[max-height] duration-200 ease-out`;
   const ttsActiveOnThisChapter =
     tts.status !== "idle" &&
     tts.currentTrack?.bookCode === bookCode &&
