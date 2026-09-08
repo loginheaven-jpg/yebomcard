@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
-import { useTts, KOREAN_VOICE_LABELS, koreanVoiceStatusFrom, type KoreanVoice } from "@/contexts/TtsContext";
+import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice } from "@/contexts/TtsContext";
 import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
 
 interface Props {
@@ -480,11 +480,11 @@ export default function SettingsSheet({
                 <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">한국어 낭독 성우</div>
                 <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">여성</div>
                 <div className="grid grid-cols-3 gap-1.5 mb-2.5">
-                  {(["f2", "f3", "f1"] as KoreanVoice[]).map(renderKoreanVoiceBtn)}
+                  {KOREAN_VOICE_ORDER.filter((kv) => koreanVoiceGender(kv) === "female").map(renderKoreanVoiceBtn)}
                 </div>
                 <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">남성</div>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(["m2", "m3", "m4", "m1", "m5"] as KoreanVoice[]).map(renderKoreanVoiceBtn)}
+                  {KOREAN_VOICE_ORDER.filter((kv) => koreanVoiceGender(kv) === "male").map(renderKoreanVoiceBtn)}
                 </div>
               </div>
 

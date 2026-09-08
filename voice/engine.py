@@ -258,8 +258,11 @@ def synth_one(text, voice, temp=0.75, punct=True):
         return merged, sr
 
 
-def synth_batch(texts, voice, temp=0.75, punct=True):
+def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN):
     """여러 텍스트를 한 번에 합성(처리량↑). 분할이 필요한 긴 항목만 개별 처리.
+
+    max_len 을 줄이면 더 잘게 쪼갠다 — 재시도 때 쓰면 '긴 입력에서 뒷문장이
+    통째로 빠지는' 잘림(욥기 1:3에서 관측)을 회피할 수 있다.
     반환: (wav 리스트[입력 순서], sr)"""
     with _lock:
         tts = get_tts()
@@ -267,7 +270,7 @@ def synth_batch(texts, voice, temp=0.75, punct=True):
         prompt = tts.create_voice_clone_prompt(
             ref_audio=voice_ref(voice), ref_text=meta["ref_text"])
         kw = gen_kwargs(temp)
-        prepared = [split_text(prosody.add_punct(t) if punct else t) for t in texts]
+        prepared = [split_text(prosody.add_punct(t) if punct else t, max_len) for t in texts]
         results = [None] * len(texts)
         sr = SR_TARGET
 
@@ -301,6 +304,35 @@ def synth_batch(texts, voice, temp=0.75, punct=True):
 
 
 # ───────────────────────── 검수(QC) ─────────────────────────
+# Whisper 는 한국어 수사를 아라비아 숫자로 받아쓴다("칠천"→"7천", "오백"→"500").
+# 원문은 한글 수사이므로 그대로 비교하면 숫자 많은 절(욥기·민수기·역대기)이
+# 전부 오탐으로 불합격 처리된다. ASR 쪽 숫자를 한글 수사로 되돌려 비교한다.
+_SINO = "영일이삼사오육칠팔구"
+
+
+def _sino(n: int) -> str:
+    if n == 0:
+        return "영"
+    out = ""
+    for val, name in ((10 ** 8, "억"), (10 ** 4, "만"), (1000, "천"), (100, "백"), (10, "십")):
+        q, n = divmod(n, val)
+        if q:
+            out += (_sino(q) + name) if val >= 10 ** 4 else (("" if q == 1 else _SINO[q]) + name)
+    if n:
+        out += _SINO[n]
+    return out
+
+
+def num_to_kor(text: str) -> str:
+    """ASR 결과의 아라비아 숫자를 한글 수사로 — '7천'→'칠천', '500'→'오백'"""
+    t = re.sub(r"(?<=\d),(?=\d{3})", "", text or "")          # 3자리 쉼표 제거
+    t = re.sub(r"(\d+)\s*([천백십만억])",
+               lambda m: _sino(int(m.group(1))) + m.group(2), t)  # 7천 → 칠천
+    t = re.sub(r"\d+", lambda m: _sino(int(m.group(0))), t)      # 500 → 오백
+    return t
+
+
+
 def qc(wav_path, src_text, min_ratio=0.85):
     """생성음을 ASR 로 되받아 원문과 대조. (ok, ratio, reason, asr_text)"""
     import difflib
@@ -317,7 +349,9 @@ def qc(wav_path, src_text, min_ratio=0.85):
         return False, 0.0, f"오디오가 김({cps:.1f}자/초·반복 의심)", ""
     # 2) 본문 대조
     hyp = transcribe(wav_path, with_ts=False)
-    ratio = difflib.SequenceMatcher(None, NORM_RE.sub("", src_text), NORM_RE.sub("", hyp)).ratio()
+    a = NORM_RE.sub("", src_text)
+    b = NORM_RE.sub("", num_to_kor(hyp))   # ASR 숫자 표기 차이를 흡수
+    ratio = difflib.SequenceMatcher(None, a, b).ratio()
     if ratio < min_ratio:
         return False, ratio, f"본문 불일치({ratio*100:.0f}%)", hyp
     return True, ratio, "", hyp

@@ -89,11 +89,15 @@ def _process(job):
         pend = [i for i in job["items"] if i["status"] == "pending"]
         if not pend:
             break
-        group = pend[:batch]
-        _cur["note"] = f"{group[0]['ref']} 외 {len(group)-1}건" if len(group) > 1 else group[0]["ref"]
+        # 같은 재시도 회차끼리 묶는다 — 회차가 오를수록 더 잘게 쪼개 잘림을 피한다
+        tries0 = pend[0]["tries"]
+        group = [i for i in pend if i["tries"] == tries0][:batch]
+        max_len = max(40, engine.MAX_LEN // (1 + tries0))
+        _cur["note"] = (f"{group[0]['ref']} 외 {len(group)-1}건" if len(group) > 1
+                        else group[0]["ref"]) + (f" (재시도{tries0})" if tries0 else "")
         try:
             wavs, sr = engine.synth_batch([g["text"] for g in group], voice,
-                                          job["temp"], job["punct"])
+                                          job["temp"], job["punct"], max_len=max_len)
         except Exception as e:
             job["status"] = "error"
             job["error"] = str(e)[:500]

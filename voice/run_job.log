@@ -1,0 +1,32 @@
+[ëŒ€ìƒ] ìƒˆë²ˆì—­ ìš¥ê¸° â€” 1070ì ˆ / 57,024ì
+       ì˜ˆìƒ ì˜¤ë””ì˜¤ 2.3h Â· ì˜ˆìƒ ìƒì„± 2.3h
+[ì‘ì—…] 20260909_002137_04d7 ì‹œì‘
+  21/1070 (í•©ê²© 21 Â· ë³´ë¥˜ 0) Â· ê²½ê³¼ 0ë¶„ Â· ë‚¨ì€ 0ë¶„
+'sox'Àº(´Â) ³»ºÎ ¶Ç´Â ¿ÜºÎ ¸í·É, ½ÇÇàÇÒ ¼ö ÀÖ´Â ÇÁ·Î±×·¥, ¶Ç´Â
+¹èÄ¡ ÆÄÀÏÀÌ ¾Æ´Õ´Ï´Ù.
+SoX could not be found!
+
+    If you do not have SoX, proceed here:
+     - - - http://sox.sourceforge.net/ - - -
+
+    If you do (or think that you should) have SoX, double-check your
+    path variables.
+    
+
+********
+Warning: flash-attn is not installed. Will only run the manual PyTorch version. Please install flash-attn for faster inference.
+********
+ 
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Fetching 4 files: 100%|â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ| 4/4 [00:00<00:00, 77314.36it/s]
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:2150 for open-end generation.

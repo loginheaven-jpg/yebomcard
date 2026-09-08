@@ -52,8 +52,8 @@ export const TTS_SPEEDS: TtsSpeed[] = [0.7, 0.85, 1.0, 1.15, 1.5, 1.75, 2.0];
  *   m1 천사장(ElevenLabs) · m2 Charon(GCP Chirp) · m3 Watson·m4 Garret·m5 Daddy(Supertone)
  *   f1 김단아(ElevenLabs) · f2 Aoede(GCP Chirp) · f3 Cindy(Supertone)
  */
-export type KoreanVoice = "m1" | "m2" | "m3" | "m4" | "m5" | "f1" | "f2" | "f3";
-export const KOREAN_VOICES: KoreanVoice[] = ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3"];
+export type KoreanVoice = "m1" | "m2" | "m3" | "m4" | "m5" | "f1" | "f2" | "f3" | "f4";
+export const KOREAN_VOICES: KoreanVoice[] = ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3", "f4"];
 export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   m1: "천사장",
   m2: "활력",
@@ -63,9 +63,12 @@ export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   f1: "김단아",
   f2: "생생",
   f3: "지성",
+  // 커스텀 클론 보이스 — 사전 생성분만 존재하므로 현재 범위를 라벨에 밝힌다.
+  // 범위가 늘면 접미사를 갱신/제거할 것.
+  f4: "영희(욥기)",
 };
 /** 선택 목록 표시 순서 — 여성(생생·지성·김단아) 먼저, 남성(활력·감미·품격·천사장·할부지) */
-export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f2", "f3", "f1", "m2", "m3", "m4", "m1", "m5"];
+export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f2", "f3", "f1", "f4", "m2", "m3", "m4", "m1", "m5"];
 /** 성우별 1순위 엔진 — route.ts KOREAN_VOICE_CONFIG 와 일치. chirp 는 GCP 라 항상 가용 */
 export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supertone"> = {
   m1: "eleven",
@@ -76,6 +79,10 @@ export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supe
   f1: "eleven",
   f2: "chirp",
   f3: "supertone",
+  // f4(영희)는 라이브 엔진이 없는 **사전 생성 전용** 보이스다.
+  // R2 공유 캐시에 있으면 그 음원이 나가고, 없으면 Chirp 로 폴백된다.
+  // 엔진을 chirp 로 두어야 헬스체크(크레딧)로 비활성화되지 않는다.
+  f4: "chirp",
 };
 export function koreanVoiceGender(kv: KoreanVoice): "male" | "female" {
   return kv.startsWith("m") ? "male" : "female";

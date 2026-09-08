@@ -119,6 +119,9 @@ const KOREAN_VOICE_CONFIG: Record<string, KoreanVoiceConfig> = {
   f1: { engine: "eleven", gender: "female", elevenId: "vDA1h0ZXkQiojUReMmR9" }, // 김단아
   f2: { engine: "chirp", gender: "female", chirpName: "ko-KR-Chirp3-HD-Aoede" }, // Aoede
   f3: { engine: "supertone", gender: "female", supId: "39f27eaab088024ff6f9ac", supModel: "sona_speech_2", supStyle: "neutral" }, // Cindy
+  // 영희 — 커스텀 클론(로컬 GPU 사전 생성). 라이브 합성 엔진 없음.
+  // R2 공유 캐시(tts/v1/ko/f4/{sha1})에 있으면 그것이 서빙되고, 없으면 Chirp(여) 폴백.
+  f4: { engine: "chirp", gender: "female", chirpName: "ko-KR-Chirp3-HD-Aoede" },
 };
 
 function ttsAudioResponse(
