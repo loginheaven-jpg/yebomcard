@@ -58,7 +58,7 @@ def counts(job):
 
 
 # ───────────────────────── 작업 생성 ─────────────────────────
-def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3):
+def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, seq=9999):
     """items: [{key, ref, text, out}] — out 은 절별 wav 절대경로(str)"""
     jid = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
     prepared = []
@@ -73,7 +73,7 @@ def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3):
         })
     job = {"id": jid, "voice": voice, "title": title, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
            "status": "queued", "temp": temp, "punct": punct, "batch": batch,
-           "retry_max": retry_max, "items": prepared}
+           "retry_max": retry_max, "seq": seq, "items": prepared}
     save(job)
     start_worker()
     return jid
@@ -129,15 +129,18 @@ def _process(job):
 
 def _loop():
     while not _stop.is_set():
-        nxt = None
-        for j in sorted(JOBS.glob("*.json")):
+        # 진도표 순서(seq)를 우선 지킨다 — 파일명(시각)만으로는 같은 초에 만든
+        # 작업들의 순서가 뒤섞인다. seq 동률이면 생성 시각 순.
+        cands = []
+        for j in JOBS.glob("*.json"):
             try:
                 job = json.loads(j.read_text(encoding="utf-8"))
             except Exception:
                 continue
             if job.get("status") in ("queued", "running"):
-                nxt = job
-                break
+                cands.append((job.get("seq", 9999), job["id"], job))
+        cands.sort(key=lambda x: (x[0], x[1]))
+        nxt = cands[0][2] if cands else None
         if not nxt:
             _cur["job"] = None
             _cur["note"] = ""

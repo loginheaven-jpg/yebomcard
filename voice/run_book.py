@@ -14,6 +14,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import app as ui
 import engine
 import jobs
+import plan
 
 
 def main():
@@ -25,6 +26,18 @@ def main():
     ap.add_argument("--retry", type=int, default=3)
     ap.add_argument("--resume", default=None, help="이어할 작업 ID")
     a = ap.parse_args()
+
+    title = f"{a.version} {a.book}"
+    seq = plan.BY_NAME.get(a.book, (9999,))[0]
+
+    # 같은 책의 미완료 작업이 이미 있으면 새로 만들지 않고 이어간다.
+    # (중복 작업을 만들면 워커가 둘을 오가며 같은 절을 두 번 생성한다)
+    dup = next((j for j in jobs.list_jobs()
+                if j["voice"] == a.voice and j["title"] == title
+                and j["status"] in ("queued", "running", "stopped", "error")), None)
+    if dup and not a.resume:
+        a.resume = dup["id"]
+        print(f"[중복 방지] 기존 작업 {dup['id']} 를 이어갑니다")
 
     if a.resume:
         jid = a.resume
@@ -39,9 +52,9 @@ def main():
         total = len(items)
         print(f"[대상] {a.version} {a.book} — {total}절 / {chars:,}자")
         print(f"       예상 오디오 {audio/3600:.1f}h · 예상 생성 {gen/3600:.1f}h")
-        jid = jobs.new_job(a.voice, f"{a.version} {a.book}", items,
-                           batch=a.batch, retry_max=a.retry)
-        print(f"[작업] {jid} 시작")
+        jid = jobs.new_job(a.voice, title, items,
+                           batch=a.batch, retry_max=a.retry, seq=seq)
+        print(f"[작업] {jid} 시작 (진도표 순번 {seq})")
 
     t0 = time.time()
     last, last_t = -1, t0
