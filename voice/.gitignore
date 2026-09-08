@@ -1,0 +1,16 @@
+# 대용량 산출물·원본 음원은 커밋하지 않는다 (코드와 문서만 추적)
+out/
+voices/
+jobs/
+compare/
+_ui/
+_punct_test/
+_ver_test/
+__pycache__/
+
+# 원본 녹음 / 중간 산출 오디오
+*.mp3
+*.wav
+
+# ASR 전사·본문 캐시 (스크립트로 재생성 가능)
+text/
