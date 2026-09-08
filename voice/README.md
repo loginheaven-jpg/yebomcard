@@ -103,3 +103,83 @@ tts/v1/ko/{voiceKey}/{sha1(정제본문)}.mp3
 2. 고유명사·숫자 — 구약 인명/지명, 수사 검증
 3. mp3 인코딩 + R2 업로드 파이프라인
 4. 보이스 여러 개 운용 (전량은 대표 1개, 나머지는 자주 듣는 범위만 — 보이스당 3.5일)
+
+## 여러 PC 로 분담 생성
+
+새번역 전권은 1대로 약 **5.4일**(129시간)이다. PC 를 늘리면 그만큼 줄어든다.
+
+### 반드시 지킬 것 — 보이스 지문
+
+**참조 클립이 1초라도 다르면 음색이 미묘하게 달라져 책마다 목소리가 바뀐다.**
+듣기 전에는 알아채기 어렵고, 알아챘을 땐 이미 수천 절을 만든 뒤다.
+그래서 각 PC 에서 지문이 **같은지 먼저 확인**한다.
+
+```bash
+python -c "import engine; print(engine.voice_fingerprint('영희'))"
+```
+
+`voice/voices/{보이스}/` 폴더(ref.wav + meta.json)를 **파일 그대로 복사**하면 지문이 같다.
+절대 2번째 PC 에서 참조 클립을 다시 잘라 등록하지 말 것.
+
+### 2번째 PC 준비
+
+```bash
+git clone <repo> && cd yebomcard/voice
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install gradio soundfile numpy requests faster-whisper
+# qwen_tts 는 PC1 과 동일한 방식으로 설치
+npm i @aws-sdk/client-s3          # 업로드용(이 패키지 하나면 된다)
+```
+
+추가로 옮길 것:
+- `.env.local` (Supabase 본문 조회 + R2 업로드에 필요)
+- `voice/voices/영희/` (참조음 — 지문 대조 필수)
+
+### 작업 분담
+
+```bash
+# PC1 — 구약 (진도표 순서)
+python run_plan.py --voice 영희 --start 욥기 --testament old
+
+# PC2 — 신약 (진도표 순서)
+python run_plan.py --voice 영희 --start 욥기 --testament new
+
+# 특정 책만 (분담 미세조정)
+python run_plan.py --voice 영희 --only 시편,예레미야,이사야
+```
+
+### 왜 잠금·조율이 필요 없는가
+
+R2 키가 `tts/v1/ko/{성우}/{sha1(정제본문)}.mp3` 로 **내용 주소**다.
+- 서로 다른 책 → 키가 절대 겹치지 않는다
+- 실수로 같은 절을 두 번 만들어도 → 같은 키에 같은 내용이 덮여 쓰일 뿐
+
+각 PC 가 **각자 R2 에 직접 업로드**하면 되고, 산출물을 한곳에 모을 필요가 없다
+(wav 를 옮기면 수 GB, mp3 로 R2 직행이면 훨씬 가볍다).
+
+### 분량과 소요 (실측 0.21초/자 기준)
+
+| 구분 | 권수 | 절 | 글자 | 예상 |
+|---|---|---|---|---|
+| 구약 | 39 | 23,133 | 1,679,495 | **98시간** |
+| 신약 | 27 | 7,942 | 532,144 | **31시간** |
+| 전체 | 66 | 31,075 | 2,211,639 | 129시간 |
+
+구약이 76% 라 단순 구약/신약 분담은 4.1일 : 1.3일로 기운다.
+**PC2 가 신약을 끝내면(약 1.3일) 구약 큰 책을 넘겨받는 방식**을 권한다:
+
+```bash
+# PC2 2단계 — 뒤쪽 큰 책을 가져간다
+python run_plan.py --voice 영희 --only 시편,예레미야,이사야,에스겔,민수기
+```
+
+이렇게 하면 양쪽 약 2.7일로 맞아 전체 기간이 절반이 된다.
+진도표 앞쪽(욥기·창세기·출애굽기…)은 PC1 이 순서대로 만들므로
+교인이 읽는 순서에는 구멍이 생기지 않는다.
+
+### 각 PC 에서 업로드
+
+```bash
+python qc_sweep.py --voice 영희 --book 마태복음        # 전수 검증
+node upload_r2.mjs --job <작업ID> --voice-key f4       # mp3 인코딩 + 업로드
+```

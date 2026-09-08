@@ -167,6 +167,16 @@ def register_voice(name, audio_path, ref_text, start=None, end=None, note=""):
     return meta
 
 
+def voice_fingerprint(name):
+    """참조음+참조텍스트의 지문. **여러 PC 로 분담 생성할 때 필수 확인.**
+    참조 클립이 1초라도 다르면 클론 음색이 미묘하게 달라져, 책마다 목소리가
+    바뀌는 결과가 된다. 각 PC 에서 이 값이 같아야 한다."""
+    h = hashlib.sha256()
+    h.update((VOICES / name / "ref.wav").read_bytes())
+    h.update(voice_meta(name).get("ref_text", "").encode("utf-8"))
+    return h.hexdigest()[:16]
+
+
 def delete_voice(name):
     import shutil
     shutil.rmtree(VOICES / name, ignore_errors=True)

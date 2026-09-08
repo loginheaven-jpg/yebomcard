@@ -42,16 +42,34 @@ def main():
     ap.add_argument("--books", type=int, default=0, help="처리할 권 수(0=끝까지)")
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--retry", type=int, default=3)
+    # ── 여러 PC 분담용 ──
+    ap.add_argument("--testament", choices=["old", "new"], default=None,
+                    help="구약/신약만 처리 (예: 다른 PC 에서 신약 병행)")
+    ap.add_argument("--only", default=None,
+                    help="쉼표로 구분한 책 이름만 처리 (예: 마태복음,마가복음)")
     a = ap.parse_args()
 
     if a.start not in plan.BY_NAME:
         print("진도표에 없는 책:", a.start); sys.exit(1)
     start_seq = plan.BY_NAME[a.start][0]
     todo = [p for p in plan.PLAN_ORDER if p[0] >= start_seq]
+    if a.testament:
+        tm = {c: t for _, c, t in engine.get_books(engine.VERSIONS[a.version])}
+        todo = [p for p in todo if tm.get(p[1]) == a.testament]
+    if a.only:
+        want = {s.strip() for s in a.only.split(",") if s.strip()}
+        todo = [p for p in todo if p[2] in want]
+        missing = want - {p[2] for p in todo}
+        if missing:
+            print("진도표에 없거나 시작책 이전이라 제외됨:", ", ".join(missing))
     if a.books:
         todo = todo[:a.books]
+    if not todo:
+        print("처리할 책이 없습니다"); sys.exit(1)
 
-    print(f"[진도표] {a.version} · 보이스 {a.voice} · {len(todo)}권 "
+    # 분담 생성 시 각 PC 에서 이 지문이 **반드시 같아야** 한다(같은 참조음/텍스트).
+    print(f"[보이스] {a.voice} · 지문 {engine.voice_fingerprint(a.voice)}", flush=True)
+    print(f"[진도표] {a.version} · {len(todo)}권 "
           f"({todo[0][2]} → {todo[-1][2]})", flush=True)
 
     t_all = time.time()
