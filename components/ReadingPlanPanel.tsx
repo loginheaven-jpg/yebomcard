@@ -4,9 +4,10 @@
  * 말씀의삶 — 성경읽기진도표 (하단 6번째 탭).
  *
  * 구성 (시안 A)
- *   1. 헤더    브랜드 + 세그먼트 [진도표 | 그룹]  (그룹은 4단계 전까지 비활성)
- *   2. 요약    지금 읽을 회차 · 완료 수 · 진행바 · [종이 체크] 토글
+ *   1. 헤더    브랜드 + 세그먼트 [진도표 | 그룹]
+ *   2. 요약    지금 읽을 회차 · 완료 수 · 진행바 · [종이 체크] 토글 (+ 그룹 순위 1줄)
  *   3. 리스트  91행. 상태별 표시 — 지금 / 완료 / 진행중 / 대기
+ *   그룹 세그먼트는 ReadingGroupsView(시안 D)가 3번 자리를 대신 채운다.
  *
  * 데이터는 이 패널이 직접 가져온다. 통독 진도(readChapters)는 SearchPanel 지역 상태라
  * page.tsx 를 거쳐 내려올 경로가 없다. 회차 완료는 저장하지 않고 매번 파생 계산한다.
@@ -19,7 +20,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
-import { fetchUnitChecks, setUnitCheck } from "@/lib/reading-plan";
+import { fetchUnitChecks, setUnitCheck, fetchGroupSummary } from "@/lib/reading-plan";
+import ReadingGroupsView from "@/components/ReadingGroupsView";
 import {
   YEBOM91,
   computeUnitProgress,
@@ -54,6 +56,13 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [checkMode, setCheckMode] = useState(false);
   const [busySeq, setBusySeq] = useState<number | null>(null);
+  const [tab, setTab] = useState<"plan" | "group">("plan");
+  const [groupLine, setGroupLine] = useState<{
+    name: string;
+    memberCount: number;
+    myRank: number;
+  } | null>(null);
+  const [groupNonce, setGroupNonce] = useState(0);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const nowRowRef = useRef<HTMLLIElement | null>(null);
@@ -76,6 +85,19 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
     };
   }, []);
 
+  // 요약 스트립의 그룹 1줄. 그룹이 없으면 아무것도 붙지 않는다.
+  // 그룹 탭에서 참여·탈퇴하면 groupNonce 가 올라 다시 계산한다.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const g = await (isLoggedIn ? fetchGroupSummary() : Promise.resolve(null));
+      if (alive) setGroupLine(g);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isLoggedIn, groupNonce]);
+
   const progress: PlanProgress = useMemo(
     () => computeUnitProgress(YEBOM91, readByBook, manualSeqs),
     [readByBook, manualSeqs],
@@ -83,14 +105,16 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
 
   // ── 마운트 시 '지금' 행을 화면 상단 1/3 에 ──
   // 행 높이가 가변(부제 유무)이라 인덱스 × 고정높이로 계산하면 어긋난다. offsetTop 을 쓴다.
+  // 그룹 탭에 있는 동안 리스트는 display:none 이라 offsetTop 이 0 이다 —
+  // 그때 계산하면 맨 위로 스크롤한 셈이 되므로 진도표를 보고 있을 때만 맞춘다.
   useEffect(() => {
-    if (!loaded || scrolledRef.current) return;
+    if (!loaded || scrolledRef.current || tab !== "plan") return;
     const list = listRef.current;
     const row = nowRowRef.current;
     if (!list || !row) return;
     scrolledRef.current = true;
     list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 3);
-  }, [loaded]);
+  }, [loaded, tab]);
 
   // ── 수동 체크 ──
   const toggleCheck = useCallback(
@@ -169,29 +193,27 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
           aria-label="진도표 / 그룹"
           className="flex bg-[var(--paper-2)] rounded-lg p-[3px] gap-[2px]"
         >
-          <button
-            type="button"
-            role="tab"
-            aria-selected
-            className="text-xs font-semibold px-3 py-[5px] rounded-md bg-[var(--paper)] text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
-          >
-            진도표
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={false}
-            disabled
-            title="그룹은 준비 중입니다"
-            className="text-xs font-semibold px-3 py-[5px] rounded-md text-[var(--ink-faint)] opacity-60 cursor-not-allowed"
-          >
-            그룹
-          </button>
+          {(["plan", "group"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={`text-xs font-semibold px-3 py-[5px] rounded-md ${
+                tab === t
+                  ? "bg-[var(--paper)] text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                  : "text-[var(--ink-faint)]"
+              }`}
+            >
+              {t === "plan" ? "진도표" : "그룹"}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── 2. 요약 스트립 ── */}
-      {isLoggedIn ? (
+      {/* ── 2. 요약 스트립 — 그룹 탭에서는 카드가 같은 정보를 담으므로 감춘다 ── */}
+      {tab === "group" ? null : isLoggedIn ? (
         <div className="mx-4 mb-2.5 px-3.5 py-3 bg-[var(--amber-tint)] rounded-xl flex items-center gap-3.5 shrink-0">
           <div className="leading-none shrink-0">
             <div className="text-[10px] font-semibold text-[var(--amber-deep)] opacity-80 mb-1">
@@ -204,6 +226,12 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
           </div>
           <div className="flex-1 text-xs text-[var(--ink-soft)] leading-normal min-w-0">
             나 <b className="text-[var(--ink)] font-semibold">{progress.doneCount} / {TOTAL}</b> 완료
+            {groupLine && (
+              <div className="text-[11px] text-[var(--ink-faint)] truncate">
+                {groupLine.name} {groupLine.memberCount}명 중{" "}
+                <b className="text-[var(--amber-deep)] font-semibold">{groupLine.myRank}번째</b>
+              </div>
+            )}
             <div
               role="progressbar"
               aria-valuenow={Math.round(pct)}
@@ -246,8 +274,21 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
         </div>
       )}
 
+      {/* ── 3. 그룹 (시안 D) ── */}
+      {tab === "group" && (
+        <ReadingGroupsView
+          isLoggedIn={isLoggedIn}
+          onLogin={onLogin}
+          onGroupsChanged={() => setGroupNonce((n) => n + 1)}
+        />
+      )}
+
       {/* ── 3. 91행 리스트 ── */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-3 pb-24 overscroll-contain">
+      <div
+        ref={listRef}
+        hidden={tab !== "plan"}
+        className="flex-1 overflow-y-auto px-3 pb-24 overscroll-contain"
+      >
         {!loaded && !sessionLoading ? (
           <p className="text-sm text-[var(--ink-faint)] py-6 text-center">불러오는 중…</p>
         ) : null}

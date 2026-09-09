@@ -7,8 +7,9 @@
  * "한 번"은 세션 메모리가 아니라 localStorage 로 기억한다 — 새로고침하면 다시 뜨기 때문이다.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { fetchGroupSummary } from "@/lib/reading-plan";
 
 const LS_KEY = "yebom_plan_unit_sheet_shown";
 
@@ -61,6 +62,23 @@ export default function UnitCompleteSheet({
     markUnitSheetShown(seq);
   }, [seq]);
 
+  // 그룹에 속해 있으면 "N명 중 R번째" 한 줄 — 함께 읽는다는 느낌이 이 시트의 목적이다.
+  // 없으면 아무것도 붙지 않는다. 순위 조회는 시트를 여는 것을 막지 않는다.
+  const [groupLine, setGroupLine] = useState<{
+    name: string;
+    memberCount: number;
+    myRank: number;
+  } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchGroupSummary().then((g) => {
+      if (alive) setGroupLine(g);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [seq]);
+
   return (
     <div className="fixed inset-0 z-[300] flex items-end justify-center">
       <button
@@ -77,7 +95,15 @@ export default function UnitCompleteSheet({
           {seq}회차를 마쳤습니다
         </p>
         <p className="text-lg font-bold text-[var(--ink)] mb-0.5">{label}</p>
-        <p className="text-xs text-[var(--ink-faint)] mb-4">{totalChapters}장</p>
+        <p className="text-xs text-[var(--ink-faint)] mb-4">
+          {totalChapters}장
+          {groupLine && (
+            <span className="ml-1.5">
+              · {groupLine.name} {groupLine.memberCount}명 중{" "}
+              <b className="text-[var(--amber-deep)] font-semibold">{groupLine.myRank}번째</b>
+            </span>
+          )}
+        </p>
 
         {next ? (
           <div className="rounded-xl bg-[var(--amber-tint)] px-3.5 py-3 mb-4">
