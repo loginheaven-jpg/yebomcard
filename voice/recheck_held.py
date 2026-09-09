@@ -54,6 +54,7 @@ def main():
             ok, ratio, reason, hyp = engine.qc(p, it["text"])
         except Exception as e:
             requeue.append((it, f"검수 오류: {e}"[:80], 0.0)); continue
+        it["asr"] = hyp          # 중앙 검수 화면에서 원문과 나란히 보려면 남겨야 한다
         if ok:
             passed.append((it, ratio, hyp))
         else:
@@ -82,6 +83,12 @@ def main():
     if requeue:
         job["status"] = "queued"
     jobs.save(job)
+    # 남은 보류를 서버로 보고 — 다른 PC 것과 함께 한 화면에서 판단한다
+    try:
+        jobs._report_held(job)
+        jobs.save(job)
+    except Exception as e:
+        print(f"  (보류 보고 실패: {e})")
     print(f"\n저장 완료 — 합격 +{len(passed)} · 대기 {len(requeue)}")
     print("이어서: python run_plan.py --voice 영희 --start 욥기")
 

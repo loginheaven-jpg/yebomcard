@@ -131,3 +131,51 @@ def upload_verses(voice_key, items, timeout=180):
     if not r.ok:
         _raise(r)
     return r.json()
+
+
+def report_held(voice, voice_key, items, timeout=300):
+    """보류 절을 서버로 보고한다 — 여러 PC 의 문제 절을 한 곳에서 판단하기 위해.
+
+    items: [{'ref','book','text','asr','ratio','reason','audio_sec','tries','mp3'(bytes|None)}]
+    이 PC 의 목록을 통째로 갈아끼우므로, 해결된 절은 다음 보고에서 자동으로 빠진다.
+    """
+    if not enabled():
+        return None
+    payload = {
+        "voice": voice,
+        "voiceKey": voice_key,
+        "items": [
+            {
+                "ref": it["ref"],
+                "book": it.get("book", ""),
+                "text": it["text"],
+                "asr": it.get("asr", ""),
+                "ratio": it.get("ratio") or 0,
+                "reason": it.get("reason", ""),
+                "audioSec": it.get("audio_sec") or 0,
+                "tries": it.get("tries") or 0,
+                **({"mp3Base64": base64.b64encode(it["mp3"]).decode("ascii")}
+                   if it.get("mp3") else {}),
+            }
+            for it in items
+        ],
+    }
+    r = requests.post(
+        f"{config()['base']}/api/voice-studio/held",
+        headers={**_headers(), "Content-Type": "application/json"},
+        data=json.dumps(payload), timeout=timeout,
+    )
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def regen_requests(timeout=60):
+    """관리자가 '재생성 요청'을 누른 절 목록. [{'id','ref','text'}]"""
+    if not enabled():
+        return []
+    r = requests.get(f"{config()['base']}/api/voice-studio/held/tasks",
+                     headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json().get("regenerate", [])

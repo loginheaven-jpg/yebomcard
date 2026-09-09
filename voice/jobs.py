@@ -134,6 +134,74 @@ def _upload_ready(job):
                 it["upload_error"] = r.get("error", "")[:120]
 
 
+# ───────────────────────── 보류 보고 / 재생성 요청 ─────────────────────────
+# 검수는 자동이지만 **판단은 자동화되지 않는다**. 오탐("욥이"→"요비" 71%)과
+# 진짜 오류(욥기 39:8 어순 뒤바뀜 67%)를 기계가 못 가른다 — 소리(자모)로 비교하면
+# 오탐은 걷히지만 어순 오류도 88%로 통과해버린다.
+# PC 가 여러 대면 그 판단거리가 각 PC 안에 흩어져 아무도 못 보므로 서버로 모은다.
+
+
+def _report_held(job):
+    key = job.get("upload_key")
+    if not key:
+        return
+    held = [i for i in job["items"] if i["status"] == "held"]
+    try:
+        import server
+        if not server.enabled():
+            return
+        items = []
+        for it in held:
+            mp3 = None
+            try:
+                if Path(it["out"]).exists():
+                    mp3 = engine.encode_mp3(it["out"])   # 관리자가 들어보고 판단할 수 있게
+            except Exception:
+                pass
+            items.append({
+                "ref": it["ref"], "book": it["ref"].split(" ")[0],
+                "text": it["text"], "asr": it.get("asr", ""),
+                "ratio": it.get("ratio"), "reason": it.get("reason", ""),
+                "audio_sec": it.get("audio_sec"), "tries": it.get("tries"),
+                "mp3": mp3,
+            })
+        server.report_held(job["voice"], key, items)
+        job.pop("held_report_error", None)
+    except Exception as e:
+        job["held_report_error"] = str(e)[:200]
+
+
+def _apply_regen_requests(job):
+    """관리자가 '재생성 요청'을 누른 절을 다시 큐에 올린다.
+    tries=1 로 두어 첫 재생성부터 강제 분할이 걸리게 한다.
+
+    한 요청은 **한 번만** 처리한다. 재생성이 또 실패해 다시 보류가 되면
+    요청은 서버에 그대로 남아 있는데, 그걸 매번 다시 집으면 같은 절을
+    무한히 반복 생성하게 된다(관리자가 판단을 바꿀 때까지 끝나지 않는다)."""
+    if not job.get("upload_key"):
+        return 0
+    try:
+        import server
+        if not server.enabled():
+            return 0
+        wanted = {r["text"] for r in server.regen_requests()}
+    except Exception:
+        return 0
+    already = set(job.get("regen_applied") or [])
+    n = 0
+    for it in job["items"]:
+        if it["status"] == "held" and it["text"] in wanted and it["key"] not in already:
+            it["status"] = "pending"
+            it["tries"] = 1
+            it["reason"] = "관리자 재생성 요청"
+            it.pop("uploaded", None)
+            already.add(it["key"])
+            n += 1
+    if n:
+        job["regen_applied"] = sorted(already)
+    return n
+
+
 def upload_counts(job):
     """(올림, 올릴 것 남음) — UI/CLI 표시용"""
     key = job.get("upload_key")
@@ -177,11 +245,13 @@ def _process(job):
             sf.write(str(p), w, sr)
             it["audio_sec"] = round(len(w) / sr, 2)
             try:
-                ok, ratio, reason, _hyp = engine.qc(p, it["text"])
+                ok, ratio, reason, hyp = engine.qc(p, it["text"])
             except Exception as e:
-                ok, ratio, reason = False, 0.0, f"검수 오류: {e}"[:120]
+                ok, ratio, reason, hyp = False, 0.0, f"검수 오류: {e}"[:120], ""
             it["ratio"] = round(ratio, 3)
             it["reason"] = reason
+            it["asr"] = hyp          # 중앙 검수에서 원문과 나란히 봐야 판단이 된다
+
             if ok:
                 it["status"] = "ok"
             elif it["tries"] >= job["retry_max"]:
@@ -192,6 +262,11 @@ def _process(job):
 
     if not _stop.is_set():
         _upload_ready(job)          # 마지막 배치까지 확실히 올리고 끝낸다
+        # 관리자가 이미 재생성을 요청해 둔 절이 있으면 지금 처리하고 끝낸다
+        if _apply_regen_requests(job):
+            save(job)
+            return _process(job)
+        _report_held(job)
     job["status"] = "stopped" if _stop.is_set() else "done"
     save(job)
 
