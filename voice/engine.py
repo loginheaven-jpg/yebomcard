@@ -141,10 +141,14 @@ def get_book_verses(version, book_code):
     return out
 
 
+def text_hash(text):
+    """공유 캐시 키에 쓰는 본문 해시. 서버 규칙과 동일해야 한다."""
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
 def cache_key(text, voice_key, lang="ko", ver="v1"):
     """예봄성경 R2 공유 캐시 키 — 서버 규칙과 동일해야 한다."""
-    h = hashlib.sha1(text.encode("utf-8")).hexdigest()
-    return f"tts/{ver}/{lang}/{voice_key}/{h}.mp3"
+    return f"tts/{ver}/{lang}/{voice_key}/{text_hash(text)}.mp3"
 
 
 # ───────────────────────── 보이스 ─────────────────────────

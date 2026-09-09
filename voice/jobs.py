@@ -212,11 +212,47 @@ def upload_counts(job):
     return done, left
 
 
+def _skip_already_made(job):
+    """다른 PC 가 이미 만든 절은 건너뛴다.
+
+    책 하나를 시작할 때 서버에 "이미 있는 절 목록" 을 한 번만 물어본다.
+    절마다 물으면 왕복이 수만 번이고, 작업을 걸 때 미리 물어보면 며칠 뒤 만들 책까지
+    그 시점 기준으로 판정해 그 사이 다른 PC 가 만든 것을 놓친다.
+
+    서버가 안 되면 아무것도 건너뛰지 않는다 — **절대 멈추지 않는다**."""
+    key = job.get("upload_key")
+    if not key:
+        return 0
+    try:
+        import server
+        have = server.cache_index(key)
+    except Exception:
+        have = None
+    if not have:
+        return 0
+    n = 0
+    for it in job["items"]:
+        if it["status"] != "pending":
+            continue
+        if engine.text_hash(it["text"]) in have:
+            it["status"] = "ok"
+            it["uploaded"] = True          # 서버에 이미 있으니 올릴 것도 없다
+            it["reason"] = "이미 서버에 있음"
+            n += 1
+    return n
+
+
 # ───────────────────────── 워커 ─────────────────────────
 def _process(job):
     job["status"] = "running"
     save(job)
     voice, batch = job["voice"], max(1, int(job["batch"]))
+
+    skipped = _skip_already_made(job)
+    if skipped:
+        job["skipped_existing"] = skipped
+        _cur["note"] = f"이미 있는 절 {skipped}개 건너뜀"
+        save(job)
 
     while not _stop.is_set():
         pend = [i for i in job["items"] if i["status"] == "pending"]
