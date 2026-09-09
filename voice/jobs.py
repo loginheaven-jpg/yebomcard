@@ -203,48 +203,78 @@ def _apply_regen_requests(job):
 
 
 def book_progress(job):
-    """지금 몇 번째 책의 어디를 하고 있는지.
+    """책별 집계. 작업 하나에 수십 권이 들어가면 총계만으로는 아무것도 알 수 없다.
 
-    작업 하나에 수십 권·수만 절이 들어가면 "20/20530" 만으로는 어디까지 왔는지
-    알 수 없다. 절 참조("출애굽기 3:14")에서 책을 뽑아 권 단위로 집계한다.
-
-    반환: {books:[{name,done,total}], current, done_books, total_books, last_ref}
+    절 참조("출애굽기 3:14")에서 책 이름을 뽑아 원래 순서대로 묶는다.
+    반환: {books:[{name,total,ok,held,uploaded,pending,last}], current, done_books, total_books}
     """
     order, per = [], {}
     for it in job["items"]:
         b = (it.get("ref") or " ").split(" ")[0]
         if b not in per:
-            per[b] = {"name": b, "done": 0, "total": 0}
+            per[b] = {"name": b, "total": 0, "ok": 0, "held": 0,
+                      "uploaded": 0, "pending": 0, "last": None}
             order.append(b)
-        per[b]["total"] += 1
-        if it["status"] in ("ok", "held"):
-            per[b]["done"] += 1
+        d = per[b]
+        d["total"] += 1
+        st = it["status"]
+        if st == "ok":
+            d["ok"] += 1
+            d["last"] = it.get("ref")
+        elif st == "held":
+            d["held"] += 1
+            d["last"] = it.get("ref")
+        else:
+            d["pending"] += 1
+        if it.get("uploaded"):
+            d["uploaded"] += 1
 
-    current, last_ref = None, None
+    current = None
     for b in order:
-        if per[b]["done"] < per[b]["total"] and current is None:
+        if per[b]["pending"] and current is None:
             current = per[b]
-    for it in job["items"]:
-        if it["status"] in ("ok", "held"):
-            last_ref = it.get("ref")
     return {
         "books": [per[b] for b in order],
         "current": current,
-        "done_books": sum(1 for b in order if per[b]["done"] >= per[b]["total"]),
+        "done_books": sum(1 for b in order if not per[b]["pending"]),
         "total_books": len(order),
-        "last_ref": last_ref,
     }
+
+
+def book_rows(job):
+    """책별 진행 표 — [책, 상태, 진행, 보류, 업로드, 마지막 절]"""
+    p = book_progress(job)
+    cur = p["current"]
+    rows = []
+    for b in p["books"]:
+        done = b["ok"] + b["held"]
+        pct = done * 100 // b["total"] if b["total"] else 0
+        if not b["pending"]:
+            state = "완료"
+        elif cur and b["name"] == cur["name"]:
+            state = "진행중"
+        elif done:
+            state = "일부"
+        else:
+            state = "대기"
+        rows.append([b["name"], state, f"{done}/{b['total']} ({pct}%)",
+                     b["held"], b["uploaded"], b["last"] or ""])
+    return rows
 
 
 def where(job):
     """진행 위치 한 줄 — '출애굽기 320/1213 · 3/38권'"""
     p = book_progress(job)
-    if p["total_books"] <= 1:
-        c = p["current"]
-        return f"{c['name']} {c['done']}/{c['total']}" if c else (p["last_ref"] or "")
     c = p["current"]
-    head = f"{c['name']} {c['done']}/{c['total']}" if c else "완료"
-    return f"{head} · {p['done_books']}/{p['total_books']}권"
+    if p["total_books"] <= 1:
+        if not c:
+            b = p["books"][0] if p["books"] else None
+            return f"{b['name']} 완료" if b else ""
+        return f"{c['name']} {c['ok'] + c['held']}/{c['total']}"
+    if not c:
+        return f"완료 · {p['total_books']}권"
+    return (f"{c['name']} {c['ok'] + c['held']}/{c['total']}"
+            f" · {p['done_books']}/{p['total_books']}권")
 
 
 def upload_counts(job):

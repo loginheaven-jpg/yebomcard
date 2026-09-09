@@ -352,6 +352,18 @@ def _boot_diag():
         return gr.update(value=ui_diagnose(), visible=True)
 
 
+def ui_book_rows():
+    """지금 돌고 있는 작업의 책별 진행. 없으면 가장 최근 작업."""
+    cur = jobs.current()
+    job = jobs.load(cur["job"]) if cur.get("job") else None
+    if job is None:
+        js = jobs.list_jobs()
+        job = js[0] if js else None
+    if job is None:
+        return []
+    return jobs.book_rows(job)
+
+
 def ui_progress():
     cur = jobs.current()
     alive = "가동중" if jobs.worker_alive() else "정지"
@@ -535,6 +547,11 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             b_btn_stop = gr.Button("워커 정지", variant="stop")
         b_jobs = gr.Dataframe(headers=["작업ID", "보이스", "진행 위치", "상태", "합격/전체", "보류", "대기", "업로드"],
                               label="작업", interactive=False, wrap=True)
+        # 여러 권을 한 작업으로 걸면 총계만으로는 어디까지 왔는지 알 수 없다 —
+        # 책마다 한 줄씩 보여준다.
+        b_bookprog = gr.Dataframe(
+            headers=["책", "상태", "진행", "보류", "업로드", "마지막 절"],
+            label="책별 진행", interactive=False, wrap=True)
         with gr.Row():
             b_jid = gr.Dropdown([], label="이어할 작업 ID", scale=2)
             b_btn_resume = gr.Button("이어하기")
@@ -586,6 +603,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     b_btn_stop.click(ui_stop, None, b_msg)
     b_btn_resume.click(ui_resume, [b_jid], b_msg)
     b_timer.tick(ui_progress, None, [b_status, b_jobs])
+    b_timer.tick(ui_book_rows, None, b_bookprog)
 
     c_btn_ref.click(ui_job_choices, None, c_jid)
     c_btn_ref.click(ui_job_choices, None, b_jid)
@@ -616,6 +634,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     # 책 목록을 못 가져오면 원인을 바로 보여준다 — 예전엔 빈 목록만 남아
     # 왜 안 되는지 알 수 없었다
     demo.load(_boot_diag, None, b_diag)
+    demo.load(ui_book_rows, None, b_bookprog)
 
 
 if __name__ == "__main__":
