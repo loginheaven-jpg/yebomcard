@@ -138,6 +138,34 @@ DDL: [scripts/migration-login-features.sql](../scripts/migration-login-features.
 ### `user_state` — 기기간 동기화 (E)
 KV. PK `(user_id, key)`, `value jsonb`, `updated_at`. key=`bookmarks`(union 머지) / `recent`(마지막 위치, last-write-wins). [lib/userSync.ts](../lib/userSync.ts). 카드갤러리(C)는 기존 `scraps` 재사용(신규 테이블 없음).
 
+## 5c. 말씀의삶 — 성경읽기진도표 테이블 (2026-09-09 신설)
+
+DDL: [scripts/migration-reading-plan.sql](../scripts/migration-reading-plan.sql),
+[scripts/migration-reading-groups.sql](../scripts/migration-reading-groups.sql). 설계는 [READING_PLAN.md](READING_PLAN.md).
+
+**세 테이블 모두 진도를 저장하지 않는다.** 회차 완료는 기존 `reading_progress`(장 단위)에서
+`computeUnitProgress`([lib/plans/yebom91.ts](../lib/plans/yebom91.ts))로 **매번 파생 계산**한다.
+저장하면 두 값이 갈라지고, 갈라지면 어느 쪽이 맞는지 알 수 없다.
+
+### `reading_unit_checks` — 회차 수동 체크
+1행=1회차. `(user_id, plan_id, seq, checked_at)`. **UNIQUE** `(user_id, plan_id, seq)`.
+자동 판정이 알 수 없는 것 하나 — **"종이 성경으로 읽었다"** 만 담는다.
+조회 시 `plan_id` 필터를 반드시 건다(default 는 INSERT 때만 걸리므로, 플랜이 늘면 섞인다).
+
+### `reading_groups` — 함께 읽기 그룹
+`(id, name, invite_code, plan_id, created_by, created_at)`. **UNIQUE** `invite_code`.
+초대코드는 서버 생성 — 혼동되는 `O·0·I·1` 을 뺀 32자 알파벳 6자리([lib/readingGroups.ts](../lib/readingGroups.ts) `CODE_ALPHABET`), 충돌 시 3회 재시도.
+클라이언트가 코드를 정하게 두면 남의 모임 이름을 선점할 수 있다.
+
+### `reading_group_members` — 소속
+PK `(group_id, user_id)` — 복합 PK 가 곧 "한 그룹에 한 번만" 제약이다.
+`user_name` 은 참여 시점의 세션 표시 이름 사본(`verse_notes` 패턴 — 교인 계정 테이블이 이 프로젝트에 없어 조인할 곳이 없다).
+`reading_group_members_user_idx` 는 "내가 속한 그룹" 조회용 — PK 선두가 `group_id` 라 `user_id` 단독 조회를 커버하지 못한다.
+
+**순위 조회는 반드시 페이지네이션한다**(`fetchAllRows`). 멤버 전원의 `reading_progress` 를 IN 으로 읽는데,
+합계가 1,000행을 넘는 순간 PostgREST 가 경고 없이 자르고 **잘린 부분집합으로 순위가 계산된다.**
+1인 평균 28장이므로 36명이면 닿는다.
+
 ## 6. iron-session 쿠키
 
 `SessionData` (lib/auth/session.ts):
@@ -157,12 +185,14 @@ TTL: 7일. 만료 시 다음 페이지 로드의 `/api/auth/session` 이 `{ sess
 - `scraps`: 자신 데이터만 SELECT/INSERT/UPDATE/DELETE (server-side service role 우회 권장)
 - `bible_verses`, `bible_audio`: public READ (anon key OK)
 - `user_photos`: 자신 데이터만 접근
-- `reading_progress`, `verse_notes`, `user_state`: **RLS enable + 정책 없음** → anon/authenticated 직접 접근 전면 차단. 앱이 iron-session(Supabase Auth 미사용)이라 `auth.uid()` 가 항상 null. API 의 `supabaseAdmin`(service_role)만 우회하며 항상 `user_id` 스코프
+- `reading_progress`, `verse_notes`, `user_state`, `reading_unit_checks`, `reading_groups`, `reading_group_members`: **RLS enable + 정책 없음** → anon/authenticated 직접 접근 전면 차단. 앱이 iron-session(Supabase Auth 미사용)이라 `auth.uid()` 가 항상 null. API 의 `supabaseAdmin`(service_role)만 우회하며 항상 `user_id` 스코프
 
 ## 8. 마이그레이션 이력
 
 | 일자 | 변경 |
 |---|---|
+| 2026-09-09 | 말씀의삶 그룹 2종 신설 (`reading_groups`/`reading_group_members`) — `scripts/migration-reading-groups.sql` |
+| 2026-09-09 | 말씀의삶 회차 수동 체크 (`reading_unit_checks`) — `scripts/migration-reading-plan.sql` |
 | 2026-06-11 | 로그인 전용 기능 테이블 3종 신설 (`reading_progress`/`verse_notes`/`user_state`) — `scripts/migration-login-features.sql` |
 | 2026-06-10 | `scraps_unique_per_user` UNIQUE 추가 + 기존 중복 row 정리 (20+ 그룹) |
 | 2026-06-10 | WEB 역본 적재 (`bible_verses` + `bible_audio` 1189 row) |
