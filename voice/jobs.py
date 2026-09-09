@@ -18,6 +18,7 @@ from pathlib import Path
 import soundfile as sf
 
 import engine
+import prosody
 
 JOBS = engine.JOBS
 _stop = threading.Event()
@@ -346,7 +347,9 @@ def _flag_note_residue(job):
     for it in job["items"]:
         if it["status"] != "pending":
             continue
-        stray = engine.note_residue(it["text"])
+        # 끝의 고아 괄호 하나뿐이라 지워도 문장이 온전한 절은 막지 않는다.
+        # (prosody.clean_for_tts 가 생성 입력에서 그 괄호를 떼어낸다)
+        stray = engine.note_residue(prosody.strip_orphan_paren(it["text"]))
         if stray:
             it["status"] = "held"
             it["reason"] = f"본문에 주석 잔재 의심(짝 없는 괄호 {stray}개) — 본문 확인 필요"

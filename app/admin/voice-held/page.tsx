@@ -187,6 +187,21 @@ export default function VoiceHeldPage() {
                 </p>
                 <div className="text-[11px] text-gray-400 mb-2">사유: {it.reason}</div>
 
+                {!it.hasAudio && (
+                  <div className="mb-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
+                    <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
+                      <b>음원이 없습니다 — 본문을 고쳐야 합니다.</b>
+                      <br />
+                      본문에 짝이 맞지 않는 괄호가 남아 있어 <b>생성하지 않았습니다</b>. 그대로 만들면
+                      주석 조각을 소리 내어 읽습니다. 들어볼 것이 없으므로 판단이 아니라{" "}
+                      <b>본문 수정</b>이 필요합니다.
+                      <br />
+                      본문을 고치면 키가 바뀌어 다음 생성 때 자동으로 만들어집니다 —
+                      여기서 누를 것은 없습니다.
+                    </p>
+                  </div>
+                )}
+
                 {it.hasAudio && (
                   <audio
                     controls
@@ -217,15 +232,16 @@ export default function VoiceHeldPage() {
                     <button
                       disabled={busy === it.id || !it.hasAudio}
                       onClick={() => act(it, "use")}
-                      title={it.hasAudio ? "" : "보관된 음원이 없어 사용할 수 없습니다"}
+                      title={it.hasAudio ? "" : "음원이 없습니다 — 본문을 고쳐야 합니다"}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
                     >
                       이대로 사용
                     </button>
                     <button
-                      disabled={busy === it.id}
+                      disabled={busy === it.id || !it.hasAudio}
                       onClick={() => act(it, "regen")}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--amber)] text-white hover:brightness-95 disabled:opacity-50"
+                      title={it.hasAudio ? "" : "본문을 고치면 자동으로 다시 만들어집니다"}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--amber)] text-white hover:brightness-95 disabled:opacity-40"
                     >
                       재생성 요청
                     </button>
