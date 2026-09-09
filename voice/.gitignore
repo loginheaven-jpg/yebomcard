@@ -22,3 +22,6 @@ text/
 # 2번째 PC 업로드용 로컬 패키지
 node_modules/
 package-lock.json
+
+# 서버 연동 정보(기기 토큰) — 커밋 금지
+studio.json

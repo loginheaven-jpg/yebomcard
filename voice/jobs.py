@@ -141,6 +141,25 @@ def _upload_ready(job):
 # PC 가 여러 대면 그 판단거리가 각 PC 안에 흩어져 아무도 못 보므로 서버로 모은다.
 
 
+# 보류를 언제 보고하는가 — 작업이 끝날 때만 보고하면 늦다.
+# 전권 작업(20,530절)은 며칠이 걸리는데, 그동안 쌓인 보류 절을 아무도 못 본다.
+# 새 보류가 생기고 마지막 보고로부터 이만큼 지났으면 중간에도 보고한다.
+HELD_REPORT_INTERVAL = 600     # 초
+_last_held_report = {}         # job id → (시각, 보고한 보류 수)
+
+
+def _report_held_if_due(job):
+    """진행 중에도 주기적으로 보고. 보고할 것이 늘지 않았으면 건너뛴다."""
+    if not job.get("upload_key"):
+        return
+    held = sum(1 for i in job["items"] if i["status"] == "held")
+    at, n = _last_held_report.get(job["id"], (0.0, -1))
+    if held == n or time.time() - at < HELD_REPORT_INTERVAL:
+        return
+    _report_held(job)
+    _last_held_report[job["id"]] = (time.time(), held)
+
+
 def _report_held(job):
     key = job.get("upload_key")
     if not key:
@@ -393,6 +412,7 @@ def _process(job):
                 it["status"] = "held"          # 상한 초과 → 보류(사람이 판단)
             # else: pending 유지 → 다음 루프에서 재시도
         _upload_ready(job)
+        _report_held_if_due(job)
         save(job)
 
     if not _stop.is_set():
