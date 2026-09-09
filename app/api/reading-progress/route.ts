@@ -3,8 +3,15 @@ import { cookies } from "next/headers";
 import { unsealData } from "iron-session";
 import { sessionOptions, SessionData } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { fetchAllRows } from "@/lib/supabasePaged";
 
 export const dynamic = "force-dynamic";
+
+interface ReadRow {
+  book_code: string;
+  chapter: number;
+  read_at: string;
+}
 
 async function getSession(): Promise<SessionData | null> {
   try {
@@ -27,13 +34,23 @@ export async function GET() {
     return NextResponse.json({ progress: [] });
   }
 
-  const { data } = await supabaseAdmin
-    .from("reading_progress")
-    .select("book_code, chapter, read_at")
-    .eq("user_id", session.user_id)
-    .order("read_at", { ascending: false });
-
-  return NextResponse.json({ progress: data || [] });
+  // PostgREST 1000행 상한 때문에 반드시 페이지네이션한다.
+  // 성경은 1,189장이라 통독을 마쳐가는 사람은 한 번에 다 받지 못하고,
+  // 그러면 읽은 장이 조용히 사라져 진도가 되돌아간다(오류도 경고도 없다).
+  try {
+    const progress = await fetchAllRows<ReadRow>((from, to) =>
+      supabaseAdmin
+        .from("reading_progress")
+        .select("book_code, chapter, read_at")
+        .eq("user_id", session.user_id)
+        .order("read_at", { ascending: false })
+        .range(from, to),
+    );
+    return NextResponse.json({ progress });
+  } catch (e) {
+    console.error("[reading-progress] 조회 실패", e);
+    return NextResponse.json({ progress: [], error: "진도를 불러오지 못했습니다" }, { status: 500 });
+  }
 }
 
 // POST: 장 읽음 기록 — SELECT-then-UPDATE/INSERT (같은 장 재방문 시 read_at 만 갱신)

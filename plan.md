@@ -341,3 +341,50 @@ R2 에 음원이 있어도 이게 배포되기 전에는 성우 목록에 '영�
   동시 실행하면 같은 절을 두 번 만들고 서로의 진행 상태를 덮어쓴다.
 - `engine.py`/`jobs.py` 수정 후에는 **워커 재시작 필수** — 실행 중 프로세스는 옛 코드를 물고 있다.
 
+---
+
+## PostgREST 1000행 상한 — 전량 조회 지점 (2026-09-09)
+
+이 프로젝트의 PostgREST 는 **max-rows=1000 하드 캡**이다. limit 을 3000 으로 줘도,
+Range 헤더를 넓혀도, service_role 키로 요청해도 1000행만 온다. **오류도 경고도 없다.**
+
+`reading_progress` 는 `lib/supabasePaged.ts` 로 해결했다. 아래는 같은 함정에 있으나
+현재 행 수가 적어 아직 안 걸린 곳이다. 데이터가 늘면 조용히 잘린다.
+
+| 위치 | 테이블 | 현재 행 수 |
+|---|---|---|
+| `app/api/verse-notes/route.ts` 41·52·75 | verse_notes / verse_note_amens | 26 / 2 |
+| `app/api/admin/verse-notes/route.ts` 31·49 | verse_note_reports / verse_notes | 0 / 26 |
+| `app/api/verse-notes/report/route.ts` 62 | verse_note_reports | 0 |
+| `app/api/user-state/route.ts` 31 | user_state | 44 |
+
+특히 `admin/verse-notes` 는 **전 사용자 메모를 모으는** 조회라 가장 먼저 닿는다.
+고칠 때는 `fetchAllRows` 를 그대로 쓰면 된다.
+
+## anon 키 노출 실태 (2026-09-09) — 별도 세션에서 처리
+
+RLS 경고 36건과 별개로, **가장 위험한 건이 경고 목록 밖에 있다.**
+
+```
+public.users   정책 "Allow all" · roles={public} · cmd=ALL · using=true
+  컬럼: email, password_hash, kakao_id, push_token …
+  → anon 키로 읽기·쓰기·삭제 전부 가능
+  → 정책이 "있으므로" rls_disabled 경고에 잡히지 않음
+public.members  RLS 미적용 (314행)
+  컬럼: resident_id(주민등록번호), phone, address, birth_date, notes
+```
+
+anon 키는 `NEXT_PUBLIC_SUPABASE_ANON_KEY` 로 브라우저 번들에 그대로 실린다.
+
+**조사 범위를 줄이는 사실**: 예봄성경의 anon 클라이언트가 실제로 접근하는 테이블은
+`bible_verses` `hymns` `bible_audio` `scraps` `user_photos` `verse_notes`
+`verse_note_amens` `verse_note_reports` `reading_progress` `user_state` **10개뿐**이다.
+`members`·`attendance`·`prayer_*` 에 RLS 를 켜도 **예봄성경은 깨지지 않는다.**
+깨질 수 있는 쪽은 saint / prayer 앱이므로 그쪽 영향 조사가 선행되어야 한다.
+
+## 말씀의삶 — 보류 항목
+
+- 그룹 이름 수정 · 멤버 강퇴 · 초대코드 재발급 (Phase 2)
+- 다중 플랜(DB화) · 그룹 익명 모드 · 절 단위 판정 · 회차별 목표일
+- 플랜 순 TTS 연속 재생 (책 경계를 넘는 자동 다음 장)
+
