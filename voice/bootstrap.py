@@ -230,8 +230,14 @@ def register_protocol():
         launcher.write_text(
             "@echo off\r\n"
             "chcp 65001 > nul\r\n"
+            "title 예봄성경 음원 생성\r\n"
+            # studio.json 이 없어져도 실행되도록 접속 정보를 런처에도 박아 둔다
+            f'set "YEBOM_BASE={BASE}"\r\n'
+            f'set "YEBOM_TOKEN={TOKEN}"\r\n'
+            f'set "YEBOM_HOME={HOME}"\r\n'
             f'cd /d "{HOME}"\r\n'
-            f'"{sys.executable}" "{HOME / "bootstrap.py"}" --run\r\n',
+            f'"{sys.executable}" "{HOME / "bootstrap.py"}" --run\r\n'
+            "if errorlevel 1 pause\r\n",
             encoding="utf-8", newline="",
         )
         root = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\yebomtts")
@@ -264,6 +270,17 @@ def main():
 
     # --run: 이미 설치된 PC 에서 바로 실행 (바로가기·yebomtts:// 가 쓰는 경로)
     if "--run" in sys.argv:
+        # 실행할 때마다 소스를 서버와 맞춘다. 이게 없으면 고친 내용이 새 PC 에
+        # 영원히 전달되지 않는다(설치 파일을 다시 받아야만 갱신됐다).
+        # 서버가 잠깐 안 되더라도 실행은 되어야 하므로 실패는 넘어간다.
+        try:
+            sync_code()
+            sync_voices()
+        except SystemExit:
+            print("  (서버에 연결하지 못해 갱신을 건너뜁니다 — 기존 코드로 실행합니다)",
+                  flush=True)
+        except Exception as e:
+            print(f"  (갱신 건너뜀: {e})", flush=True)
         run_studio()
         return
 

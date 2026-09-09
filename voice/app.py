@@ -126,20 +126,27 @@ def ui_delete_voice(name):
 
 
 def ui_books(ver_label):
+    """역본의 책 목록을 검수 탭·생성 탭·범위 드롭다운에 모두 채운다.
+
+    실패하면 사유를 그대로 돌려준다 — 예전엔 검수 탭에만 표시돼서, 생성 탭으로
+    바로 간 사람은 목록이 왜 비었는지 알 수 없었다."""
     ver = engine.VERSIONS[ver_label]
     try:
         books = engine.get_books(ver)
     except Exception as e:
-        return gr.update(choices=[]), gr.update(choices=[]), f"책 목록 실패: {e}"
+        msg = f"책 목록을 불러오지 못했습니다: {e}"
+        return (gr.update(choices=[]), gr.update(choices=[]),
+                gr.update(choices=[]), gr.update(choices=[]), msg)
     names = [n for n, _, _ in books]
     return (gr.update(choices=names, value=(names[0] if names else None)),
-            gr.update(choices=names, value=[]), "")
+            gr.update(choices=names, value=[]),
+            gr.update(choices=names, value=(names[0] if names else None)),
+            gr.update(choices=names, value=(names[-1] if names else None)),
+            "")
 
 
 # ═══════════════════ 2. 생성 ═══════════════════
-def _pick_books(ver_label, which):
-    ver = engine.VERSIONS[ver_label]
-    books = engine.get_books(ver)
+def _pick_books(books, which):
     if which == "신약":
         return [n for n, _, t in books if t == "new"]
     if which == "구약":
@@ -150,7 +157,34 @@ def _pick_books(ver_label, which):
 
 
 def ui_select_group(ver_label, which):
-    return gr.update(value=_pick_books(ver_label, which))
+    """빠른 선택. **choices 도 같이 돌려준다** — 목록이 아직 안 채워진 상태에서
+    누르면 '목록에 없는 값을 선택'하게 되어 컴포넌트가 오류를 냈다."""
+    try:
+        books = engine.get_books(engine.VERSIONS[ver_label])
+    except Exception as e:
+        return gr.update(), f"책 목록을 불러오지 못했습니다: {e}"
+    names = [n for n, _, _ in books]
+    picked = _pick_books(books, which)
+    return gr.update(choices=names, value=picked), f"{which} {len(picked)}권 선택"
+
+
+def ui_select_range(ver_label, first, last):
+    """성경 순서로 시작~끝 사이를 모두 선택 (예: 출애굽기 → 말라기).
+
+    '출애굽기부터 구약 전체' 처럼 신약/구약 통짜가 아닌 범위를 맡길 때 쓴다.
+    거꾸로 골라도(끝이 시작보다 앞) 알아서 뒤집는다."""
+    try:
+        books = engine.get_books(engine.VERSIONS[ver_label])
+    except Exception as e:
+        return gr.update(), f"책 목록을 불러오지 못했습니다: {e}"
+    names = [n for n, _, _ in books]
+    if first not in names or last not in names:
+        return gr.update(choices=names), "시작 책과 끝 책을 고르세요"
+    i, j = names.index(first), names.index(last)
+    if i > j:
+        i, j = j, i
+    picked = names[i:j + 1]
+    return gr.update(choices=names, value=picked), f"{picked[0]} ~ {picked[-1]} · {len(picked)}권 선택"
 
 
 def build_items(voice, mode, ver_label, book_names, ch_from, ch_to, custom_text, file_obj):
@@ -394,6 +428,10 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                 b_g2 = gr.Button("구약 전체")
                 b_g3 = gr.Button("전체")
                 b_g0 = gr.Button("선택 해제")
+            with gr.Row():
+                b_from = gr.Dropdown([], label="범위 시작", scale=2)
+                b_to = gr.Dropdown([], label="범위 끝", scale=2)
+                b_grange = gr.Button("범위 선택")
             b_books = gr.CheckboxGroup([], label="책 (다중 선택)")
             with gr.Row():
                 b_cf = gr.Number(label="시작 장 (책 1권일 때만)", value=None, precision=0)
@@ -451,14 +489,15 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     a_btn_ref.click(refresh_voices, None, a_list)
     a_btn_del.click(ui_delete_voice, [a_list], [a_msg, a_list])
     a_list.change(ui_voice_info, [a_list], [a_vprev, a_vinfo])
-    a_ver.change(ui_books, [a_ver], [a_book, b_books, a_msg])
+    a_ver.change(ui_books, [a_ver], [a_book, b_books, b_from, b_to, a_msg])
 
     b_btn_ref.click(refresh_voices, None, b_voice)
-    b_ver.change(ui_books, [b_ver], [a_book, b_books, b_msg])
-    b_g1.click(lambda v: ui_select_group(v, "신약"), [b_ver], b_books)
-    b_g2.click(lambda v: ui_select_group(v, "구약"), [b_ver], b_books)
-    b_g3.click(lambda v: ui_select_group(v, "전체"), [b_ver], b_books)
-    b_g0.click(lambda: gr.update(value=[]), None, b_books)
+    b_ver.change(ui_books, [b_ver], [a_book, b_books, b_from, b_to, b_msg])
+    b_g1.click(lambda v: ui_select_group(v, "신약"), [b_ver], [b_books, b_msg])
+    b_g2.click(lambda v: ui_select_group(v, "구약"), [b_ver], [b_books, b_msg])
+    b_g3.click(lambda v: ui_select_group(v, "전체"), [b_ver], [b_books, b_msg])
+    b_grange.click(ui_select_range, [b_ver, b_from, b_to], [b_books, b_msg])
+    b_g0.click(lambda: (gr.update(value=[]), "선택 해제"), None, [b_books, b_msg])
     b_btn_est.click(ui_estimate,
                     [b_voice, b_mode, b_ver, b_books, b_cf, b_ct, b_text, b_file], b_msg)
     b_btn_add.click(ui_add_job,
@@ -483,7 +522,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                 ui_job_choices(), ui_job_choices(), ui_job_rows())
 
     demo.load(_boot, None, [a_list, b_voice, c_jid, b_jid, b_jobs])
-    demo.load(ui_books, [a_ver], [a_book, b_books, a_msg])
+    # 생성 탭 역본(b_ver)으로 채운다 — 예전엔 검수 탭 역본(a_ver)을 보고 채워서,
+    # 생성 탭으로 바로 간 경우 책 목록이 비어 있을 수 있었다.
+    demo.load(ui_books, [b_ver], [a_book, b_books, b_from, b_to, b_msg])
 
 
 if __name__ == "__main__":
