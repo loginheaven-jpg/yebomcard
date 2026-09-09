@@ -35,6 +35,7 @@
 |---|---|---|---|
 | [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md) | TTS | 3단 폴백 / 캐시 v5 / accent 분기 / WEB R2 음원 / 미니플레이어 패턴 | TTS 정책·인프라 변경 시 |
 | [docs/IA_5TAB.md](docs/IA_5TAB.md) | UI/UX | BottomTabBar(6탭) + SettingsSheet + QuickNavFab + 모달 스택 / 좌우 스와이프 / 다크 추종 | IA 또는 탭 정책 변경 시 |
+| [docs/READING_PLAN.md](docs/READING_PLAN.md) | 말씀의삶 | 플랜 층 설계 — 판정 규칙(entryChapter/nextChapter) · 경계 장 10개 · 플랜 모드 개입 지점 · TTS 세 묶음 | 플랜 정책·판정 규칙 변경 시 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 데이터 | bible_verses/bible_audio/scraps + UNIQUE 정책 + RLS + 마이그레이션 + BibleVersion 추가 체크리스트 | DB 스키마·정책 변경 시 |
 
 ### docs/tasks/ (진행 중 작업 지시서)

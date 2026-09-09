@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import SearchPanel, { type NavRequest } from "@/components/SearchPanel";
 import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
 import BottomTabBar, { type ActiveTab } from "@/components/BottomTabBar";
 import ReadingPlanPanel from "@/components/ReadingPlanPanel";
+import PlanHeader from "@/components/PlanHeader";
+import UnitCompleteSheet, { wasUnitSheetShown } from "@/components/UnitCompleteSheet";
+import {
+  YEBOM91,
+  flattenPlan,
+  findPlanIndex,
+  planStep,
+  unitChapters as unitChaptersOf,
+  computeUnitProgress,
+} from "@/lib/plans/yebom91";
+import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
+import { fetchUnitChecks } from "@/lib/reading-plan";
+import { getBookByCode } from "@/lib/books";
 import SettingsSheet from "@/components/SettingsSheet";
 import { readBookmarks } from "@/lib/bookmark";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
@@ -147,6 +160,130 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  // ─── 말씀의삶 플랜 모드 ───
+  // 위치(idx)를 상태로 들지 않는다. SearchPanel 의 setChapter/setBookCode 호출 지점이
+  // 20곳이 넘고 그중 다수가 플랜과 무관한 점프라, 상태로 들면 헤더가 거짓말을 한다.
+  // on/off 와 seq 만 들고 현재 위치에서 매번 파생한다.
+  // 위치 보고 콜백이 최신 view 를 보게 한다 — 콜백을 매번 새로 만들면 SearchPanel 의
+  // 보고 effect 가 매 렌더 재실행된다(deps 에 콜백이 있다).
+  const viewRef = useRef<ViewMode>("search");
+  useEffect(() => { viewRef.current = view; }, [view]);
+
+  const [planMode, setPlanMode] = useState<{ planId: "yebom91"; seq: number } | null>(null);
+  const [planPos, setPlanPos] = useState<{ book: string; chapter: number } | null>(null);
+  const [planReadByBook, setPlanReadByBook] = useState<Record<string, Set<number>>>({});
+  const [planManual, setPlanManual] = useState<Set<number>>(new Set());
+  const [completedSeq, setCompletedSeq] = useState<number | null>(null);
+  const [fullscreenCloseNonce, setFullscreenCloseNonce] = useState(0);
+
+  const planFlat = useMemo(() => flattenPlan(YEBOM91), []);
+  const planIdx =
+    planMode && planPos ? findPlanIndex(planFlat, planMode.seq, planPos.book, planPos.chapter) : -1;
+  const planUnit = planMode ? YEBOM91.units[planMode.seq - 1] : null;
+  const planUnitChapters = useMemo(
+    () => (planUnit ? unitChaptersOf(planUnit) : undefined),
+    [planUnit],
+  );
+
+  // 진도 — 플랜 헤더의 "n / total장" 과 완료 시트에 쓴다
+  const reloadPlanProgress = useCallback(async () => {
+    const [read, seqs] = await Promise.all([fetchReadChapters(), fetchUnitChecks()]);
+    setPlanReadByBook(computeProgress(read).readByBook);
+    setPlanManual(new Set(seqs));
+  }, []);
+  useEffect(() => {
+    if (planMode) void reloadPlanProgress();
+  }, [planMode, reloadPlanProgress]);
+
+  /** 회차로 진입 — entryChapter 로 간다 */
+  const openPlanUnit = useCallback(
+    (seq: number) => {
+      const progress = computeUnitProgress(YEBOM91, planReadByBook, planManual);
+      const unit = YEBOM91.units[seq - 1];
+      const chs = unitChaptersOf(unit);
+      // 그 회차가 currentSeq 면 entryChapter 를, 아니면 회차 첫 장을 쓴다
+      const target =
+        progress.entryChapter && progress.entryChapter.seq === seq
+          ? { book: progress.entryChapter.book, chapter: progress.entryChapter.chapter }
+          : { book: chs[0].book, chapter: chs[0].chapter };
+      setPlanMode({ planId: "yebom91", seq });
+      setPlanPos(target);
+      setView("search");
+      setActiveTab("read");
+      navNonceRef.current += 1;
+      setNavRequest({
+        target: "chapter",
+        nonce: navNonceRef.current,
+        book: target.book,
+        chapter: target.chapter,
+      });
+    },
+    [planReadByBook, planManual],
+  );
+
+  /** 플랜 순서로 이동 — 도착 항목이 seq 를 결정한다 */
+  const goPlan = useCallback(
+    (t: { book: string; chapter: number }) => {
+      setPlanPos(t);
+      navNonceRef.current += 1;
+      setNavRequest({ target: "chapter", nonce: navNonceRef.current, book: t.book, chapter: t.chapter });
+    },
+    [],
+  );
+
+  const planNav = useMemo(() => {
+    if (!planMode || !planUnit) return undefined;
+    const prev = planIdx >= 0 ? planStep(planFlat, planIdx, -1) : null;
+    const next = planIdx >= 0 ? planStep(planFlat, planIdx, 1) : null;
+    const readCount = planUnitChapters
+      ? planUnitChapters.filter((c: { book: string; chapter: number }) =>
+          planReadByBook[c.book]?.has(c.chapter)).length
+      : 0;
+    return {
+      header: (
+        <PlanHeader
+          unit={planUnit}
+          readCount={readCount}
+          total={planUnitChapters?.length ?? 0}
+          current={planPos}
+          offPlan={planIdx === -1}
+          bookName={(code) => getBookByCode(code)?.nameKr ?? code}
+          isLoggedIn={!!session?.isLoggedIn}
+          onOpenPlan={() => setView("plan")}
+          onReturnToPlan={() => openPlanUnit(planMode.seq)}
+        />
+      ),
+      prev: prev ? { book: prev.book, chapter: prev.chapter } : null,
+      next: next ? { book: next.book, chapter: next.chapter } : null,
+      onGo: (t: { book: string; chapter: number }) => {
+        // 도착 항목의 seq 로 갱신한다(인접 중복 장은 planStep 이 이미 건너뛴다)
+        const dir = next && t.book === next.book && t.chapter === next.chapter ? 1 : -1;
+        const arrived = planIdx >= 0 ? planStep(planFlat, planIdx, dir) : null;
+        if (arrived) setPlanMode({ planId: "yebom91", seq: arrived.seq });
+        goPlan(t);
+      },
+    };
+  }, [planMode, planUnit, planIdx, planFlat, planUnitChapters, planReadByBook, planPos, session, openPlanUnit, goPlan]);
+
+  /** SearchPanel 이 보고한 현재 위치 — 본문을 볼 때만 받는다.
+   *  SearchPanel 은 다른 뷰에서도 언마운트되지 않아 숨은 위치 변화까지 올라온다. */
+  const handlePositionChange = useCallback(
+    (book: string, chapter: number) => {
+      if (viewRef.current !== "search") return;
+      setPlanPos((p) => (p && p.book === book && p.chapter === chapter ? p : { book, chapter }));
+    },
+    [],
+  );
+
+  /** 회차 완료 — 이미 보여준 회차면 시트를 띄우지 않는다(새로고침 후에도) */
+  const handleUnitComplete = useCallback((seq: number) => {
+    if (wasUnitSheetShown(seq)) return;
+    setFullscreenCloseNonce((n) => n + 1);   // 풀스크린이면 닫고 띄운다
+    setCompletedSeq(seq);
+    void reloadPlanProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleTabChange = useCallback((tab: ActiveTab) => {
     setActiveTab(tab);
     if (tab === "settings") {
@@ -159,6 +296,8 @@ export default function Home() {
       setView("plan");
       return;
     }
+    // 목차·검색·책갈피로 나가면 플랜 모드를 푼다. 본문(read)은 유지한다.
+    if (tab === "toc" || tab === "search" || tab === "bookmark") setPlanMode(null);
     setView("search");
     navNonceRef.current += 1;
     setNavRequest({
@@ -417,6 +556,12 @@ export default function Home() {
           }}
           scrapCount={scrapCount}
           onReadingViewChange={setIsReadingView}
+          onPositionChange={handlePositionChange}
+          planNav={view === "search" ? planNav : undefined}
+          unitChapters={planUnitChapters}
+          unitSeq={planMode?.seq}
+          onUnitComplete={handleUnitComplete}
+          fullscreenCloseNonce={fullscreenCloseNonce}
           tabBarHidden={tabBarHidden}
         />
       </div>
@@ -540,10 +685,30 @@ export default function Home() {
           진입할 때마다 마운트되므로 진도도 매번 최신으로 다시 읽는다. */}
       {view === "plan" && (
         <ReadingPlanPanel
-          onOpenUnit={(seq) => console.info("[plan] 회차 진입 요청", seq)}
+          onOpenUnit={openPlanUnit}
           onLogin={() => ensureLogin("말씀의삶")}
         />
       )}
+
+      {/* 회차 완료 시트 — 풀스크린을 닫고 띄운다 */}
+      {completedSeq !== null && (() => {
+        const unit = YEBOM91.units[completedSeq - 1];
+        const nextUnit = YEBOM91.units[completedSeq] ?? null;
+        return (
+          <UnitCompleteSheet
+            seq={completedSeq}
+            label={unit.label}
+            totalChapters={unitChaptersOf(unit).length}
+            next={nextUnit ? { seq: nextUnit.seq, label: nextUnit.label } : null}
+            onOpenPlan={() => { setCompletedSeq(null); setView("plan"); }}
+            onReadNext={() => {
+              setCompletedSeq(null);
+              if (nextUnit) openPlanUnit(nextUnit.seq);
+            }}
+            onClose={() => setCompletedSeq(null)}
+          />
+        );
+      })()}
 
       {(view === "search" || view === "plan") && (
         <BottomTabBar

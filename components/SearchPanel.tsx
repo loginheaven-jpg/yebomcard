@@ -45,10 +45,13 @@ import { useFont, FONTS } from "@/contexts/FontContext";
 import { linkify } from "@/lib/linkify";
 
 export interface NavRequest {
-  /** 하단 탭이 요청한 화면 — Phase 2a */
-  target: "toc" | "search" | "read" | "bookmark";
+  /** 하단 탭이 요청한 화면 — Phase 2a. "chapter" 는 말씀의삶 회차 진입(단계 3) */
+  target: "toc" | "search" | "read" | "bookmark" | "chapter";
   /** 같은 target 재요청 시에도 effect 가 다시 돌도록 nonce */
   nonce: number;
+  /** target="chapter" 전용 — 이 위치로 직진입한다 */
+  book?: string;
+  chapter?: number;
 }
 
 interface SearchPanelProps {
@@ -64,8 +67,26 @@ interface SearchPanelProps {
   onVerseUpdated?: (updated: BibleVerse) => void;
   /** 하단 5탭에서 들어오는 네비게이션 요청 (Phase 2a) */
   navRequest?: NavRequest;
-  /** 현재 보고 있는 위치 보고 — 이동시키지 않는다. 플랜 헤더(단계 3)가 쓴다 */
+  /** 현재 보고 있는 위치 보고 — 이동시키지 않는다. 플랜 헤더가 쓴다 */
   onPositionChange?: (book: string, chapter: number) => void;
+  /**
+   * 플랜 모드 — 있으면 장 이동이 진도표 순서를 따른다.
+   * prev/next 가 null 이면 그 방향은 비활성(플랜의 처음/끝).
+   */
+  planNav?: {
+    header: React.ReactNode;
+    prev: { book: string; chapter: number } | null;
+    next: { book: string; chapter: number } | null;
+    onGo: (t: { book: string; chapter: number }) => void;
+  };
+  /** 현재 회차의 장 목록 — 회차 완료 전이를 SearchPanel 이 자기 진도로 감지한다 */
+  unitChapters?: { book: string; chapter: number }[];
+  /** 현재 회차 번호 (완료 보고에 실어 올린다) */
+  unitSeq?: number;
+  /** 회차 완료 — 델타가 아니라 **결과**를 올린다. page.tsx 에는 기준 집합이 없다 */
+  onUnitComplete?: (seq: number) => void;
+  /** 값이 바뀌면 풀스크린을 닫는다 (완료 시트를 띄우기 위해). 열기 nonce 와 대칭 */
+  fullscreenCloseNonce?: number;
   /** SettingsSheet 에서 전체화면 진입 요청 (Phase 2b) — nonce 갱신 시 전체화면 열림 */
   fullscreenRequestNonce?: number;
   /** 책갈피 메뉴 안 스크랩 버튼 클릭 시 — app/page.tsx 에서 ScrapList 열기 (Phase 2b 후속) */
@@ -101,6 +122,11 @@ export default function SearchPanel({
   onVerseUpdated,
   navRequest,
   onPositionChange,
+  planNav,
+  unitChapters,
+  unitSeq,
+  onUnitComplete,
+  fullscreenCloseNonce,
   fullscreenRequestNonce,
   onOpenScrap,
   scrapCount,
@@ -529,6 +555,16 @@ export default function SearchPanel({
       // 책갈피 탭 재클릭 토글 (사용자 요청)
       setShowBookmarkMenu((prev) => !prev);
       setShowSearchRow(false);
+    } else if (target === "chapter") {
+      // 말씀의삶 진도표에서 회차를 눌러 들어온다 — 지정 위치로 직진입
+      if (navRequest.book && navRequest.chapter) {
+        setBookCode(navRequest.book);
+        setChapter(navRequest.chapter);
+        setMode("chapter");
+        setBrowseStep("verse");
+      }
+      setShowBookmarkMenu(false);
+      setShowSearchRow(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navRequest?.nonce]);
@@ -579,9 +615,16 @@ export default function SearchPanel({
   const atFirstChapter = chapterIdx === 0;
   const atLastChapter = chapterIdx >= 0 && chapterIdx === chapters.length - 1;
 
-  const canPrevChapter = chapterIdx > 0 || (atFirstChapter && !!prevBook);
-  const canNextChapter =
-    (chapterIdx >= 0 && chapterIdx < chapters.length - 1) || (atLastChapter && !!nextBook);
+  // 플랜 모드면 진도표 순서를 따른다. 단계 2.5 로 5경로(스와이프·키보드·PC 여백·
+  // 상단 ◀▶·풀스크린 오버스크롤)가 goChapter 하나로 모였으므로 **이 두 곳만** 바꾸면
+  // 전부 따라온다. 활성 판정을 goChapter 안에 숨기지 않은 이유도 여기 있다 —
+  // 렌더 조건·disabled·undefined 세 소비 방식이 그대로 살아야 한다.
+  const canPrevChapter = planNav
+    ? planNav.prev !== null
+    : chapterIdx > 0 || (atFirstChapter && !!prevBook);
+  const canNextChapter = planNav
+    ? planNav.next !== null
+    : (chapterIdx >= 0 && chapterIdx < chapters.length - 1) || (atLastChapter && !!nextBook);
 
   /**
    * 장 이동 — **모든 조작이 이 함수 하나를 통과한다.**
@@ -594,6 +637,11 @@ export default function SearchPanel({
    */
   const goChapter = useCallback(
     (delta: -1 | 1) => {
+      if (planNav) {
+        const t = delta === -1 ? planNav.prev : planNav.next;
+        if (t) planNav.onGo(t);
+        return;
+      }
       if (delta === -1) {
         if (chapterIdx > 0) {
           setChapter(chapters[chapterIdx - 1]);
@@ -612,7 +660,7 @@ export default function SearchPanel({
         }
       }
     },
-    [chapters, chapterIdx, atFirstChapter, atLastChapter, prevBook, nextBook],
+    [planNav, chapters, chapterIdx, atFirstChapter, atLastChapter, prevBook, nextBook],
   );
 
   // ─── 키보드: ← 이전장 / → 다음장 / Space 스마트 다음장 (PC) ───
@@ -800,21 +848,53 @@ export default function SearchPanel({
     [],
   );
 
+  /**
+   * TTS 자동 다음 장이 읽을 현재 위치.
+   *
+   * TtsContext 는 start() 시점에 loadNextChapter 를 ref 에 한 번만 담고, 자동 진행은
+   * start() 를 다시 부르지 않고 큐만 교체한다. 그래서 콜백이 **start() 당시의 클로저에
+   * 고정**된다. 지금 동작하는 것은 아래 장 추종 effect 가 경합에서 이겨 재등록해 주기
+   * 때문인데, 그 effect 는 책이 바뀌면 막힌다 — 플랜 이동은 책을 넘나든다.
+   * 위치를 ref 에서 읽으면 언제 호출되든 현재 값을 본다.
+   *
+   * **대입은 이 effect 에서만 한다.** 로더가 반환 직전에 ref 를 전진시키면,
+   * setChapter 커밋 전에 다른 렌더가 끼어들 때 effect 가 이전 위치로 되돌려
+   * 같은 장이 반복된다. 로더 재호출 간격은 한 장 분량의 재생 시간이라
+   * 한 커밋 지연은 문제가 되지 않는다.
+   */
+  const ttsPosRef = useRef({ bookCode, chapter, chapters, mainVersion, planNav });
+  useEffect(() => {
+    ttsPosRef.current = { bookCode, chapter, chapters, mainVersion, planNav };
+  });
+
   const loadNextChapterForTts = useCallback(async (): Promise<TtsTrack[] | null> => {
-    const idx = chapters.indexOf(chapter);
-    if (idx === -1 || idx >= chapters.length - 1) return null;
-    const nextCh = chapters[idx + 1];
+    const pos = ttsPosRef.current;
+    // 플랜 모드면 진도표 순서를 따른다. 기능을 끄지 않는다 —
+    // 고령 교인이 가장 많이 쓰는 기능이 플랜 안에서만 죽으면 기능 후퇴다.
+    let nextBookCode = pos.bookCode;
+    let nextCh: number;
+    if (pos.planNav) {
+      if (!pos.planNav.next) return null;
+      nextBookCode = pos.planNav.next.book;
+      nextCh = pos.planNav.next.chapter;
+    } else {
+      const idx = pos.chapters.indexOf(pos.chapter);
+      if (idx === -1 || idx >= pos.chapters.length - 1) return null;
+      nextCh = pos.chapters[idx + 1];
+    }
     const { data } = await supabase
       .from("bible_verses")
       .select("*")
-      .eq("version", mainVersion)
-      .eq("book_code", bookCode)
+      .eq("version", pos.mainVersion)
+      .eq("book_code", nextBookCode)
       .eq("chapter", nextCh)
       .order("verse");
     if (!data || data.length === 0) return null;
+    // 조회에 성공한 뒤에만 화면을 옮긴다(빈 결과로 재생이 끊긴 채 화면만 넘어가지 않게)
+    if (nextBookCode !== pos.bookCode) setBookCode(nextBookCode);
     setChapter(nextCh);
     return buildTtsTracks(data as BibleVerse[]);
-  }, [bookCode, chapter, chapters, mainVersion, buildTtsTracks]);
+  }, [buildTtsTracks]);
 
   const handleTtsToggle = useCallback(() => {
     if (ttsActiveOnThisChapter) {
@@ -839,18 +919,27 @@ export default function SearchPanel({
     }
   }, [tts.currentTrack, ttsActiveOnThisChapter]);
 
-  // 사용자가 chapter 화살표/키보드/QuickNav 등으로 같은 책의 다른 장으로 이동 시 TTS 도 따라가기.
-  // auto-next 경로는 TtsContext 가 먼저 currentTrack 을 새 장으로 갱신하므로 이 useEffect 는 skip.
+  // 사용자가 장을 옮기면 TTS 도 따라간다.
+  //
+  // 책 가드를 플랜 모드에서 완화한다 — 목차·QuickNav 점프처럼 **따라가면 안 되는**
+  // 이동을 막는 것이 원래 목적인데, 플랜의 책 넘김은 선형 이동이라 따라가야 한다.
+  //
+  // 다만 가드만 열면 안 된다. 이 effect 의 deps 에 browseVerses 가 있고 본문은 위치
+  // 변경보다 한 왕복 늦게 오므로, 첫 발화 시점의 browseVerses 는 아직 이전 위치다.
+  // 같은 책에서는 "이전 장이 잠깐 들리는" 정도였지만 책이 바뀌면 **다른 책이 읽힌다.**
+  // → 트랙이 현재 위치와 다르면 그냥 돌아간다(본문이 도착하면 다시 발화한다).
   useEffect(() => {
     if (browseVerses.length === 0) return;
     if (tts.status === "idle" || !tts.currentTrack) return;
-    if (tts.currentTrack.bookCode !== bookCode) return;
-    if (tts.currentTrack.chapter === chapter) return;
+    const sameBook = tts.currentTrack.bookCode === bookCode;
+    if (!sameBook && !planNav) return;          // 플랜 모드가 아니면 기존대로 책 경계에서 멈춘다
+    if (sameBook && tts.currentTrack.chapter === chapter) return;
     const tracks = buildTtsTracks(browseVerses);
     if (tracks.length === 0) return;
+    if (tracks[0].bookCode !== bookCode || tracks[0].chapter !== chapter) return; // 스테일 가드
     tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookCode, chapter, browseVerses]);
+  }, [bookCode, chapter, browseVerses, planNav]);
 
   // ─── 관리자: 인라인 편집 (A안) + 편집모드 토글 (B안) ───
   const [editingVerseId, setEditingVerseId] = useState<number | null>(null);
@@ -1772,8 +1861,42 @@ export default function SearchPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullscreenRequestNonce]);
 
+  // 풀스크린 닫기 — 열기 nonce 와 대칭. showFullscreen 은 이 컴포넌트 지역 상태이고
+  // 키보드 핸들러·오버스크롤 배선이 전부 여기 묶여 있어 상위로 끌어올릴 수 없다.
+  // 회차 완료 시트를 띄우려면 page.tsx 가 풀스크린을 닫을 수단이 필요하다.
+  useEffect(() => {
+    if (!fullscreenCloseNonce) return;
+    setShowFullscreen(false);
+  }, [fullscreenCloseNonce]);
+
+  // 회차 완료 감지 — **델타가 아니라 결과를 올린다.**
+  // page.tsx 에는 진도 기준 집합이 없어 (book, chapter) 튜플 하나로는
+  // "나머지 12장이 이미 읽혔는지" 를 알 수 없다. 여기서 판정해 seq 만 올린다.
+  //
+  // 3초 트리거는 재열람마다 발화하므로, 한 번 완료를 알린 회차는 다시 알리지 않는다.
+  const notifiedUnitRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!onUnitComplete || !unitChapters?.length || unitSeq === undefined) return;
+    if (notifiedUnitRef.current === unitSeq) return;
+    const read = new Set(readChapters.map((r) => `${r.book_code}:${r.chapter}`));
+    const done = unitChapters.every((c) => read.has(`${c.book}:${c.chapter}`));
+    if (!done) return;
+    notifiedUnitRef.current = unitSeq;
+    onUnitComplete(unitSeq);
+  }, [readChapters, unitChapters, unitSeq, onUnitComplete]);
+
+  // 회차가 바뀌면 다시 알릴 수 있게 표시를 푼다
+  useEffect(() => {
+    if (unitSeq !== undefined && notifiedUnitRef.current !== unitSeq) {
+      notifiedUnitRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitSeq]);
+
   return (
     <div className="w-full max-w-[1400px] mx-auto">
+      {/* 플랜 헤더 — 플랜 모드일 때만. 풀스크린에서는 숨긴다(§5.6) */}
+      {planNav && mode === "chapter" && browseStep === "verse" && !showFullscreen && planNav.header}
       {/* PC 전용: 좌/우 공백 클릭으로 이전/다음 장 (목차 브라우즈 verse step에서만) */}
       {mode === "chapter" && browseStep === "verse" && (
         <>
