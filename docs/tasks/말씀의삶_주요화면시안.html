@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>예봄성경 — 말씀의삶 주요화면 시안 v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Playfair+Display:ital@1&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#DBD5C8;--paper:#FBF9F4;--paper-2:#F4EFE4;
+  --ink:#2B2A26;--ink-soft:#6E675B;--ink-faint:#938B7C;--muted:#8C8475;
+  --line:#EBE5D8;--line-soft:#F1ECE1;
+  --amber:#B97E2C;--amber-bright:#E0A23C;--amber-tint:#F6EBD6;--amber-deep:#8E5E18;
+  --bad:#C0563E;--bad-tint:#F6E4DE;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo',sans-serif;background:var(--canvas);color:var(--ink);padding:36px 16px 64px;min-height:100vh}
+h1{font-size:22px;font-weight:700;text-align:center;letter-spacing:-.4px}
+.sub{text-align:center;font-size:12px;color:var(--ink-soft);margin:6px 0 30px;line-height:1.6}
+.grid{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;max-width:1720px;margin:0 auto}
+.col{width:380px}
+.col-label{font-size:14px;font-weight:700;margin-bottom:4px}
+.col-label small{font-weight:500;color:var(--ink-soft);margin-left:6px}
+.col-desc{font-size:12px;color:var(--ink-soft);line-height:1.6;margin-bottom:12px;min-height:56px}
+.col-desc b{color:var(--amber-deep);font-weight:600}
+
+/* phone shell */
+.phone{width:380px;height:740px;background:var(--paper);border-radius:28px;overflow:hidden;position:relative;box-shadow:0 16px 48px rgba(43,42,38,.22),0 0 0 1px rgba(43,42,38,.06);display:flex;flex-direction:column}
+.screen{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+
+/* header */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px}
+.brand{display:flex;flex-direction:column;line-height:1}
+.b-top{font-size:8px;letter-spacing:5px;padding-left:5px;color:var(--ink-faint);text-align:center}
+.b-main{font-family:'Playfair Display','Noto Serif KR',serif;font-style:italic;font-size:19px;color:#374151;margin-top:4px}
+.hdr-title{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.seg{display:flex;background:var(--paper-2);border-radius:8px;padding:3px;gap:2px}
+.seg span{font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;color:var(--ink-soft)}
+.seg span.on{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+/* summary strip */
+.summary{margin:0 16px 10px;padding:12px 14px;background:var(--amber-tint);border-radius:12px;display:flex;align-items:center;gap:14px}
+.summary .big{font-size:26px;font-weight:700;color:var(--amber-deep);line-height:1;letter-spacing:-.5px}
+.summary .big small{font-size:12px;font-weight:600;margin-left:2px}
+.summary .txt{flex:1;font-size:12px;color:var(--ink-soft);line-height:1.5}
+.summary .txt b{color:var(--ink);font-weight:600}
+.bar{height:6px;background:rgba(0,0,0,.08);border-radius:3px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),var(--amber-bright));border-radius:3px}
+
+/* progress list */
+.list{flex:1;overflow-y:auto;padding:0 12px 80px}
+.pin{position:sticky;top:0;background:var(--paper);font-size:11px;color:var(--ink-faint);padding:6px 6px 4px;border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;z-index:1}
+.row{display:grid;grid-template-columns:34px 1fr 28px;align-items:center;gap:8px;padding:11px 6px;border-bottom:1px solid var(--line-soft);min-height:48px}
+.row .n{font-size:13px;font-weight:600;color:var(--ink-faint);text-align:center}
+.row .t{font-size:14px;line-height:1.4;letter-spacing:-.2px}
+.row .t small{display:block;font-size:11px;color:var(--ink-faint);margin-top:2px}
+.chk{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;margin:0 auto}
+.row.done .chk{background:var(--amber);border-color:var(--amber);color:#fff}
+.row.done .t{color:var(--ink-soft)}
+.row.done .n{color:var(--amber)}
+.row.now{background:var(--amber-tint);border-radius:10px;border-bottom-color:transparent;margin:2px 0}
+.row.now .n{color:var(--amber-deep)}
+.row.now .t{font-weight:600}
+.row.now .chk{border-color:var(--amber);background:conic-gradient(var(--amber) 0 38%,transparent 38% 100%);position:relative}
+.row.now .chk::after{content:"";position:absolute;inset:3px;background:var(--amber-tint);border-radius:3px}
+.row.part .chk{border-color:var(--amber);background:conic-gradient(var(--amber) 0 25%,transparent 25% 100%);position:relative}
+.row.part .chk::after{content:"";position:absolute;inset:3px;background:var(--paper);border-radius:3px}
+.row .t .tag{display:inline-block;font-size:10px;font-weight:600;color:var(--amber-deep);background:var(--paper);border:1px solid var(--amber);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+
+/* tab bar */
+.tabs{border-top:1px solid var(--line);background:var(--paper);display:grid;grid-template-columns:repeat(6,1fr);padding:6px 0 10px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--ink-faint);letter-spacing:-.3px}
+.tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--amber-deep);font-weight:600}
+
+/* reader */
+.plan-hdr{margin:0 12px 6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.plan-hdr .l1{display:flex;justify-content:space-between;align-items:baseline}
+.plan-hdr .l1 b{font-size:13px;font-weight:700;color:var(--amber-deep)}
+.plan-hdr .l1 span{font-size:11px;color:var(--ink-soft)}
+.chips{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.chip{font-size:11px;padding:4px 9px;border-radius:14px;background:var(--paper-2);color:var(--ink-soft);border:1px solid transparent}
+.chip.done{background:var(--amber-tint);color:var(--amber-deep)}
+.chip.on{background:var(--paper);border-color:var(--amber);color:var(--amber-deep);font-weight:600}
+.reader{flex:1;overflow:hidden;padding:6px 20px 0}
+.ch-title{display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px}
+.ch-title h2{font-family:'Noto Serif KR',serif;font-size:19px;font-weight:600}
+.ch-title .ver{font-size:11px;color:var(--ink-soft);background:var(--paper-2);padding:4px 8px;border-radius:5px}
+.v{margin-bottom:12px}
+.v .k{font-family:'Noto Serif KR',serif;font-size:15.5px;line-height:1.85;color:var(--ink)}
+.v .k em{font-style:normal;color:var(--amber);font-size:11px;font-weight:600;margin-right:4px;vertical-align:3px}
+.v .e{font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:2px;padding-left:16px}
+.nav{position:absolute;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;gap:8px}
+.nav a{flex:1;font-size:12px;padding:10px 12px;border-radius:10px;background:var(--paper);border:1px solid var(--line);color:var(--ink-soft);text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.nav a b{display:block;font-size:13px;color:var(--ink);font-weight:600;margin-top:1px}
+.nav a.next{text-align:right}
+.nav a.jump{border-color:var(--amber);background:var(--amber-tint)}
+.nav a.jump b{color:var(--amber-deep)}
+
+/* completion sheet */
+.dim{position:absolute;inset:0;background:rgba(43,42,38,.28)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-radius:20px 20px 0 0;padding:10px 20px 22px;box-shadow:0 -8px 30px rgba(0,0,0,.15)}
+.grip{width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 16px}
+.sheet h3{font-size:18px;font-weight:700;letter-spacing:-.3px}
+.sheet p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-top:6px}
+.sheet .next-unit{margin:14px 0;padding:12px 14px;background:var(--amber-tint);border-radius:12px}
+.sheet .next-unit small{font-size:11px;color:var(--amber-deep);font-weight:600}
+.sheet .next-unit div{font-size:15px;font-weight:600;margin-top:2px}
+.btns{display:flex;gap:8px}
+.btn{flex:1;text-align:center;padding:13px;border-radius:12px;font-size:14px;font-weight:600}
+.btn.p{background:var(--amber);color:#fff}
+.btn.s{background:var(--paper-2);color:var(--ink-soft)}
+.sheet .also{font-size:11px;color:var(--ink-faint);text-align:center;margin-top:12px}
+
+/* group */
+.gcard{margin:0 16px 12px;padding:14px;border:1px solid var(--line);border-radius:14px}
+.gcard .name{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.gcard .meta{font-size:12px;color:var(--ink-soft);margin-top:3px;display:flex;justify-content:space-between;align-items:center}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:2px;background:var(--paper-2);padding:3px 8px;border-radius:5px;color:var(--ink)}
+.mem{display:grid;grid-template-columns:22px 60px 1fr 42px;align-items:center;gap:8px;padding:8px 0;font-size:13px}
+.mem .r{color:var(--ink-faint);font-size:11px;text-align:center}
+.mem .nm{letter-spacing:-.2px}
+.mem .mb{height:8px;background:var(--paper-2);border-radius:4px;overflow:hidden}
+.mem .mb i{display:block;height:100%;background:var(--amber-bright);border-radius:4px}
+.mem .c{text-align:right;font-size:12px;color:var(--ink-soft)}
+.mem.me{background:var(--amber-tint);border-radius:8px;margin:0 -8px;padding:8px}
+.mem.me .nm{font-weight:700}
+.mem.me .mb i{background:var(--amber)}
+.mem.me .c{color:var(--amber-deep);font-weight:700}
+.glist{flex:1;overflow-y:auto;padding-bottom:12px}
+.gfoot{margin:6px 16px 12px;display:flex;gap:8px}
+.gfoot .btn{font-size:13px;padding:11px}
+.note{font-size:11px;color:var(--ink-faint);padding:0 16px 8px;line-height:1.5}
+
+/* discussion */
+.disc{max-width:1100px;margin:44px auto 0;background:var(--paper);border-radius:16px;padding:22px 26px}
+.disc h2{font-size:15px;font-weight:700;margin-bottom:12px}
+.disc table{width:100%;border-collapse:collapse;font-size:13px}
+.disc th,.disc td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.5}
+.disc th{font-weight:600;color:var(--ink-soft);font-size:12px}
+.disc td:first-child{font-weight:600;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<h1>말씀의삶 — 주요화면 시안 v1</h1>
+<p class="sub">기존 예봄성경 토큰(paper / ink / amber) 그대로. 성경 본문·역본 비교 UI는 손대지 않고, 하단 6번째 탭과 플랜 헤더만 얹는다.<br>데이터는 별첨 진도표 28~41회차 실제 내용.</p>
+
+<div class="grid">
+
+<!-- ═══════════ A. 진도표 ═══════════ -->
+<div class="col">
+  <div class="col-label">A. 진도표<small>말씀의삶 탭 기본</small></div>
+  <div class="col-desc">종이 진도표를 그대로 옮긴 91행. 현재 회차로 자동 스크롤. 행을 누르면 그 회차 첫 장으로 진입. <b>체크 3상태</b>: 완료·진행중(원형 채움)·미완. 진행중은 자동 판정, 완료 체크는 자동 + 수동 병행.</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="hdr">
+        <div class="brand"><div class="b-top">YEBOM</div><div class="b-main">Bible</div></div>
+        <div class="seg"><span class="on">진도표</span><span>그룹</span></div>
+      </div>
+      <div class="summary">
+        <div class="big">34<small>회차</small></div>
+        <div class="txt">나 <b>33 / 91</b> 완료 · 수요성경반 12명 중 <b>4번째</b>
+          <div class="bar"><i style="width:36%"></i></div></div>
+      </div>
+      <div class="list">
+        <div class="pin"><span>구약</span><span>28–41회차 보는 중 · 위로 스크롤하면 1회차</span></div>
+        <div class="row done"><div class="n">28</div><div class="t">사무엘하 2-7, 시편 31-41</div><div class="chk">✓</div></div>
+        <div class="row done"><div class="n">29</div><div class="t">사무엘하 8-12, 시편 60, 51</div><div class="chk">✓</div></div>
+        <div class="row done"><div class="n">30</div><div class="t">시편 42-50, 사무엘하 13-15, 시편 3</div><div class="chk">✓</div></div>
+        <div class="row done"><div class="n">31</div><div class="t">사무엘하 16-24, 시편 53, 55, 58, 61-62</div><div class="chk">✓</div></div>
+        <div class="row done"><div class="n">32</div><div class="t">시편 64-71, 열왕기상 1-6</div><div class="chk">✓</div></div>
+        <div class="row done"><div class="n">33</div><div class="t">시편 72, 잠언 1-15<small>종이로 읽음 · 직접 체크</small></div><div class="chk">✓</div></div>
+        <div class="row now"><div class="n">34</div><div class="t">열왕기상 7-11, 아가 1-8<span class="tag">지금</span><small>5 / 13장 · 아가 1장부터 이어 읽기</small></div><div class="chk"></div></div>
+        <div class="row"><div class="n">35</div><div class="t">잠언 16-31</div><div class="chk"></div></div>
+        <div class="row part"><div class="n">36</div><div class="t">전도서 1-12<small>3 / 12장 · 순서 밖에서 읽은 장 반영</small></div><div class="chk"></div></div>
+        <div class="row"><div class="n">37</div><div class="t">열왕기상 12-22</div><div class="chk"></div></div>
+        <div class="row"><div class="n">38</div><div class="t">열왕기하 1-10, 오바댜 1</div><div class="chk"></div></div>
+        <div class="row"><div class="n">39</div><div class="t">열왕기하 11-15:22, 요엘 1-3, 요나 1-4, 아모스 1-9</div><div class="chk"></div></div>
+        <div class="row"><div class="n">40</div><div class="t">열왕기하 15:23-17, 이사야 1-4</div><div class="chk"></div></div>
+        <div class="row"><div class="n">41</div><div class="t">호세아 1-14</div><div class="chk"></div></div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 6a9 9 0 00-6-2.3c-1 0-2 .2-3 .5v14.3A9 9 0 016 18c2.3 0 4.4.9 6 2.3m0-14.3a9 9 0 016-2.3c1 0 2 .2 3 .5v14.3A9 9 0 0018 18a9 9 0 00-6 2.3m0-14.3v14.3"/></svg>목차</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z"/></svg>검색</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M19.5 14.25v-2.6a3.4 3.4 0 00-3.4-3.4h-1.5a1.1 1.1 0 01-1.1-1.1v-1.5a3.4 3.4 0 00-3.4-3.4H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.6c-.6 0-1.1.5-1.1 1.1v17.3c0 .6.5 1.1 1.1 1.1h12.8c.6 0 1.1-.5 1.1-1.1V11.25a9 9 0 00-9-9z"/></svg>본문</div>
+      <div class="tab on"><svg viewBox="0 0 24 24"><path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>말씀의삶</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M17.6 3.3c1.1.1 1.9 1.1 1.9 2.2V21L12 17.25 4.5 21V5.5c0-1.1.8-2.1 1.9-2.2a48.5 48.5 0 0111.2 0z"/></svg>책갈피</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>설정</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ B. 회차 읽기 ═══════════ -->
+<div class="col">
+  <div class="col-label">B. 회차 읽기<small>플랜 모드 본문</small></div>
+  <div class="col-desc">기존 본문 뷰 위에 <b>플랜 헤더</b> 한 장. 구간 칩으로 이 회차의 책 묶음과 위치가 보인다. 하단 이전/다음이 <b>플랜 순서</b>를 따른다 — 열왕기상 11장 다음이 아가 1장. 역본 대역·TTS·글꼴은 그대로.</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="hdr">
+        <div class="brand"><div class="b-top">YEBOM</div><div class="b-main">Bible</div></div>
+        <div class="hdr-title" style="font-size:12px;color:var(--ink-soft);font-weight:500">개역개정 · KJV 대역</div>
+      </div>
+      <div class="plan-hdr">
+        <div class="l1"><b>34회차 · 6 / 13장</b><span>진도표로 ›</span></div>
+        <div class="bar" style="margin-top:6px"><i style="width:46%"></i></div>
+        <div class="chips"><span class="chip done">열왕기상 7-11 ✓</span><span class="chip on">아가 1-8 · 1장</span></div>
+      </div>
+      <div class="reader">
+        <div class="ch-title"><h2>아가 1장</h2><span class="ver">Song of Solomon 1</span></div>
+        <div class="v"><div class="k"><em>1</em>솔로몬의 아가라</div><div class="e">The song of songs, which is Solomon's.</div></div>
+        <div class="v"><div class="k"><em>2</em>내게 입맞추기를 원하니 네 사랑이 포도주보다 나음이로구나</div><div class="e">Let him kiss me with the kisses of his mouth: for thy love is better than wine.</div></div>
+        <div class="v"><div class="k"><em>3</em>네 기름이 향기로워 아름답고 네 이름이 쏟은 향기름 같으므로 처녀들이 너를 사랑하는구나</div><div class="e">Because of the savour of thy good ointments thy name is as ointment poured forth, therefore do the virgins love thee.</div></div>
+        <div class="v"><div class="k"><em>4</em>왕이 나를 그의 방으로 이끌어 들이시니 너는 나를 인도하라 우리가 너를 따라 달려가리라 …</div></div>
+      </div>
+      <div class="nav">
+        <a href="#">‹ 이전<b>열왕기상 11장</b></a>
+        <a href="#" class="next">다음 ›<b>아가 2장</b></a>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 6a9 9 0 00-6-2.3c-1 0-2 .2-3 .5v14.3A9 9 0 016 18c2.3 0 4.4.9 6 2.3m0-14.3a9 9 0 016-2.3c1 0 2 .2 3 .5v14.3A9 9 0 0018 18a9 9 0 00-6 2.3m0-14.3v14.3"/></svg>목차</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z"/></svg>검색</div>
+      <div class="tab on"><svg viewBox="0 0 24 24"><path d="M19.5 14.25v-2.6a3.4 3.4 0 00-3.4-3.4h-1.5a1.1 1.1 0 01-1.1-1.1v-1.5a3.4 3.4 0 00-3.4-3.4H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.6c-.6 0-1.1.5-1.1 1.1v17.3c0 .6.5 1.1 1.1 1.1h12.8c.6 0 1.1-.5 1.1-1.1V11.25a9 9 0 00-9-9z"/></svg>본문</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>말씀의삶</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M17.6 3.3c1.1.1 1.9 1.1 1.9 2.2V21L12 17.25 4.5 21V5.5c0-1.1.8-2.1 1.9-2.2a48.5 48.5 0 0111.2 0z"/></svg>책갈피</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>설정</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ C. 회차 완료 ═══════════ -->
+<div class="col">
+  <div class="col-label">C. 회차 완료<small>마지막 장 끝에서</small></div>
+  <div class="col-desc">회차 마지막 장(아가 8장)을 다 읽으면 시트가 올라온다. 자동 판정이므로 사용자는 확인만 한다. <b>다음 회차로 바로 이어가기</b>가 기본 동작. 그룹에 있으면 "12명 중 4번째" 한 줄로 함께 읽는 느낌을 준다.</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="hdr">
+        <div class="brand"><div class="b-top">YEBOM</div><div class="b-main">Bible</div></div>
+        <div class="hdr-title" style="font-size:12px;color:var(--ink-soft);font-weight:500">개역개정 · KJV 대역</div>
+      </div>
+      <div class="plan-hdr">
+        <div class="l1"><b>34회차 · 13 / 13장</b><span>진도표로 ›</span></div>
+        <div class="bar" style="margin-top:6px"><i style="width:100%"></i></div>
+        <div class="chips"><span class="chip done">열왕기상 7-11 ✓</span><span class="chip on">아가 1-8 · 8장</span></div>
+      </div>
+      <div class="reader">
+        <div class="ch-title"><h2>아가 8장</h2><span class="ver">Song of Solomon 8</span></div>
+        <div class="v"><div class="k"><em>13</em>너 동산에 거주하는 자야 친구들이 네 소리에 귀를 기울이니 내가 듣게 하려무나</div><div class="e">Thou that dwellest in the gardens, the companions hearken to thy voice: cause me to hear it.</div></div>
+        <div class="v"><div class="k"><em>14</em>내 사랑하는 자야 너는 빨리 달리라 향기로운 산 위에 있는 노루와도 같고 어린 사슴과도 같아라</div><div class="e">Make haste, my beloved, and be thou like to a roe or to a young hart upon the mountains of spices.</div></div>
+      </div>
+      <div class="dim"></div>
+      <div class="sheet">
+        <div class="grip"></div>
+        <h3>34회차를 마쳤습니다</h3>
+        <p>열왕기상 7-11, 아가 1-8 · 13장 · 나흘 걸렸습니다.<br>수요성경반 12명 중 4번째로 도착했습니다.</p>
+        <div class="next-unit"><small>다음 35회차</small><div>잠언 16-31</div></div>
+        <div class="btns"><span class="btn s">진도표 보기</span><span class="btn p">잠언 16장 읽기</span></div>
+        <div class="also">오늘은 여기까지 — 시트를 내리면 아가 8장에 머뭅니다</div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 6a9 9 0 00-6-2.3c-1 0-2 .2-3 .5v14.3A9 9 0 016 18c2.3 0 4.4.9 6 2.3m0-14.3a9 9 0 016-2.3c1 0 2 .2 3 .5v14.3A9 9 0 0018 18a9 9 0 00-6 2.3m0-14.3v14.3"/></svg>목차</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z"/></svg>검색</div>
+      <div class="tab on"><svg viewBox="0 0 24 24"><path d="M19.5 14.25v-2.6a3.4 3.4 0 00-3.4-3.4h-1.5a1.1 1.1 0 01-1.1-1.1v-1.5a3.4 3.4 0 00-3.4-3.4H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.6c-.6 0-1.1.5-1.1 1.1v17.3c0 .6.5 1.1 1.1 1.1h12.8c.6 0 1.1-.5 1.1-1.1V11.25a9 9 0 00-9-9z"/></svg>본문</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>말씀의삶</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M17.6 3.3c1.1.1 1.9 1.1 1.9 2.2V21L12 17.25 4.5 21V5.5c0-1.1.8-2.1 1.9-2.2a48.5 48.5 0 0111.2 0z"/></svg>책갈피</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>설정</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ D. 그룹 ═══════════ -->
+<div class="col">
+  <div class="col-label">D. 그룹<small>세그먼트 '그룹'</small></div>
+  <div class="col-desc">일정이 없으니 그룹 화면은 <b>누가 어디까지 왔는가</b> 하나만 보여준다. 완료 회차 내림차순 막대. 내 행은 강조. 초대코드 6자리로 참여, 여러 그룹에 속해도 진도는 하나.</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="hdr">
+        <div class="brand"><div class="b-top">YEBOM</div><div class="b-main">Bible</div></div>
+        <div class="seg"><span>진도표</span><span class="on">그룹</span></div>
+      </div>
+      <div class="glist">
+        <div class="gcard">
+          <div class="name">예봄교회 수요성경반</div>
+          <div class="meta"><span>12명 · 평균 31회차 · 완주 1명</span><span class="code">YB7K2M</span></div>
+          <div style="margin-top:10px">
+            <div class="mem"><div class="r">1</div><div class="nm">김은혜</div><div class="mb"><i style="width:100%"></i></div><div class="c">91</div></div>
+            <div class="mem"><div class="r">2</div><div class="nm">박성호</div><div class="mb"><i style="width:45%"></i></div><div class="c">41</div></div>
+            <div class="mem"><div class="r">3</div><div class="nm">이정민</div><div class="mb"><i style="width:42%"></i></div><div class="c">38</div></div>
+            <div class="mem me"><div class="r">4</div><div class="nm">나</div><div class="mb"><i style="width:36%"></i></div><div class="c">33</div></div>
+            <div class="mem"><div class="r">5</div><div class="nm">최영숙</div><div class="mb"><i style="width:35%"></i></div><div class="c">32</div></div>
+            <div class="mem"><div class="r">6</div><div class="nm">정도현</div><div class="mb"><i style="width:31%"></i></div><div class="c">28</div></div>
+            <div class="mem"><div class="r">7</div><div class="nm">한미래</div><div class="mb"><i style="width:29%"></i></div><div class="c">26</div></div>
+            <div class="mem"><div class="r">8</div><div class="nm">오태식</div><div class="mb"><i style="width:22%"></i></div><div class="c">20</div></div>
+            <div class="mem"><div class="r">9</div><div class="nm">윤서연</div><div class="mb"><i style="width:15%"></i></div><div class="c">14</div></div>
+            <div class="mem"><div class="r">10</div><div class="nm">강민준</div><div class="mb"><i style="width:9%"></i></div><div class="c">8</div></div>
+            <div class="mem"><div class="r">11</div><div class="nm">서지우</div><div class="mb"><i style="width:4%"></i></div><div class="c">4</div></div>
+            <div class="mem"><div class="r">12</div><div class="nm">임하늘</div><div class="mb"><i style="width:0"></i></div><div class="c">0</div></div>
+          </div>
+        </div>
+        <div class="gcard" style="border-style:dashed;color:var(--ink-faint);font-size:13px;text-align:center;padding:16px">청년부 새벽독서 · 6명 · 나 33회차<br><span style="font-size:11px">두 번째 그룹 — 진도는 같은 33이다</span></div>
+      </div>
+      <div class="note">순위는 완료 회차 수 기준. 같은 회차면 먼저 마친 사람이 위.</div>
+      <div class="gfoot"><span class="btn s">초대코드로 참여</span><span class="btn p">그룹 만들기</span></div>
+    </div>
+    <div class="tabs">
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M12 6a9 9 0 00-6-2.3c-1 0-2 .2-3 .5v14.3A9 9 0 016 18c2.3 0 4.4.9 6 2.3m0-14.3a9 9 0 016-2.3c1 0 2 .2 3 .5v14.3A9 9 0 0018 18a9 9 0 00-6 2.3m0-14.3v14.3"/></svg>목차</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M21 21l-5.2-5.2m0 0A7.5 7.5 0 105.2 5.2a7.5 7.5 0 0010.6 10.6z"/></svg>검색</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M19.5 14.25v-2.6a3.4 3.4 0 00-3.4-3.4h-1.5a1.1 1.1 0 01-1.1-1.1v-1.5a3.4 3.4 0 00-3.4-3.4H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.6c-.6 0-1.1.5-1.1 1.1v17.3c0 .6.5 1.1 1.1 1.1h12.8c.6 0 1.1-.5 1.1-1.1V11.25a9 9 0 00-9-9z"/></svg>본문</div>
+      <div class="tab on"><svg viewBox="0 0 24 24"><path d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>말씀의삶</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><path d="M17.6 3.3c1.1.1 1.9 1.1 1.9 2.2V21L12 17.25 4.5 21V5.5c0-1.1.8-2.1 1.9-2.2a48.5 48.5 0 0111.2 0z"/></svg>책갈피</div>
+      <div class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>설정</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div class="disc">
+  <h2>토론 포인트</h2>
+  <table>
+    <tr><th>#</th><th>쟁점</th><th>시안의 선택</th><th>대안</th></tr>
+    <tr><td>1</td><td>'지금' 회차 정의</td><td>마지막 완료 회차 + 1. 33까지 완료면 34가 지금</td><td>가장 최근에 읽은 장이 속한 회차 (순서 밖 읽기 존중)</td></tr>
+    <tr><td>2</td><td>순서 밖에서 읽은 장</td><td>36회차 전도서처럼 부분 채움으로 표시. 판정은 장 집합 기준이라 순서 무관</td><td>플랜 모드에서 읽은 것만 인정 (엄격)</td></tr>
+    <tr><td>3</td><td>수동 체크 진입</td><td>진도표 행 길게 누름 → "종이로 읽음" 체크. 33회차처럼 표기</td><td>체크박스 직접 탭 (오터치 위험)</td></tr>
+    <tr><td>4</td><td>완료 시트</td><td>마지막 장 3초 열람 시 자동. '잠언 16장 읽기'가 1차 버튼</td><td>시트 없이 하단 nav 버튼만 '35회차 →'로 바꿈</td></tr>
+    <tr><td>5</td><td>그룹 순위 노출</td><td>이름·순위·회차 전부 공개. 북클럽은 서로 보이는 게 동력</td><td>내 순위만 보이고 남은 익명 막대 (부담 완화)</td></tr>
+    <tr><td>6</td><td>플랜 헤더 위치</td><td>본문 위 카드. 플랜 모드일 때만 렌더, 목차·검색 진입 시 사라짐</td><td>QuickNavFab 옆 작은 뱃지로 축소</td></tr>
+    <tr><td>7</td><td>절 경계 회차 (39↔40)</td><td>열왕기하 15장은 양쪽 회차에 속하고, 읽으면 둘 다 채움. 헤더에 '15:22까지'만 표시</td><td>절 단위 스크롤 위치로 판정 (구현 무거움)</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

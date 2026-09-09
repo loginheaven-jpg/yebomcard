@@ -37,6 +37,16 @@
 | [docs/IA_5TAB.md](docs/IA_5TAB.md) | UI/UX | BottomTabBar + SettingsSheet + QuickNavFab + 모달 스택 / 좌우 스와이프 / 다크 추종 | IA 또는 5탭 정책 변경 시 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 데이터 | bible_verses/bible_audio/scraps + UNIQUE 정책 + RLS + 마이그레이션 + BibleVersion 추가 체크리스트 | DB 스키마·정책 변경 시 |
 
+### docs/tasks/ (진행 중 작업 지시서)
+
+작업이 끝나면 `backup/` 으로 옮긴다.
+
+| 문서 | 상태 | 내용 |
+|---|---|---|
+| [docs/tasks/말씀의삶_클코_작업지시서_v1.1.md](docs/tasks/말씀의삶_클코_작업지시서_v1.1.md) | **확정본** | 성경읽기진도표 91회차 북클럽 — 단계 0~4. §번호는 v1 유지 |
+| [docs/tasks/말씀의삶_주요화면시안.html](docs/tasks/말씀의삶_주요화면시안.html) | 별첨 | 화면 A~D 시안. 단, 시안 D 의 "먼저 마친 사람이 위" 는 폐기(v1.1 §6.3) |
+| [docs/tasks/말씀의삶_클코_작업지시서_v1.md](docs/tasks/말씀의삶_클코_작업지시서_v1.md) | 이력 | v1.1 로 대체. 검토 경과 확인용 |
+
 ### backup/ (실효 보관 — git 이력 보존)
 
 | 문서 | 실효 사유 |
