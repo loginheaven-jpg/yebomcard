@@ -97,7 +97,8 @@ def _process(job):
                         else group[0]["ref"]) + (f" (재시도{tries0})" if tries0 else "")
         try:
             wavs, sr = engine.synth_batch([g["text"] for g in group], voice,
-                                          job["temp"], job["punct"], max_len=max_len)
+                                          job["temp"], job["punct"], max_len=max_len,
+                                          force=(tries0 >= 1))
         except Exception as e:
             job["status"] = "error"
             job["error"] = str(e)[:500]

@@ -211,7 +211,32 @@ def transcribe(path, with_ts=True):
 
 
 # ───────────────────────── 합성 ─────────────────────────
-def split_text(text, max_len=MAX_LEN):
+SENT_RE = re.compile(r"(?<=[.!?。？！])\s+")
+
+
+def force_split(text):
+    """길이와 무관하게 문장 → (안 되면) 쉼표 단위로 쪼갠다.
+
+    구조가 반복되는 절에서 모델이 한쪽을 통째로 건너뛴다:
+      "귀가 말을 알아듣지 못하겠느냐? 혀가 음식 맛을 알지 못하겠느냐?" → 앞 문장만
+      "어찌하여 너는 ... 여기며, 어찌하여 우리를 ... 보느냐?"        → 뒷 절만
+    36~40자라 max_len 분할(최소 40)이 걸리지 않으니 재시도 때 이걸로 강제한다."""
+    t = (text or "").strip()
+    segs = [s.strip() for s in SENT_RE.split(t) if s.strip()]
+    if len(segs) > 1:
+        return segs
+    segs = [s.strip() for s in t.split(",") if s.strip()]
+    if len(segs) > 1 and min(len(s) for s in segs) >= 8:
+        # 쉼표는 제 자리에 남겨야 억양이 유지된다
+        return [s + "," for s in segs[:-1]] + [segs[-1]]
+    return [t]
+
+
+def split_text(text, max_len=MAX_LEN, force=False):
+    if force:
+        segs = force_split(text)
+        if len(segs) > 1:
+            return segs
     parts, buf = [], ""
     for chunk in re.split(r"(?<=[.!?。？！])\s+|\n+", (text or "").strip()):
         chunk = chunk.strip()
@@ -268,7 +293,7 @@ def synth_one(text, voice, temp=0.75, punct=True):
         return merged, sr
 
 
-def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN):
+def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=False):
     """여러 텍스트를 한 번에 합성(처리량↑). 분할이 필요한 긴 항목만 개별 처리.
 
     max_len 을 줄이면 더 잘게 쪼갠다 — 재시도 때 쓰면 '긴 입력에서 뒷문장이
@@ -280,7 +305,8 @@ def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN):
         prompt = tts.create_voice_clone_prompt(
             ref_audio=voice_ref(voice), ref_text=meta["ref_text"])
         kw = gen_kwargs(temp)
-        prepared = [split_text(prosody.add_punct(t) if punct else t, max_len) for t in texts]
+        prepared = [split_text(prosody.add_punct(t) if punct else t, max_len, force)
+                    for t in texts]
         results = [None] * len(texts)
         sr = SR_TARGET
 
@@ -343,6 +369,21 @@ def num_to_kor(text: str) -> str:
 
 
 
+def qc_threshold(n_chars, base=0.85):
+    """짧은 절일수록 임계를 낮춘다.
+
+    ASR 오차는 보통 1~2글자인데 짧은 절에서는 그 몇 글자가 일치율을 크게 떨어뜨린다.
+    실측: "욥이 대답하였다"(9자) → ASR "요비 대답하였다" = 71%. 발화속도 7.5자/초로
+    음원은 멀쩡한데 85% 기준으로는 불합격이 된다. 길이에 맞춰 기준을 조정한다."""
+    if n_chars < 15:
+        return min(base, 0.60)
+    if n_chars < 30:
+        return min(base, 0.72)
+    if n_chars < 60:
+        return min(base, 0.80)
+    return base
+
+
 def qc(wav_path, src_text, min_ratio=0.85):
     """생성음을 ASR 로 되받아 원문과 대조. (ok, ratio, reason, asr_text)"""
     import difflib
@@ -362,8 +403,9 @@ def qc(wav_path, src_text, min_ratio=0.85):
     a = NORM_RE.sub("", src_text)
     b = NORM_RE.sub("", num_to_kor(hyp))   # ASR 숫자 표기 차이를 흡수
     ratio = difflib.SequenceMatcher(None, a, b).ratio()
-    if ratio < min_ratio:
-        return False, ratio, f"본문 불일치({ratio*100:.0f}%)", hyp
+    thr = qc_threshold(len(a), min_ratio)
+    if ratio < thr:
+        return False, ratio, f"본문 불일치({ratio*100:.0f}%<{thr*100:.0f}%)", hyp
     return True, ratio, "", hyp
 
 

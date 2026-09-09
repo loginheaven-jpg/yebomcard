@@ -17,6 +17,7 @@ text/
 
 # 실행 로그
 *.log
+*.err
 
 # 2번째 PC 업로드용 로컬 패키지
 node_modules/
