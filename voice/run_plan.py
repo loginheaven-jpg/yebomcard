@@ -18,7 +18,7 @@ import jobs
 import plan
 
 
-def ensure_job(voice, version, book_name, batch, retry, seq):
+def ensure_job(voice, version, book_name, batch, retry, seq, upload_key=None):
     """같은 책의 미완료 작업이 있으면 재사용, 없으면 생성. (jid, total) 반환"""
     title = f"{version} {book_name}"
     for j in jobs.list_jobs():
@@ -30,7 +30,8 @@ def ensure_job(voice, version, book_name, batch, retry, seq):
             jobs.requeue(j["id"])
             return j["id"], len(j["items"]), False
     items = ui.build_items(voice, "성경 범위", version, [book_name], None, None, "", None)
-    jid = jobs.new_job(voice, title, items, batch=batch, retry_max=retry, seq=seq)
+    jid = jobs.new_job(voice, title, items, batch=batch, retry_max=retry, seq=seq,
+                       upload_key=upload_key)
     return jid, len(items), False
 
 
@@ -47,6 +48,9 @@ def main():
                     help="구약/신약만 처리 (예: 다른 PC 에서 신약 병행)")
     ap.add_argument("--only", default=None,
                     help="쉼표로 구분한 책 이름만 처리 (예: 마태복음,마가복음)")
+    ap.add_argument("--upload-key", default=None,
+                    help="예봄성경 성우 슬롯(예: f4). 생략하면 보이스 meta.json 의 voiceKey")
+    ap.add_argument("--no-upload", action="store_true", help="자동 업로드 끄기")
     a = ap.parse_args()
 
     if a.start not in plan.BY_NAME:
@@ -68,13 +72,22 @@ def main():
         print("처리할 책이 없습니다"); sys.exit(1)
 
     # 분담 생성 시 각 PC 에서 이 지문이 **반드시 같아야** 한다(같은 참조음/텍스트).
+    upload_key = None if a.no_upload else (a.upload_key or engine.voice_upload_key(a.voice))
     print(f"[보이스] {a.voice} · 지문 {engine.voice_fingerprint(a.voice)}", flush=True)
+    if upload_key:
+        import server
+        print(f"[업로드] 합격 절을 예봄성경 '{upload_key}' 로 자동 전송"
+              f"{'' if server.enabled() else ' — 다만 서버 연동 정보(studio.json)가 없어 보류됩니다'}",
+              flush=True)
+    else:
+        print("[업로드] 자동 전송 없음 (생성만 합니다)", flush=True)
     print(f"[진도표] {a.version} · {len(todo)}권 "
           f"({todo[0][2]} → {todo[-1][2]})", flush=True)
 
     t_all = time.time()
     for seq, code, name, day in todo:
-        jid, total, already = ensure_job(a.voice, a.version, name, a.batch, a.retry, seq)
+        jid, total, already = ensure_job(a.voice, a.version, name, a.batch, a.retry, seq,
+                                         upload_key)
         if already:
             print(f"[{seq:2d}/66] {name} — 이미 완료, 건너뜀", flush=True)
             continue

@@ -19,6 +19,7 @@ import soundfile as sf
 
 import engine
 import jobs
+import server
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -205,7 +206,7 @@ def ui_estimate(voice, mode, ver_label, book_names, ch_from, ch_to, custom_text,
 
 
 def ui_add_job(voice, mode, ver_label, book_names, ch_from, ch_to, custom_text, file_obj,
-               batch, temp, punct, retry):
+               batch, temp, punct, retry, auto_upload):
     if not voice:
         return "보이스를 먼저 선택하세요", gr.update()
     try:
@@ -214,9 +215,23 @@ def ui_add_job(voice, mode, ver_label, book_names, ch_from, ch_to, custom_text, 
         return f"실패: {e}", gr.update()
     title = (f"{ver_label} {'·'.join(book_names[:3])}{'…' if len(book_names) > 3 else ''}"
              if mode == "성경 범위" else f"{mode} {len(items)}행")
+
+    # 성경 본문일 때만 예봄성경에 올린다 — 직접 입력·텍스트 파일은 본문이 아니라
+    # 공유 캐시 키(본문 sha1)에 얹을 근거가 없다.
+    upload_key = None
+    note = ""
+    if auto_upload and mode == "성경 범위":
+        upload_key = engine.voice_upload_key(voice)
+        if not upload_key:
+            note = f"  (주의: 보이스 '{voice}' 에 예봄성경 성우 슬롯이 없어 업로드하지 않습니다)"
+        elif not server.enabled():
+            note = "  (주의: 서버 연동 정보가 없어 업로드가 보류됩니다)"
+        else:
+            note = f"  → 합격 절은 예봄성경 '{upload_key}' 로 자동 업로드됩니다"
+
     jid = jobs.new_job(voice, title, items, temp=float(temp), punct=bool(punct),
-                       batch=int(batch), retry_max=int(retry))
-    return f"작업 등록: {jid} ({len(items):,}개 항목)", ui_job_rows()
+                       batch=int(batch), retry_max=int(retry), upload_key=upload_key)
+    return f"작업 등록: {jid} ({len(items):,}개 항목){note}", ui_job_rows()
 
 
 def ui_job_rows():
@@ -224,8 +239,10 @@ def ui_job_rows():
     for j in jobs.list_jobs()[:30]:
         ok, held, pend = jobs.counts(j)
         tot = len(j["items"])
+        up_done, up_left = jobs.upload_counts(j)
+        up = "—" if not j.get("upload_key") else f"{up_done}" + (f" (+{up_left})" if up_left else "")
         rows.append([j["id"], j["voice"], j["title"], j["status"],
-                     f"{ok}/{tot}", held, pend])
+                     f"{ok}/{tot}", held, pend, up])
     return rows
 
 
@@ -233,6 +250,11 @@ def ui_progress():
     cur = jobs.current()
     alive = "가동중" if jobs.worker_alive() else "정지"
     note = f" · 처리중: {cur['note']}" if cur.get("note") else ""
+    # 업로드가 조용히 실패하면 며칠치 작업이 서빙되지 않은 채 쌓인다 — 눈에 보이게 한다
+    errs = [f"{j['title']}: {j['upload_error']}" for j in jobs.list_jobs()[:30]
+            if j.get("upload_error")]
+    if errs:
+        note += "  [업로드 오류] " + " / ".join(errs[:2])
     return f"워커 {alive}{note}", ui_job_rows()
 
 
@@ -383,6 +405,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             b_temp = gr.Slider(0.5, 1.0, value=0.75, step=0.05, label="temperature")
             b_retry = gr.Slider(1, 5, value=3, step=1, label="재시도 상한")
             b_punct = gr.Checkbox(value=True, label="구두점 주입(개역 등 구두점 없는 본문에 유효)")
+        b_upload = gr.Checkbox(
+            value=True,
+            label="완성된 절을 예봄성경에 자동 업로드 (성경 범위일 때만)")
         with gr.Row():
             b_btn_est = gr.Button("예상 계산")
             b_btn_add = gr.Button("작업 추가 (생성 시작)", variant="primary")
@@ -391,7 +416,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         with gr.Row():
             b_status = gr.Textbox(label="워커", scale=3)
             b_btn_stop = gr.Button("워커 정지", variant="stop")
-        b_jobs = gr.Dataframe(headers=["작업ID", "보이스", "제목", "상태", "합격/전체", "보류", "대기"],
+        b_jobs = gr.Dataframe(headers=["작업ID", "보이스", "제목", "상태", "합격/전체", "보류", "대기", "업로드"],
                               label="작업", interactive=False, wrap=True)
         with gr.Row():
             b_jid = gr.Dropdown([], label="이어할 작업 ID", scale=2)
@@ -438,7 +463,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                     [b_voice, b_mode, b_ver, b_books, b_cf, b_ct, b_text, b_file], b_msg)
     b_btn_add.click(ui_add_job,
                     [b_voice, b_mode, b_ver, b_books, b_cf, b_ct, b_text, b_file,
-                     b_batch, b_temp, b_punct, b_retry], [b_msg, b_jobs])
+                     b_batch, b_temp, b_punct, b_retry, b_upload], [b_msg, b_jobs])
     b_btn_stop.click(ui_stop, None, b_msg)
     b_btn_resume.click(ui_resume, [b_jid], b_msg)
     b_timer.tick(ui_progress, None, [b_status, b_jobs])

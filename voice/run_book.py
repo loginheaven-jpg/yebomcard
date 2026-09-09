@@ -25,6 +25,9 @@ def main():
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--retry", type=int, default=3)
     ap.add_argument("--resume", default=None, help="이어할 작업 ID")
+    ap.add_argument("--upload-key", default=None,
+                    help="예봄성경 성우 슬롯(예: f4). 생략하면 보이스 meta.json 의 voiceKey")
+    ap.add_argument("--no-upload", action="store_true", help="자동 업로드 끄기")
     a = ap.parse_args()
 
     title = f"{a.version} {a.book}"
@@ -53,7 +56,9 @@ def main():
         print(f"[대상] {a.version} {a.book} — {total}절 / {chars:,}자")
         print(f"       예상 오디오 {audio/3600:.1f}h · 예상 생성 {gen/3600:.1f}h")
         jid = jobs.new_job(a.voice, title, items,
-                           batch=a.batch, retry_max=a.retry, seq=seq)
+                           batch=a.batch, retry_max=a.retry, seq=seq,
+                           upload_key=(None if a.no_upload
+                                       else (a.upload_key or engine.voice_upload_key(a.voice))))
         print(f"[작업] {jid} 시작 (진도표 순번 {seq})")
 
     t0 = time.time()

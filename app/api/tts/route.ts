@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import * as crypto from "crypto";
 import { markEngineDown, clearEngineDown, isEngineDown } from "@/lib/tts/engineHealth";
 import { getR2Audio, putR2Audio } from "@/lib/tts/r2Cache";
-
-// 공유 캐시 키 버전 — 성우↔엔진 매핑을 바꾸면 올려서 일괄 무효화(본문 변경은 sha1 로 자동 무효화).
-const TTS_CACHE_VERSION = "v1";
+// 정제/키 규칙은 lib/tts/verseText 한 곳에 둔다 — 로컬 스튜디오(voice/engine.py)와
+// 문자 단위로 같아야 하고, 어긋나면 에러 없이 조용히 캐시 미스가 난다.
+import { cleanForTts, ttsCacheKey } from "@/lib/tts/verseText";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -237,8 +237,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "text is required" }, { status: 400 });
     }
     // TTS 입력 정제: 새번역(rnksv) 등 편집자 주석 "(주: …)"은 화면엔 두되 낭독에서만 제외.
-    // 주석은 절 끝에 오므로 "(주:"부터 끝까지 제거. "( 셀라 )"·본문 괄호는 보존.
-    const ttsText = text.replace(/\s*\(\s*주\s*[:：][\s\S]*$/, "").trim() || text;
+    const ttsText = cleanForTts(text);
     if (new TextEncoder().encode(ttsText).length > 5000) {
       return NextResponse.json(
         { error: "text too long (max 5000 bytes)" },
@@ -253,8 +252,7 @@ export async function POST(req: NextRequest) {
     const voiceKey = isEng
       ? `${accent === "gb" ? "gb" : "us"}-${isMale ? "male" : "female"}`
       : koreanVoice || "m1";
-    const textHash = crypto.createHash("sha1").update(ttsText).digest("hex");
-    const r2Key = `tts/${TTS_CACHE_VERSION}/${isEng ? "en" : "ko"}/${voiceKey}/${textHash}.mp3`;
+    const r2Key = ttsCacheKey(ttsText, voiceKey, isEng ? "en" : "ko");
     const cachedR2 = await getR2Audio(r2Key);
     if (cachedR2) {
       return ttsAudioResponse(cachedR2.buffer, cachedR2.voice || "r2", "hit");

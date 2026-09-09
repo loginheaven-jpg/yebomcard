@@ -298,6 +298,13 @@ export default function SettingsSheet({
                       <span className="text-[var(--ink-faint)]">›</span>
                     </span>
                   </a>
+                  <a
+                    href="/admin/voice-studio"
+                    className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
+                  >
+                    <span>음원 생성 PC 설치</span>
+                    <span className="text-[var(--ink-faint)]">›</span>
+                  </a>
                   </>
                 )}
               </div>

@@ -58,8 +58,13 @@ def counts(job):
 
 
 # ───────────────────────── 작업 생성 ─────────────────────────
-def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, seq=9999):
-    """items: [{key, ref, text, out}] — out 은 절별 wav 절대경로(str)"""
+def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, seq=9999,
+            upload_key=None):
+    """items: [{key, ref, text, out}] — out 은 절별 wav 절대경로(str)
+
+    upload_key: 예봄성경 성우 슬롯(예: "f4"). 주면 **합격한 절을 그때그때
+    서버로 올린다** — 책 하나가 끝날 때까지 기다리지 않으므로, 며칠짜리 작업이
+    중간에 끊겨도 그때까지 만든 음원은 이미 교인에게 서빙되고 있다."""
     jid = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
     prepared = []
     for it in items:
@@ -73,10 +78,70 @@ def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, se
         })
     job = {"id": jid, "voice": voice, "title": title, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
            "status": "queued", "temp": temp, "punct": punct, "batch": batch,
-           "retry_max": retry_max, "seq": seq, "items": prepared}
+           "retry_max": retry_max, "seq": seq, "upload_key": upload_key,
+           "items": prepared}
     save(job)
     start_worker()
     return jid
+
+
+# ───────────────────────── 자동 업로드 ─────────────────────────
+# 합격한 절을 예봄성경 공유 캐시로 보낸다. 키는 서버가 본문으로 계산하므로
+# 로컬은 본문과 mp3 만 보내면 된다(로컬에 R2 비밀키가 없다).
+UPLOAD_BATCH = 10
+
+
+def _upload_ready(job):
+    """아직 안 올린 합격 절을 골라 올린다. 실패는 다음 회차에 다시 시도한다."""
+    key = job.get("upload_key")
+    if not key:
+        return
+    ready = [i for i in job["items"] if i["status"] == "ok" and not i.get("uploaded")]
+    if not ready:
+        return
+    try:
+        import server
+        if not server.enabled():
+            return
+    except Exception:
+        return
+
+    for n in range(0, len(ready), UPLOAD_BATCH):
+        chunk = ready[n:n + UPLOAD_BATCH]
+        payload = []
+        for it in chunk:
+            try:
+                payload.append({"ref": it["ref"], "text": it["text"],
+                                "mp3": engine.encode_mp3(it["out"])})
+            except Exception as e:
+                it["upload_error"] = str(e)[:120]
+        if not payload:
+            continue
+        try:
+            res = server.upload_verses(key, payload)
+        except Exception as e:
+            # 네트워크 장애로 생성을 멈추지는 않는다 — 다음 회차에 다시 올린다
+            job["upload_error"] = str(e)[:200]
+            return
+        job.pop("upload_error", None)
+        by_ref = {r["ref"]: r for r in res.get("results", [])}
+        for it in chunk:
+            r = by_ref.get(it["ref"])
+            if r and r["status"] in ("uploaded", "exists"):
+                it["uploaded"] = True
+                it.pop("upload_error", None)
+            elif r:
+                it["upload_error"] = r.get("error", "")[:120]
+
+
+def upload_counts(job):
+    """(올림, 올릴 것 남음) — UI/CLI 표시용"""
+    key = job.get("upload_key")
+    if not key:
+        return 0, 0
+    done = sum(1 for i in job["items"] if i.get("uploaded"))
+    left = sum(1 for i in job["items"] if i["status"] == "ok" and not i.get("uploaded"))
+    return done, left
 
 
 # ───────────────────────── 워커 ─────────────────────────
@@ -122,8 +187,11 @@ def _process(job):
             elif it["tries"] >= job["retry_max"]:
                 it["status"] = "held"          # 상한 초과 → 보류(사람이 판단)
             # else: pending 유지 → 다음 루프에서 재시도
+        _upload_ready(job)
         save(job)
 
+    if not _stop.is_set():
+        _upload_ready(job)          # 마지막 배치까지 확실히 올리고 끝낸다
     job["status"] = "stopped" if _stop.is_set() else "done"
     save(job)
 
@@ -185,6 +253,7 @@ def regenerate(jid, keys):
             it["status"] = "pending"
             it["tries"] = 0
             it["reason"] = ""
+            it.pop("uploaded", None)   # 새로 만들면 다시 올려야 한다
             n += 1
     if n:
         job["status"] = "queued"

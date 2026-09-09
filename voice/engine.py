@@ -13,6 +13,7 @@
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import threading
 from pathlib import Path
@@ -63,11 +64,36 @@ def _env():
     return env
 
 
-def _sb(params):
+_sb_conf = None
+
+
+def _sb_credentials():
+    """(url, anon key). 이 저장소 안에서 돌 때는 .env.local, 설치된 PC 에서는 서버에서 받는다.
+
+    Supabase anon 키는 이미 브라우저 번들에 들어 있는 **공개 키**라 이렇게 받아도 된다.
+    이 덕분에 새 PC 에 .env.local 을 복사할 필요가 없다."""
+    global _sb_conf
+    if _sb_conf:
+        return _sb_conf
     e = _env()
     url, key = e.get("NEXT_PUBLIC_SUPABASE_URL"), e.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    if not url or not key:
-        raise RuntimeError(".env.local 에서 Supabase 정보를 못 읽었다")
+    if not (url and key):
+        try:
+            import server
+            rc = server.remote_config()
+            if rc:
+                url, key = rc.get("supabaseUrl"), rc.get("supabaseAnonKey")
+        except Exception as ex:
+            raise RuntimeError(f"성경 본문 접속 정보를 얻지 못했습니다: {ex}")
+    if not (url and key):
+        raise RuntimeError(
+            ".env.local 도 서버 연동(studio.json)도 없어 성경 본문을 읽을 수 없습니다")
+    _sb_conf = (url, key)
+    return _sb_conf
+
+
+def _sb(params):
+    url, key = _sb_credentials()
     r = requests.get(f"{url}/rest/v1/bible_verses", params=params,
                      headers={"apikey": key, "Authorization": f"Bearer {key}"}, timeout=30)
     r.raise_for_status()
@@ -132,6 +158,12 @@ def voice_meta(name):
 
 def voice_ref(name):
     return str(VOICES / name / "ref.wav")
+
+
+def voice_upload_key(name):
+    """이 보이스가 예봄성경의 어느 성우 슬롯으로 올라가는지(예: 영희→f4).
+    meta.json 에 voiceKey 가 없으면 None — 자동 업로드를 하지 않는다."""
+    return (voice_meta(name) or {}).get("voiceKey") or None
 
 
 def cut_audio(src, dst, start=None, end=None, sr=SR_TARGET):
@@ -413,3 +445,36 @@ def estimate(chars):
     """글자수 → (예상 오디오초, 예상 생성초)"""
     audio = chars / CPS if CPS else 0
     return audio, audio * RTF
+
+
+# ───────────────────────── mp3 인코딩 ─────────────────────────
+# 예전에는 Node + @aws-sdk 로 인코딩·업로드를 했다. 새 PC 설치를 단순하게 하려고
+# 파이썬으로 옮겼다 — 이제 로컬에 Node 도 R2 키도 필요 없다.
+_ffmpeg = None
+
+
+def ffmpeg_exe():
+    """imageio-ffmpeg 가 가져온 실행파일을 우선 쓰고, 없으면 시스템 ffmpeg."""
+    global _ffmpeg
+    if _ffmpeg:
+        return _ffmpeg
+    try:
+        import imageio_ffmpeg
+        _ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        _ffmpeg = shutil.which("ffmpeg")
+    if not _ffmpeg:
+        raise RuntimeError("ffmpeg 를 찾지 못했습니다 — pip install imageio-ffmpeg")
+    return _ffmpeg
+
+
+def encode_mp3(wav_path, bitrate="96k"):
+    """wav 파일 → mp3 bytes (모노). 공유 캐시에 올릴 형식."""
+    out = subprocess.run(
+        [ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(wav_path),
+         "-ac", "1", "-b:a", bitrate, "-f", "mp3", "pipe:1"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if out.returncode != 0 or not out.stdout:
+        raise RuntimeError(f"mp3 인코딩 실패: {out.stderr.decode('utf-8', 'replace')[:200]}")
+    return out.stdout
