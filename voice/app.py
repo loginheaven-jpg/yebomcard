@@ -337,8 +337,9 @@ def ui_job_rows():
         tot = len(j["items"])
         up_done, up_left = jobs.upload_counts(j)
         up = "—" if not j.get("upload_key") else f"{up_done}" + (f" (+{up_left})" if up_left else "")
-        rows.append([j["id"], j["voice"], j["title"], j["status"],
-                     f"{ok}/{tot}", held, pend, up])
+        pct = (ok + held) * 100 // tot if tot else 0
+        rows.append([j["id"], j["voice"], jobs.where(j), j["status"],
+                     f"{ok}/{tot} ({pct}%)", held, pend, up])
     return rows
 
 
@@ -355,6 +356,11 @@ def ui_progress():
     cur = jobs.current()
     alive = "가동중" if jobs.worker_alive() else "정지"
     note = f" · 처리중: {cur['note']}" if cur.get("note") else ""
+    # 어디까지 왔는지 — 숫자만으로는 어느 성경인지 알 수 없다
+    if cur.get("job"):
+        j = jobs.load(cur["job"])
+        if j:
+            note = f" · {jobs.where(j)}" + note
     # 업로드가 조용히 실패하면 며칠치 작업이 서빙되지 않은 채 쌓인다 — 눈에 보이게 한다
     errs = [f"{j['title']}: {j['upload_error']}" for j in jobs.list_jobs()[:30]
             if j.get("upload_error")]
@@ -527,7 +533,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         with gr.Row():
             b_status = gr.Textbox(label="워커", scale=3)
             b_btn_stop = gr.Button("워커 정지", variant="stop")
-        b_jobs = gr.Dataframe(headers=["작업ID", "보이스", "제목", "상태", "합격/전체", "보류", "대기", "업로드"],
+        b_jobs = gr.Dataframe(headers=["작업ID", "보이스", "진행 위치", "상태", "합격/전체", "보류", "대기", "업로드"],
                               label="작업", interactive=False, wrap=True)
         with gr.Row():
             b_jid = gr.Dropdown([], label="이어할 작업 ID", scale=2)
@@ -590,6 +596,14 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     c_btn_merge.click(ui_merge, [c_jid], [c_merged, c_msg])
 
     def _boot():
+        # PC 가 꺼졌다 켜졌으면 중단된 작업을 자동으로 이어간다.
+        # 예전엔 사람이 '이어하기' 를 누르기 전까지 아무 일도 일어나지 않았다.
+        try:
+            n = jobs.resume_all()
+            if n:
+                print(f"[재개] 중단된 작업 {n}개를 이어서 진행합니다", flush=True)
+        except Exception as e:
+            print(f"[재개] 실패: {e}", flush=True)
         v = _voices()
         return (gr.update(choices=v, value=(v[0] if v else None)),
                 gr.update(choices=v, value=(v[0] if v else None)),

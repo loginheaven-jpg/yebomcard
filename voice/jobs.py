@@ -202,6 +202,51 @@ def _apply_regen_requests(job):
     return n
 
 
+def book_progress(job):
+    """지금 몇 번째 책의 어디를 하고 있는지.
+
+    작업 하나에 수십 권·수만 절이 들어가면 "20/20530" 만으로는 어디까지 왔는지
+    알 수 없다. 절 참조("출애굽기 3:14")에서 책을 뽑아 권 단위로 집계한다.
+
+    반환: {books:[{name,done,total}], current, done_books, total_books, last_ref}
+    """
+    order, per = [], {}
+    for it in job["items"]:
+        b = (it.get("ref") or " ").split(" ")[0]
+        if b not in per:
+            per[b] = {"name": b, "done": 0, "total": 0}
+            order.append(b)
+        per[b]["total"] += 1
+        if it["status"] in ("ok", "held"):
+            per[b]["done"] += 1
+
+    current, last_ref = None, None
+    for b in order:
+        if per[b]["done"] < per[b]["total"] and current is None:
+            current = per[b]
+    for it in job["items"]:
+        if it["status"] in ("ok", "held"):
+            last_ref = it.get("ref")
+    return {
+        "books": [per[b] for b in order],
+        "current": current,
+        "done_books": sum(1 for b in order if per[b]["done"] >= per[b]["total"]),
+        "total_books": len(order),
+        "last_ref": last_ref,
+    }
+
+
+def where(job):
+    """진행 위치 한 줄 — '출애굽기 320/1213 · 3/38권'"""
+    p = book_progress(job)
+    if p["total_books"] <= 1:
+        c = p["current"]
+        return f"{c['name']} {c['done']}/{c['total']}" if c else (p["last_ref"] or "")
+    c = p["current"]
+    head = f"{c['name']} {c['done']}/{c['total']}" if c else "완료"
+    return f"{head} · {p['done_books']}/{p['total_books']}권"
+
+
 def upload_counts(job):
     """(올림, 올릴 것 남음) — UI/CLI 표시용"""
     key = job.get("upload_key")
@@ -242,11 +287,35 @@ def _skip_already_made(job):
     return n
 
 
+def _flag_note_residue(job):
+    """주석이 본문에 섞여 들어간 절은 만들지 않고 보류한다.
+
+    만들어 버리면 주석을 소리 내어 읽는 음원이 되고, 검수는 통과한다 —
+    잘못된 원문과 음원이 일치하기 때문이다(욥기 1:5 가 그랬다).
+    사람이 본문을 고쳐야 하는 일이므로 중앙 검수로 올린다."""
+    n = 0
+    for it in job["items"]:
+        if it["status"] != "pending":
+            continue
+        stray = engine.note_residue(it["text"])
+        if stray:
+            it["status"] = "held"
+            it["reason"] = f"본문에 주석 잔재 의심(짝 없는 괄호 {stray}개) — 본문 확인 필요"
+            it["ratio"] = None
+            n += 1
+    return n
+
+
 # ───────────────────────── 워커 ─────────────────────────
 def _process(job):
     job["status"] = "running"
     save(job)
     voice, batch = job["voice"], max(1, int(job["batch"]))
+
+    flagged = _flag_note_residue(job)
+    if flagged:
+        _cur["note"] = f"주석 잔재 의심 {flagged}개 보류"
+        save(job)
 
     skipped = _skip_already_made(job)
     if skipped:
@@ -338,6 +407,34 @@ def start_worker():
     _stop.clear()
     _worker = threading.Thread(target=_loop, daemon=True)
     _worker.start()
+
+
+def unfinished():
+    """아직 안 끝난 작업들. PC 가 꺼졌다 켜졌을 때 이어갈 대상."""
+    out = []
+    for j in list_jobs():
+        _ok, _held, pend = counts(j)
+        if pend and j.get("status") in ("queued", "running", "stopped"):
+            out.append(j)
+    return out
+
+
+def resume_all():
+    """중단된 작업을 모두 다시 큐에 올리고 워커를 켠다.
+
+    PC 가 꺼지면 작업 파일에 status="running" 이 그대로 남는다. 워커는 그 상태도
+    집어가지만, **앱이 켜질 때 워커 자체가 시작되지 않아** 사람이 '이어하기'를
+    누르기 전까지 아무 일도 일어나지 않았다. 며칠짜리 작업에서는 치명적이다.
+
+    반환: 이어갈 작업 수"""
+    jobs_ = unfinished()
+    for j in jobs_:
+        if j.get("status") == "stopped":
+            j["status"] = "queued"
+            save(j)
+    if jobs_:
+        start_worker()
+    return len(jobs_)
 
 
 def stop_worker():

@@ -141,6 +141,28 @@ def get_book_verses(version, book_code):
     return out
 
 
+def note_residue(text):
+    """주석 잔재를 짚는다 — 짝이 맞지 않는 닫는 괄호의 개수.
+
+    편집자 주석은 괄호 안에 들어가고 낭독에서 제외해야 한다(NOTE_RE). 그런데
+    여는 괄호가 빠진 채로 들어간 절이 있다. 그러면 주석이 본문으로 남아
+    **소리 내어 읽힌다** — 실제로 욥기 1:5 가 그랬다.
+
+    대조본 없이 판별할 수 있는 객관적 기준이 이것이다: 여는 괄호가 사라지면
+    닫는 ')' 만 남는다. 새번역 31,075절 중 16절이 여기 걸렸고, 반대로
+    "또는 '이렇게 하자'" 처럼 본문에 있는 표현은 괄호가 맞아 걸리지 않는다."""
+    depth = stray = 0
+    for c in text or "":
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            if depth:
+                depth -= 1
+            else:
+                stray += 1
+    return stray
+
+
 def text_hash(text):
     """공유 캐시 키에 쓰는 본문 해시. 서버 규칙과 동일해야 한다."""
     return hashlib.sha1(text.encode("utf-8")).hexdigest()
