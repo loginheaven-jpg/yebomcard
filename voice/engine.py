@@ -88,7 +88,9 @@ def _sb_credentials():
     if not (url and key):
         raise RuntimeError(
             ".env.local 도 서버 연동(studio.json)도 없어 성경 본문을 읽을 수 없습니다")
-    _sb_conf = (url, key)
+    # 값 끝에 줄바꿈이 섞여 오는 일이 있다(배포처 환경변수에 붙어 들어간 경우).
+    # 그대로 두면 HTTP 헤더에 넣을 때 터진다 — 여기서 걷어낸다.
+    _sb_conf = (url.strip(), key.strip())
     return _sb_conf
 
 

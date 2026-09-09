@@ -18,10 +18,15 @@ export async function GET(req: Request) {
   const gate = await requireDevice(req);
   if (!gate.ok) return gate.res;
 
+  // 배포처 환경변수 값에 줄바꿈·공백이 섞여 들어가는 일이 흔하다. 그대로 내보내면
+  // 받는 쪽에서 HTTP 헤더에 넣을 때 터진다("Invalid ... return character(s) in header value").
+  // 여기서 한 번 걷어낸다.
+  const clean = (v: string | undefined) => (v || "").trim();
+
   return NextResponse.json(
     {
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      supabaseUrl: clean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      supabaseAnonKey: clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       ttsCacheVersion: TTS_CACHE_VERSION,
       voiceKeys: PREGENERATED_VOICE_KEYS,
       issuedTo: gate.claims.sub,
