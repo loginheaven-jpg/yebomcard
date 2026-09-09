@@ -35,6 +35,9 @@ def main():
     ap.add_argument("--book", default=None, help="책 이름(작업 제목으로 검색)")
     ap.add_argument("--job", default=None, help="작업 ID 직접 지정")
     ap.add_argument("--dry", action="store_true", help="판정만 출력")
+    ap.add_argument("--report-only", action="store_true",
+                    help="불합격을 재생성하지 않고 보류로 두고 중앙 검수로만 올린다. "
+                         "고유명사 오인식처럼 다시 만들어도 같은 결과가 나오는 경우에 쓴다")
     a = ap.parse_args()
 
     job = pick_job(a.book, a.job)
@@ -76,12 +79,15 @@ def main():
         it["ratio"] = round(ratio, 3)
         it["reason"] = "재검수 통과"
     for it, reason, ratio in requeue:
-        it["status"] = "pending"
-        it["tries"] = 1            # 첫 재생성부터 강제 분할이 걸리도록
         it["ratio"] = round(ratio, 3) if ratio else None
         it["reason"] = reason
-    if requeue:
-        job["status"] = "queued"
+        if a.report_only:
+            it["status"] = "held"      # 그대로 두고 사람이 듣고 판단
+        else:
+            it["status"] = "pending"
+            it["tries"] = 1            # 첫 재생성부터 강제 분할이 걸리도록
+    # 합격으로 바뀐 절을 올리고 보류를 중앙으로 보고하려면 워커가 이 작업을 한 번 집어야 한다
+    job["status"] = "queued"
     jobs.save(job)
     # 남은 보류를 서버로 보고 — 다른 PC 것과 함께 한 화면에서 판단한다
     try:
@@ -89,7 +95,8 @@ def main():
         jobs.save(job)
     except Exception as e:
         print(f"  (보류 보고 실패: {e})")
-    print(f"\n저장 완료 — 합격 +{len(passed)} · 대기 {len(requeue)}")
+    label = "보류 유지(중앙 검수로 보고)" if a.report_only else "대기"
+    print(f"\n저장 완료 — 합격 +{len(passed)} · {label} {len(requeue)}")
     print("이어서: python run_plan.py --voice 영희 --start 욥기")
 
 

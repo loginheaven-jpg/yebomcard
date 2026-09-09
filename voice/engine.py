@@ -12,6 +12,7 @@
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -257,10 +258,16 @@ def get_tts():
 
 
 def get_asr():
+    """검수용 ASR. 기본은 GPU.
+
+    생성이 도는 중에 재검수를 돌리면 VRAM 이 모자란다(3060 12GB 에서 생성만으로 98%).
+    그럴 때 YEBOM_ASR_DEVICE=cpu 로 두면 느리지만 생성을 방해하지 않는다."""
     global _asr
     if _asr is None:
         from faster_whisper import WhisperModel
-        _asr = WhisperModel(ASR_MODEL, device="cuda", compute_type="float16")
+        dev = os.environ.get("YEBOM_ASR_DEVICE", "cuda").lower()
+        _asr = (WhisperModel(ASR_MODEL, device="cpu", compute_type="int8") if dev == "cpu"
+                else WhisperModel(ASR_MODEL, device="cuda", compute_type="float16"))
     return _asr
 
 
@@ -419,6 +426,34 @@ def _sino(n: int) -> str:
     return out
 
 
+# 고유어 수사 — 성경 본문은 나이·햇수에 이쪽을 쓴다("예순다섯 살", "백일흔다섯 해").
+# Whisper 는 이걸 숫자로 받아쓰므로(65), 한자어(육십오)로만 되돌리면 영영 안 맞는다.
+_NATIVE_ONES = ["", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉"]
+_NATIVE_TENS = ["", "열", "스물", "서른", "마흔", "쉰", "예순", "일흔", "여든", "아흔"]
+
+
+def _native(n: int) -> str:
+    """1~99 는 고유어, 100 이상은 백 단위만 한자어로 얹는다(백일흔다섯)."""
+    if n <= 0 or n >= 1000:
+        return ""
+    head = ""
+    if n >= 100:
+        h, n = divmod(n, 100)
+        head = ("" if h == 1 else _SINO[h]) + "백"
+    return head + _NATIVE_TENS[n // 10] + _NATIVE_ONES[n % 10]
+
+
+def num_to_kor_native(text: str) -> str:
+    """ASR 의 아라비아 숫자를 **고유어** 수사로 — '65'→'예순다섯', '175'→'백일흔다섯'"""
+    t = re.sub(r"(?<=\d),(?=\d{3})", "", text or "")
+
+    def sub(m):
+        n = int(m.group(0))
+        return _native(n) or m.group(0)
+
+    return re.sub(r"\d+", sub, t)
+
+
 def num_to_kor(text: str) -> str:
     """ASR 결과의 아라비아 숫자를 한글 수사로 — '7천'→'칠천', '500'→'오백'"""
     t = re.sub(r"(?<=\d),(?=\d{3})", "", text or "")          # 3자리 쉼표 제거
@@ -461,8 +496,13 @@ def qc(wav_path, src_text, min_ratio=0.85):
     # 2) 본문 대조
     hyp = transcribe(wav_path, with_ts=False)
     a = NORM_RE.sub("", src_text)
-    b = NORM_RE.sub("", num_to_kor(hyp))   # ASR 숫자 표기 차이를 흡수
-    ratio = difflib.SequenceMatcher(None, a, b).ratio()
+    # Whisper 는 수사를 숫자로 받아쓴다. 한자어(육십오)와 고유어(예순다섯) 둘 다
+    # 같은 수를 읽은 것이므로, 두 표기로 각각 대조해 더 나은 쪽을 택한다.
+    # 한쪽만 보면 족보·나이가 많은 책(창세기 등)이 통째로 오탐이 된다.
+    ratio = max(
+        difflib.SequenceMatcher(None, a, NORM_RE.sub("", num_to_kor(hyp))).ratio(),
+        difflib.SequenceMatcher(None, a, NORM_RE.sub("", num_to_kor_native(hyp))).ratio(),
+    )
     thr = qc_threshold(len(a), min_ratio)
     if ratio < thr:
         return False, ratio, f"본문 불일치({ratio*100:.0f}%<{thr*100:.0f}%)", hyp
