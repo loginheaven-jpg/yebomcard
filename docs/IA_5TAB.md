@@ -1,20 +1,45 @@
-# 하단 5탭 IA + 통합 SettingsSheet 정책
+# 하단 6탭 IA + 통합 SettingsSheet 정책
 
-> Phase 2a~3 리디자인으로 도입된 정보 구조(IA). 2026-06-11 기준.
+> Phase 2a~3 리디자인으로 도입된 정보 구조(IA). 2026-09-09 '말씀의삶' 탭 추가로 6탭.
+> (파일명은 이력 보존을 위해 IA_5TAB.md 를 유지한다)
 
 ---
 
-## 1. 하단 5탭 (BottomTabBar)
+## 1. 하단 6탭 (BottomTabBar)
 
-`view === "search"` 일 때만 렌더 (display/card 뷰에서는 숨김).
+`view === "search" || view === "plan"` 일 때 렌더 (display/card 뷰에서는 숨김).
 
 | 탭 | 동작 |
 |---|---|
 | **목차** (toc) | `navRequest.target="toc"` — SearchPanel 의 책·장 선택 모드 |
 | **검색** (search) | `navRequest.target="search"` — 단어·주제 검색 모드 |
-| **읽기** (read) | `navRequest.target="read"` — 본문 chapter 직진입 |
+| **본문** (read) | `navRequest.target="read"` — 본문 chapter 직진입 |
+| **말씀의삶** (plan) | `setView("plan")` — 성경읽기진도표 91회차. **navRequest 를 타지 않는다** |
 | **책갈피** (bookmark) | `navRequest.target="bookmark"` — 책갈피 메뉴 노출 (+ 스크랩 진입) |
 | **설정** (settings) | `SettingsSheet` 띄움 (view 변경 안 함) |
+
+### 말씀의삶 탭에서 주의할 것 세 가지
+
+**하나 — `handleTabChange` 에서 navRequest 앞에 끊는다.**
+`ActiveTab` 과 `navRequest.target` 유니온이 겹쳐 타입 오류 없이 통과하지만,
+`setView("search")` 가 먼저 걸려 검색 뷰만 뜨고 `target="plan"` 은 조용히 무시된다.
+
+**둘 — 탭바 자동 숨김을 반드시 제외한다.**
+판정식은 `autoHideTabBar && isReadingView && view === "search"`(`shouldAutoHideTabBar`).
+SearchPanel 은 `display:none` 으로만 가려져 언마운트되지 않으므로 `isReadingView` 가
+plan 뷰에서도 true 로 남는다. 이 식은 **세 곳**(revealTabBar · 재평가 effect ·
+스크롤 리스너)에서 쓰이므로 파생값 하나로 묶었다 — 한 곳만 고치면 타이머는 멈추는데
+스크롤 리스너가 남거나 그 반대가 된다.
+
+**셋 — `useHardwareBack(view === "plan", …)` 는 키보드 격리도 겸한다.**
+SearchPanel 의 ←/→/Space 장 이동 리스너가 plan 뷰에서도 살아 있는데,
+이 훅 등록으로 `modalStack` 이 2 가 되어 SearchPanel 쪽 가드
+(`getActiveModalCount() > 1`)에 걸린다. 빼먹으면 PC 에서 진도표를 보며 방향키를
+누를 때 보이지 않는 본문의 장이 바뀐다.
+
+`ReadingPlanPanel` 만 **조건부 마운트**다(다른 뷰는 display:none 유지).
+`display:none` 요소는 `offsetTop` 이 0 이라 "지금 회차를 화면 상단 1/3 에" 스크롤이
+동작하지 않는다. 진입할 때마다 마운트되므로 진도도 매번 최신으로 다시 읽는다.
 
 ### 라우팅 메커니즘
 

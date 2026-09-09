@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * 하단 5탭 네비게이션 — 리디자인 Phase 2a
+ * 하단 6탭 네비게이션 — 리디자인 Phase 2a
  *
- * 탭: 목차 / 검색 / 읽기 / 책갈피 / 설정
+ * 탭: 목차 / 검색 / 본문 / 말씀의삶 / 책갈피 / 설정
  *
  * Phase 2a 는 *전환기* — 기존 상단 탭(성경목차/본문검색/주제추천/책갈피)도 살아있고,
  * 사용자는 양쪽 어디서든 진입 가능. Phase 2b 에서 상단 탭 제거 + 시트 통합 완료.
@@ -11,7 +11,7 @@
 
 import type { ReactNode } from "react";
 
-export type ActiveTab = "toc" | "search" | "read" | "bookmark" | "settings";
+export type ActiveTab = "toc" | "search" | "read" | "plan" | "bookmark" | "settings";
 
 interface Tab {
   id: ActiveTab;
@@ -44,6 +44,15 @@ const TABS: Tab[] = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+    ),
+  },
+  {
+    id: "plan",
+    label: "말씀의삶",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -109,7 +118,7 @@ export default function BottomTabBar({
         pointerEvents: hidden ? "none" : undefined,
       }}
     >
-      <div className="grid grid-cols-5 max-w-2xl mx-auto">
+      <div className="grid grid-cols-6 max-w-2xl mx-auto">
         {TABS.map((t) => {
           const isActive = active === t.id;
           return (

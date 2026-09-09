@@ -30,8 +30,12 @@
 - 외부 SSO: `https://saint.yebom.org/login?from=bible` 으로 리다이렉트
 - 상세: [AUTH_INTEGRATION_GUIDE.md](AUTH_INTEGRATION_GUIDE.md)
 
-### 하단 5탭 IA
-- `BottomTabBar` (목차/검색/읽기/책갈피/설정) — `view==="search"` 일 때만 렌더
+### 하단 6탭 IA
+- `BottomTabBar` (목차/검색/본문/**말씀의삶**/책갈피/설정) — `view==="search" || view==="plan"` 일 때 렌더
+- **말씀의삶** — 성경읽기진도표 91회차. 플랜 정의는 정적 파일 `lib/plans/yebom91.ts`,
+  회차 완료는 `reading_progress` 에서 **파생 계산**(저장하지 않음). 수동 체크만 `reading_unit_checks`.
+  `handleTabChange` 에서 navRequest 앞에 끊고, 탭바 자동 숨김에서 제외하고,
+  `useHardwareBack` 을 등록해 키보드 격리까지 해야 한다 — 셋 다 [docs/IA_5TAB.md](docs/IA_5TAB.md) §1 참조
 - `SettingsSheet` — 계정/찬송가/예배성경/카드빌더/풀스크린/관리자/종료 통합
 - **본문 몰입 — 하단 탭바 자동 숨김**: 본문(`browseStep==="verse"`)에서 무조작 3초 → 아래로 슬라이드 감춤(얇은 손잡이만 남김). 복귀 = 하단 손잡이 탭 + 위로 스크롤(본문은 내부 컨테이너 스크롤이라 `window` **capture** 로 수집). 리빌 존은 `safe-area-inset-bottom` 위 28px 에 두어 iOS 홈 인디케이터 제스처와 분리. 상태는 `app/page.tsx` 소유(`tabBarHidden`), SearchPanel 은 `onReadingViewChange` 로 본문 여부만 보고. 설정 토글 `본문 볼 때 하단 메뉴 자동 숨김`(기본 ON, `yebom_autohide_tabbar`). 숨겨도 본문 컨테이너 높이(`browseScrollMaxH`)는 그대로 두어 **리플로우 없음**
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)

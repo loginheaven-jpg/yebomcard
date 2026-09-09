@@ -6,6 +6,7 @@ import VerseDisplay from "@/components/VerseDisplay";
 import CardPreview from "@/components/CardPreview";
 import ScrapList from "@/components/ScrapList";
 import BottomTabBar, { type ActiveTab } from "@/components/BottomTabBar";
+import ReadingPlanPanel from "@/components/ReadingPlanPanel";
 import SettingsSheet from "@/components/SettingsSheet";
 import { readBookmarks } from "@/lib/bookmark";
 import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap";
@@ -97,22 +98,27 @@ export default function Home() {
     tabBarTimer.current = setTimeout(() => setTabBarHidden(true), TABBAR_HIDE_MS);
   }, []);
 
+  // 자동 숨김은 **본문을 볼 때만**이다. 말씀의삶 탭은 목록 화면이라 숨기면 안 된다.
+  // SearchPanel 이 display:none 으로만 가려져 언마운트되지 않으므로 isReadingView 는
+  // plan 뷰에서도 true 로 남는다 — view 조건을 반드시 함께 봐야 한다.
+  const shouldAutoHideTabBar = autoHideTabBar && isReadingView && view === "search";
+
   /** 탭바 표시 + (본문·설정 ON 이면) 다시 감출 타이머 재무장 */
   const revealTabBar = useCallback(() => {
     setTabBarHidden(false);
-    armTabBarHide(autoHideTabBar && isReadingView);
-  }, [armTabBarHide, autoHideTabBar, isReadingView]);
+    armTabBarHide(shouldAutoHideTabBar);
+  }, [armTabBarHide, shouldAutoHideTabBar]);
 
   // 본문 진입/이탈 · 설정 변경 시 재평가
   useEffect(() => {
     setTabBarHidden(false);
-    armTabBarHide(autoHideTabBar && isReadingView);
+    armTabBarHide(shouldAutoHideTabBar);
     return () => { if (tabBarTimer.current) clearTimeout(tabBarTimer.current); };
-  }, [autoHideTabBar, isReadingView, armTabBarHide]);
+  }, [shouldAutoHideTabBar, armTabBarHide]);
 
   // 위로 스크롤하면 다시 표시 (scroll 은 버블링하지 않으므로 capture 단계에서 수집)
   useEffect(() => {
-    if (!(autoHideTabBar && isReadingView)) return;
+    if (!shouldAutoHideTabBar) return;
     const lastTop = new WeakMap<EventTarget, number>();
     const onScroll = (e: Event) => {
       const t = e.target;
@@ -124,9 +130,9 @@ export default function Home() {
     };
     window.addEventListener("scroll", onScroll, true);
     return () => window.removeEventListener("scroll", onScroll, true);
-  }, [autoHideTabBar, isReadingView, revealTabBar]);
+  }, [shouldAutoHideTabBar, revealTabBar]);
 
-  // ─── Phase 2a 하단 5탭 ───
+  // ─── Phase 2a 하단 6탭 ───
   const [activeTab, setActiveTab] = useState<ActiveTab | null>(null);
   const [navRequest, setNavRequest] = useState<NavRequest | undefined>();
   const navNonceRef = useRef(0);
@@ -145,6 +151,12 @@ export default function Home() {
     setActiveTab(tab);
     if (tab === "settings") {
       setShowSettingsSheet(true);
+      return;
+    }
+    // 말씀의삶은 별도 뷰다. 아래로 내려가면 setView("search") 가 먼저 걸려
+    // 검색 뷰만 뜨고 target="plan" 은 SearchPanel 에서 조용히 무시된다.
+    if (tab === "plan") {
+      setView("plan");
       return;
     }
     setView("search");
@@ -192,6 +204,11 @@ export default function Home() {
     setView("search");
   });
   useHardwareBack(isAddingMore, () => setIsAddingMore(false));
+  // 말씀의삶 → 본문. 이 등록은 뒤로가기뿐 아니라 **키보드 격리**도 겸한다 —
+  // SearchPanel 은 display:none 으로만 가려져 window keydown 리스너가 살아 있는데,
+  // modalStack 이 2 가 되면 그쪽 가드(getActiveModalCount() > 1)에 걸려
+  // 진도표를 보며 방향키를 눌러도 뒤에 숨은 본문의 장이 바뀌지 않는다.
+  useHardwareBack(view === "plan", () => setView("search"));
 
   // 루트 종료 방지
   const exitingRef = useRef(false);
@@ -517,7 +534,18 @@ export default function Home() {
       )}
 
       {/* Phase 2a/2b — 하단 5탭 (목차/검색/읽기/책갈피/설정) */}
-      {view === "search" && (
+      {/* 말씀의삶 — 조건부 마운트.
+          다른 뷰처럼 display:none 으로 두면 offsetTop 이 0 이라
+          "지금 회차를 화면 상단 1/3 에" 스크롤이 동작하지 않는다.
+          진입할 때마다 마운트되므로 진도도 매번 최신으로 다시 읽는다. */}
+      {view === "plan" && (
+        <ReadingPlanPanel
+          onOpenUnit={(seq) => console.info("[plan] 회차 진입 요청", seq)}
+          onLogin={() => ensureLogin("말씀의삶")}
+        />
+      )}
+
+      {(view === "search" || view === "plan") && (
         <BottomTabBar
           active={activeTab}
           onTabChange={handleTabChange}

@@ -22,7 +22,7 @@ export type KoreanVersion = "nkrv" | "rnksv" | "easy";
 export type EnglishVersion = "kjv" | "nirv" | "gnt" | "web";
 export type BibleVersion = KoreanVersion | EnglishVersion;
 
-export type ViewMode = "search" | "display" | "card" | "scrap";
+export type ViewMode = "search" | "display" | "card" | "scrap" | "plan";
 
 export interface ScrapItem {
   id: string;

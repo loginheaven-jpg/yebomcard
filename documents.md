@@ -34,7 +34,7 @@
 | 문서 | 카테고리 | 단면 | 갱신 정책 |
 |---|---|---|---|
 | [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md) | TTS | 3단 폴백 / 캐시 v5 / accent 분기 / WEB R2 음원 / 미니플레이어 패턴 | TTS 정책·인프라 변경 시 |
-| [docs/IA_5TAB.md](docs/IA_5TAB.md) | UI/UX | BottomTabBar + SettingsSheet + QuickNavFab + 모달 스택 / 좌우 스와이프 / 다크 추종 | IA 또는 5탭 정책 변경 시 |
+| [docs/IA_5TAB.md](docs/IA_5TAB.md) | UI/UX | BottomTabBar(6탭) + SettingsSheet + QuickNavFab + 모달 스택 / 좌우 스와이프 / 다크 추종 | IA 또는 탭 정책 변경 시 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 데이터 | bible_verses/bible_audio/scraps + UNIQUE 정책 + RLS + 마이그레이션 + BibleVersion 추가 체크리스트 | DB 스키마·정책 변경 시 |
 
 ### docs/tasks/ (진행 중 작업 지시서)
