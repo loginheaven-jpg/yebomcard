@@ -44,6 +44,15 @@ import { isAdmin } from "@/lib/admin";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { linkify } from "@/lib/linkify";
 
+/** 진도표 이동 목표 — 도착 회차·진입 절·그 장의 낭독 순서까지 함께 온다 */
+interface PlanNavTarget {
+  book: string;
+  chapter: number;
+  seq: number;
+  verse?: number;
+  segments?: { book: string; chapter: number; fromVs?: number; toVs?: number }[];
+}
+
 export interface NavRequest {
   /** 하단 탭이 요청한 화면 — Phase 2a. "chapter" 는 말씀의삶 회차 진입(단계 3) */
   target: "toc" | "search" | "read" | "bookmark" | "chapter";
@@ -52,6 +61,8 @@ export interface NavRequest {
   /** target="chapter" 전용 — 이 위치로 직진입한다 */
   book?: string;
   chapter?: number;
+  /** 진도표가 장 중간부터 읽는 구간이면 그 절로 내려간다 (예: 10회차 민수기 9:15) */
+  verse?: number;
 }
 
 interface SearchPanelProps {
@@ -75,9 +86,16 @@ interface SearchPanelProps {
    */
   planNav?: {
     header: React.ReactNode;
-    prev: { book: string; chapter: number } | null;
-    next: { book: string; chapter: number } | null;
-    onGo: (t: { book: string; chapter: number }) => void;
+    /** seq·verse 는 도착 회차와 진입 절 — 진도표가 장 중간부터 읽는 구간에 쓴다 */
+    prev: PlanNavTarget | null;
+    next: PlanNavTarget | null;
+    onGo: (t: { book: string; chapter: number; seq?: number; verse?: number }) => void;
+    /**
+     * 지금 보고 있는 장을 이 회차가 읽는 순서(절 단위).
+     * 대개 `[{fromVs:undefined,toVs:undefined}]`(장 전체)이지만, 10회차 민수기 9장처럼
+     * 한 장을 두 토막으로 **다른 순서로** 읽는 회차가 있다 — 낭독이 이 순서를 따른다.
+     */
+    segments?: { book: string; chapter: number; fromVs?: number; toVs?: number }[];
   };
   /** 현재 회차의 장 목록 — 회차 완료 전이를 SearchPanel 이 자기 진도로 감지한다 */
   unitChapters?: { book: string; chapter: number }[];
@@ -562,6 +580,8 @@ export default function SearchPanel({
         setChapter(navRequest.chapter);
         setMode("chapter");
         setBrowseStep("verse");
+        // 본문은 한 왕복 뒤에 온다 — 지금 스크롤해도 대상이 없다. 예약해 두고 렌더 후 내려간다.
+        setPendingVerse(navRequest.verse ?? null);
       }
       setShowBookmarkMenu(false);
       setShowSearchRow(false);
@@ -832,19 +852,46 @@ export default function SearchPanel({
     tts.applyVersionDefault(mainVersion);
   }, [mainVersion, tts]);
 
+  /**
+   * 절 배열을 낭독 트랙으로.
+   *
+   * `segments` 를 주면 **진도표가 그 장을 읽는 순서**를 따른다. 대개 장 전체지만,
+   * 10회차 민수기 9장은 15-23절을 먼저 읽고 1-14절을 나중에 읽는다. 절 번호 순으로
+   * 읽으면 진도표와 다른 본문이 된다.
+   */
   const buildTtsTracks = useCallback(
-    (verses: BibleVerse[]): TtsTrack[] =>
-      verses
-        .filter((v) => v.text && v.text.trim().length > 0)
-        .map((v) => ({
-          text: stripNotes(v.text),
-          ref: `${v.book_name} ${v.chapter}:${v.verse}`,
-          version: v.version,
-          bookCode: v.book_code,
-          bookName: v.book_name,
-          chapter: v.chapter,
-          verse: v.verse,
-        })),
+    (
+      verses: BibleVerse[],
+      segments?: { fromVs?: number; toVs?: number }[],
+    ): TtsTrack[] => {
+      const usable = verses.filter((v) => v.text && v.text.trim().length > 0);
+      const toTrack = (v: BibleVerse): TtsTrack => ({
+        text: stripNotes(v.text),
+        ref: `${v.book_name} ${v.chapter}:${v.verse}`,
+        version: v.version,
+        bookCode: v.book_code,
+        bookName: v.book_name,
+        chapter: v.chapter,
+        verse: v.verse,
+      });
+      if (!segments || segments.length === 0) return usable.map(toTrack);
+      const out: TtsTrack[] = [];
+      const taken = new Set<number>();
+      for (const sg of segments) {
+        const lo = sg.fromVs ?? 1;
+        const hi = sg.toVs ?? Number.MAX_SAFE_INTEGER;
+        for (const v of usable) {
+          // 구간이 겹쳐도 한 절을 두 번 읽지 않는다
+          if (v.verse >= lo && v.verse <= hi && !taken.has(v.verse)) {
+            taken.add(v.verse);
+            out.push(toTrack(v));
+          }
+        }
+      }
+      // 구간이 본문을 다 덮지 못하면(진도표 표기 오차) 남은 절은 뒤에 붙여 빠뜨리지 않는다
+      for (const v of usable) if (!taken.has(v.verse)) out.push(toTrack(v));
+      return out;
+    },
     [],
   );
 
@@ -862,6 +909,20 @@ export default function SearchPanel({
    * 같은 장이 반복된다. 로더 재호출 간격은 한 장 분량의 재생 시간이라
    * 한 커밋 지연은 문제가 되지 않는다.
    */
+  /** 진도표 진입 절 — 본문이 도착한 뒤에 그 절로 내려간다 */
+  const [pendingVerse, setPendingVerse] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (pendingVerse === null || browseVerses.length === 0) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const el = root.querySelector(
+      `[data-book="${bookCode}"][data-chapter="${chapter}"][data-verse="${pendingVerse}"]`,
+    );
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: "start" });
+    setPendingVerse(null);
+  }, [pendingVerse, browseVerses, bookCode, chapter]);
+
   const ttsPosRef = useRef({ bookCode, chapter, chapters, mainVersion, planNav });
   useEffect(() => {
     ttsPosRef.current = { bookCode, chapter, chapters, mainVersion, planNav };
@@ -893,7 +954,8 @@ export default function SearchPanel({
     // 조회에 성공한 뒤에만 화면을 옮긴다(빈 결과로 재생이 끊긴 채 화면만 넘어가지 않게)
     if (nextBookCode !== pos.bookCode) setBookCode(nextBookCode);
     setChapter(nextCh);
-    return buildTtsTracks(data as BibleVerse[]);
+    // 도착 장을 진도표가 읽는 순서대로 (10회차 민수기 9장 = 15-23 → 1-14)
+    return buildTtsTracks(data as BibleVerse[], pos.planNav?.next?.segments);
   }, [buildTtsTracks]);
 
   const handleTtsToggle = useCallback(() => {
@@ -901,10 +963,10 @@ export default function SearchPanel({
       tts.stop();
       return;
     }
-    const tracks = buildTtsTracks(browseVerses);
+    const tracks = buildTtsTracks(browseVerses, planNav?.segments);
     if (tracks.length === 0) return;
     tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
-  }, [ttsActiveOnThisChapter, tts, browseVerses, buildTtsTracks, loadNextChapterForTts]);
+  }, [ttsActiveOnThisChapter, tts, browseVerses, buildTtsTracks, loadNextChapterForTts, planNav]);
 
   // TTS 재생 중 현재 절을 화면 중앙으로 스크롤
   useEffect(() => {
@@ -934,7 +996,7 @@ export default function SearchPanel({
     const sameBook = tts.currentTrack.bookCode === bookCode;
     if (!sameBook && !planNav) return;          // 플랜 모드가 아니면 기존대로 책 경계에서 멈춘다
     if (sameBook && tts.currentTrack.chapter === chapter) return;
-    const tracks = buildTtsTracks(browseVerses);
+    const tracks = buildTtsTracks(browseVerses, planNav?.segments);
     if (tracks.length === 0) return;
     if (tracks[0].bookCode !== bookCode || tracks[0].chapter !== chapter) return; // 스테일 가드
     tts.start({ tracks, loadNextChapter: loadNextChapterForTts });

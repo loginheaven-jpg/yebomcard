@@ -22,6 +22,9 @@ import {
   computeUnitProgress,
   planStep,
   chapterKey,
+  unitSegments,
+  chapterSegments,
+  chapterEntryVerse,
 } from "../lib/plans/yebom91";
 
 const NAME: Record<string, string> = {};
@@ -292,6 +295,84 @@ const addUnit = (m: Record<string, Set<number>>, seq: number) => {
   const p = computeUnitProgress(YEBOM91, m, new Set());
   console.log(`  (f) 50회차만    완료 ${p.doneCount} · 지금 ${p.currentSeq}회차 (기대 1)`);
   if (p.currentSeq !== 1) fail("(f) 순서 밖 완료가 currentSeq 를 밀었습니다");
+}
+
+// ───────────────────────── 8. 절 단위 읽기 순서 ─────────────────────────
+// 진도표는 한 장을 두 토막으로 나눠 **다른 순서로** 읽히기도 한다.
+// 장 이동은 장 단위(unitChapters)로 하되, 진입 절과 낭독은 절 단위(unitSegments)를 따른다.
+h("8. 절 단위 읽기 순서");
+
+{
+  const segs10 = chapterSegments(YEBOM91.units[9], "num", 9);
+  console.log(`  10회차 민수기 9장  ${segs10.map((x) => `${x.fromVs}-${x.toVs}`).join(" → ")}`);
+  if (
+    segs10.length !== 2 ||
+    segs10[0].fromVs !== 15 || segs10[0].toVs !== 23 ||
+    segs10[1].fromVs !== 1 || segs10[1].toVs !== 14
+  ) {
+    fail("10회차 민수기 9장이 15-23 → 1-14 순서가 아닙니다");
+  }
+
+  const flat = flattenPlan(YEBOM91);
+  const i = findPlanIndex(flat, 10, "exo", 40);
+  const nx = planStep(flat, i, 1);
+  const v = nx ? chapterEntryVerse(YEBOM91.units[nx.seq - 1], nx.book, nx.chapter) : undefined;
+  console.log(`  출애굽기 40장 다음  ${nx ? `${NAME[nx.book]} ${nx.chapter}${v ? ":" + v : ""}` : "없음"}`);
+  if (!nx || nx.book !== "num" || nx.chapter !== 9 || v !== 15) {
+    fail("출애굽기 40장 다음이 민수기 9:15 가 아닙니다");
+  }
+
+  if (chapterEntryVerse(YEBOM91.units[38], "2ki", 11) !== undefined) {
+    fail("장 전체를 읽는 39회차 왕하 11장에 진입 절이 붙었습니다");
+  }
+  const k15 = chapterSegments(YEBOM91.units[38], "2ki", 15);
+  const k12 = chapterSegments(YEBOM91.units[38], "2ki", 12);
+  if (k15.length !== 1 || k15[0].toVs !== 22) fail("39회차 왕하 15장 끝 절이 22 가 아닙니다");
+  if (k12.length !== 1 || k12[0].toVs !== undefined) {
+    fail("구간 끝 절이 중간 장(왕하 12장)에도 붙었습니다");
+  }
+  console.log(`  39회차 왕하 15장    끝 절 ${k15[0]?.toVs} · 중간 장 12장 끝 절 ${k12[0]?.toVs ?? "없음"}`);
+}
+
+// 절 단위로 펼쳐도 장 목록을 잃으면 안 된다 — 낭독이 통째로 빠지는 장이 생긴다
+{
+  let bad = 0;
+  for (const u of YEBOM91.units) {
+    const chs = new Set(unitChapters(u).map((c) => `${c.book}:${c.chapter}`));
+    const segs = new Set(unitSegments(u).map((c) => `${c.book}:${c.chapter}`));
+    if (chs.size !== segs.size || ![...chs].every((k) => segs.has(k))) {
+      fail(`${u.seq}회차 — 절 단위 펼침이 장 목록과 다릅니다`);
+      bad++;
+    }
+  }
+  console.log(`  장 목록 일치        ${91 - bad} / 91 회차`);
+}
+
+// 같은 장을 두 토막으로 읽는 회차에서 절이 새지 않는가
+{
+  let holes = 0;
+  let split = 0;
+  for (const u of YEBOM91.units) {
+    const byCh = new Map<string, { fromVs?: number; toVs?: number }[]>();
+    for (const sg of unitSegments(u)) {
+      const k = `${sg.book}:${sg.chapter}`;
+      byCh.set(k, [...(byCh.get(k) ?? []), sg]);
+    }
+    for (const [k, list] of byCh) {
+      if (list.length < 2) continue;
+      split++;
+      const sorted = [...list].sort((a, b) => (a.fromVs ?? 1) - (b.fromVs ?? 1));
+      for (let i = 1; i < sorted.length; i++) {
+        const prevEnd = sorted[i - 1].toVs;
+        const curStart = sorted[i].fromVs ?? 1;
+        if (prevEnd !== undefined && curStart > prevEnd + 1) {
+          fail(`${u.seq}회차 ${k} — ${prevEnd}절 다음이 ${curStart}절 (틈)`);
+          holes++;
+        }
+      }
+    }
+  }
+  console.log(`  한 장을 두 토막으로 읽는 자리 ${split}곳 · 절이 새는 곳 ${holes}곳`);
 }
 
 // ───────────────────────── 결과 ─────────────────────────

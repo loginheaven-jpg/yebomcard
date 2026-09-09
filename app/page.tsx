@@ -16,6 +16,8 @@ import {
   planStep,
   unitChapters as unitChaptersOf,
   computeUnitProgress,
+  chapterEntryVerse,
+  chapterSegments,
 } from "@/lib/plans/yebom91";
 import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
 import { fetchUnitChecks } from "@/lib/reading-plan";
@@ -210,12 +212,16 @@ export default function Home() {
       setPlanPos(target);
       setView("search");
       setActiveTab("read");
+      // 진도표는 새번역 기준이다. 성우는 TtsContext 의 역본 기본값 규칙이 이어받아
+      // 영희(f4)로 맞춘다 — 교인이 성우를 직접 고른 적이 있으면 그 선택을 존중한다.
+      setMainVersion("rnksv");
       navNonceRef.current += 1;
       setNavRequest({
         target: "chapter",
         nonce: navNonceRef.current,
         book: target.book,
         chapter: target.chapter,
+        verse: chapterEntryVerse(unit, target.book, target.chapter),
       });
     },
     [planReadByBook, planManual],
@@ -223,10 +229,17 @@ export default function Home() {
 
   /** 플랜 순서로 이동 — 도착 항목이 seq 를 결정한다 */
   const goPlan = useCallback(
-    (t: { book: string; chapter: number }) => {
-      setPlanPos(t);
+    (t: { book: string; chapter: number; seq?: number; verse?: number }) => {
+      setPlanPos({ book: t.book, chapter: t.chapter });
       navNonceRef.current += 1;
-      setNavRequest({ target: "chapter", nonce: navNonceRef.current, book: t.book, chapter: t.chapter });
+      setNavRequest({
+        target: "chapter",
+        nonce: navNonceRef.current,
+        book: t.book,
+        chapter: t.chapter,
+        // 진도표가 장 중간부터 읽는 구간이면 그 절로 내려간다(예: 10회차 민수기 9:15)
+        verse: t.verse,
+      });
     },
     [],
   );
@@ -253,13 +266,32 @@ export default function Home() {
           onReturnToPlan={() => openPlanUnit(planMode.seq)}
         />
       ),
-      prev: prev ? { book: prev.book, chapter: prev.chapter } : null,
-      next: next ? { book: next.book, chapter: next.chapter } : null,
-      onGo: (t: { book: string; chapter: number }) => {
+      // 도착 장의 진입 절까지 실어 보낸다. 도착지가 다른 회차일 수 있으므로
+      // 진입 절은 **도착 항목의 seq** 기준으로 뽑는다.
+      prev: prev
+        ? {
+            book: prev.book,
+            chapter: prev.chapter,
+            seq: prev.seq,
+            verse: chapterEntryVerse(YEBOM91.units[prev.seq - 1], prev.book, prev.chapter),
+            segments: chapterSegments(YEBOM91.units[prev.seq - 1], prev.book, prev.chapter),
+          }
+        : null,
+      next: next
+        ? {
+            book: next.book,
+            chapter: next.chapter,
+            seq: next.seq,
+            verse: chapterEntryVerse(YEBOM91.units[next.seq - 1], next.book, next.chapter),
+            // 자동 다음 장 낭독이 도착 장의 순서를 그대로 따르게 한다
+            segments: chapterSegments(YEBOM91.units[next.seq - 1], next.book, next.chapter),
+          }
+        : null,
+      // 지금 보고 있는 장을 이 회차가 어떤 순서로 읽는가 — 낭독이 이 순서를 따른다
+      segments: chapterSegments(planUnit, planPos?.book ?? "", planPos?.chapter ?? 0),
+      onGo: (t: { book: string; chapter: number; seq?: number; verse?: number }) => {
         // 도착 항목의 seq 로 갱신한다(인접 중복 장은 planStep 이 이미 건너뛴다)
-        const dir = next && t.book === next.book && t.chapter === next.chapter ? 1 : -1;
-        const arrived = planIdx >= 0 ? planStep(planFlat, planIdx, dir) : null;
-        if (arrived) setPlanMode({ planId: "yebom91", seq: arrived.seq });
+        if (t.seq) setPlanMode({ planId: "yebom91", seq: t.seq });
         goPlan(t);
       },
     };

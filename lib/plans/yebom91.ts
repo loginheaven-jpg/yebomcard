@@ -44,6 +44,12 @@ export interface PlanChapterRef {
   chapter: number;
 }
 
+/** 절 경계까지 살린 읽기 단위. 같은 장이 두 번 나올 수 있다(10·79회차) */
+export interface PlanSegment extends PlanChapterRef {
+  fromVs?: number;
+  toVs?: number;
+}
+
 export interface PlanChapter extends PlanChapterRef {
   seq: number;
   /** flattenPlan 배열에서의 위치 */
@@ -88,6 +94,7 @@ export const chapterKey = (book: string, chapter: number): string => `${book}:${
 // ───────────────────────── 파생 유틸 ─────────────────────────
 
 const unitChaptersCache = new WeakMap<PlanUnit, PlanChapterRef[]>();
+const unitSegmentsCache = new WeakMap<PlanUnit, PlanSegment[]>();
 
 /**
  * 회차의 장 목록. 같은 회차 안 중복 장(예: 10회차 민수기 9)은 1회만, 등장 순서 유지.
@@ -109,6 +116,66 @@ export function unitChapters(unit: PlanUnit): PlanChapterRef[] {
   }
   unitChaptersCache.set(unit, out);
   return out;
+}
+
+/**
+ * 회차의 읽기 순서를 **절 단위**로 펼친다.
+ *
+ * `unitChapters` 는 장 단위라 같은 장을 한 번만 낸다 — 장 이동에는 그것이 맞다
+ * (같은 장으로 두 번 넘어가면 제자리걸음으로 보인다). 그러나 진도표는 한 장을
+ * 두 토막으로 나눠 **다른 순서로** 읽히기도 한다:
+ *
+ *   10회차  출애굽기 32-40, 민수기 9:15-23, 9:1-14
+ *   79회차  사도행전 13-15:35, 갈라디아서, 사도행전 15:36-16
+ *
+ * 낭독은 이 순서를 따라야 한다. 민수기 9장을 1절부터 읽으면 진도표와 다른 본문이다.
+ * 그래서 낭독·진입 절에는 이 함수를 쓰고, 장 이동에는 `unitChapters` 를 쓴다.
+ *
+ * 절 경계는 **구간의 양 끝 장에만** 붙는다. "열왕기하 11-15:22" 는 11~14장이 통째이고
+ * 15장만 22절까지다.
+ */
+export function unitSegments(unit: PlanUnit): PlanSegment[] {
+  const hit = unitSegmentsCache.get(unit);
+  if (hit) return hit;
+
+  const out: PlanSegment[] = [];
+  for (const r of unit.ranges) {
+    for (let c = r.fromCh; c <= r.toCh; c++) {
+      out.push({
+        book: r.book,
+        chapter: c,
+        fromVs: c === r.fromCh ? r.fromVs : undefined,
+        toVs: c === r.toCh ? r.toVs : undefined,
+      });
+    }
+  }
+  unitSegmentsCache.set(unit, out);
+  return out;
+}
+
+/**
+ * 그 회차에서 이 장을 읽는 순서. 장 전체를 통째로 읽으면 `[{fromVs:undefined,toVs:undefined}]`,
+ * 회차에 없는 장이면 빈 배열.
+ */
+export function chapterSegments(unit: PlanUnit, book: string, chapter: number): PlanSegment[] {
+  return unitSegments(unit).filter((s) => s.book === book && s.chapter === chapter);
+}
+
+/** 그 회차에서 이 장을 펼칠 때 놓일 절. 장 전체면 undefined(맨 위) */
+export function chapterEntryVerse(
+  unit: PlanUnit,
+  book: string,
+  chapter: number,
+): number | undefined {
+  return chapterSegments(unit, book, chapter)[0]?.fromVs;
+}
+
+/** 절 번호가 이 회차의 해당 장 구간에 드는가 */
+export function verseInSegments(segments: PlanSegment[], verse: number): boolean {
+  if (segments.length === 0) return true;
+  return segments.some(
+    (s) => verse >= (s.fromVs ?? 1) && verse <= (s.toVs ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 const flattenCache = new WeakMap<ReadingPlan, PlanChapter[]>();

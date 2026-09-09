@@ -5,14 +5,14 @@
  *
  * 구성 (시안 A)
  *   1. 헤더    브랜드 + 세그먼트 [진도표 | 그룹]
- *   2. 요약    지금 읽을 회차 · 완료 수 · 진행바 · [종이 체크] 토글 (+ 그룹 순위 1줄)
+ *   2. 요약    지금 읽을 회차 · 완료 수 · 진행바 · [종이성경읽음] 토글 (+ 그룹 순위 1줄)
  *   3. 리스트  91행. 상태별 표시 — 지금 / 완료 / 진행중 / 대기
  *   그룹 세그먼트는 ReadingGroupsView(시안 D)가 3번 자리를 대신 채운다.
  *
  * 데이터는 이 패널이 직접 가져온다. 통독 진도(readChapters)는 SearchPanel 지역 상태라
  * page.tsx 를 거쳐 내려올 경로가 없다. 회차 완료는 저장하지 않고 매번 파생 계산한다.
  *
- * 수동 체크 진입로는 둘이다 — 행을 길게 누르거나(500ms), [종이 체크] 를 켜서 체크박스를
+ * 수동 체크 진입로는 둘이다 — 행을 길게 누르거나(500ms), [종이성경읽음] 을 켜서 체크박스를
  * 드러내거나. 길게 누름만 두면 고령 교인이 기능을 발견하지 못하고, 체크박스만 상시로 두면
  * 91행을 훑다가 잘못 눌린다.
  */
@@ -250,13 +250,13 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
             type="button"
             onClick={() => setCheckMode((v) => !v)}
             aria-pressed={checkMode}
-            className={`shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors ${
+            className={`shrink-0 whitespace-nowrap text-[11px] font-semibold px-2 py-1.5 rounded-lg border transition-colors ${
               checkMode
                 ? "bg-[var(--amber)] text-white border-transparent"
                 : "bg-[var(--paper)] text-[var(--ink-soft)] border-[var(--line)]"
             }`}
           >
-            종이 체크
+            종이성경읽음
           </button>
         </div>
       ) : (
