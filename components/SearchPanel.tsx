@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName } from "@/lib/books";
+import { BOOKS, CHAPTER_COUNTS, OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
@@ -568,8 +568,20 @@ export default function SearchPanel({
   // `-1 < length-1` 이 참이라 chapters[0] 으로 튄다. 키보드(구 지역 계산)와
   // TTS(loadNextChapterForTts)가 이미 이 가드를 갖고 있어 **엄격 쪽으로 통일**했다.
   const chapterIdx = chapters.indexOf(chapter);
-  const canPrevChapter = chapterIdx > 0;
-  const canNextChapter = chapterIdx >= 0 && chapterIdx < chapters.length - 1;
+
+  // 책 경계를 넘는다 — 창세기 50장에서 ▶ 를 누르면 출애굽기 1장으로 간다.
+  // 통독하는 사람이 책 끝마다 목차로 나갔다 오지 않아도 된다.
+  // BOOKS 는 정경 순서 배열이므로 인덱스 ±1 이 곧 앞뒤 책이다.
+  const bookIdx = BOOKS.findIndex((b) => b.code === bookCode);
+  const prevBook = bookIdx > 0 ? BOOKS[bookIdx - 1] : null;
+  const nextBook = bookIdx >= 0 && bookIdx < BOOKS.length - 1 ? BOOKS[bookIdx + 1] : null;
+
+  const atFirstChapter = chapterIdx === 0;
+  const atLastChapter = chapterIdx >= 0 && chapterIdx === chapters.length - 1;
+
+  const canPrevChapter = chapterIdx > 0 || (atFirstChapter && !!prevBook);
+  const canNextChapter =
+    (chapterIdx >= 0 && chapterIdx < chapters.length - 1) || (atLastChapter && !!nextBook);
 
   /**
    * 장 이동 — **모든 조작이 이 함수 하나를 통과한다.**
@@ -582,13 +594,25 @@ export default function SearchPanel({
    */
   const goChapter = useCallback(
     (delta: -1 | 1) => {
-      if (delta === -1 && canPrevChapter) {
-        setChapter(chapters[chapterIdx - 1]);
-      } else if (delta === 1 && canNextChapter) {
-        setChapter(chapters[chapterIdx + 1]);
+      if (delta === -1) {
+        if (chapterIdx > 0) {
+          setChapter(chapters[chapterIdx - 1]);
+        } else if (atFirstChapter && prevBook) {
+          // 이전 책의 **마지막 장**으로. 장 수는 CHAPTER_COUNTS 를 쓰고, 역본에 그 장이
+          // 없으면 loadChapters effect 가 그 책의 첫 장으로 바로잡는다.
+          setBookCode(prevBook.code);
+          setChapter(CHAPTER_COUNTS[prevBook.code] ?? 1);
+        }
+      } else {
+        if (chapterIdx >= 0 && chapterIdx < chapters.length - 1) {
+          setChapter(chapters[chapterIdx + 1]);
+        } else if (atLastChapter && nextBook) {
+          setBookCode(nextBook.code);
+          setChapter(1);
+        }
       }
     },
-    [canPrevChapter, canNextChapter, chapters, chapterIdx],
+    [chapters, chapterIdx, atFirstChapter, atLastChapter, prevBook, nextBook],
   );
 
   // ─── 키보드: ← 이전장 / → 다음장 / Space 스마트 다음장 (PC) ───
