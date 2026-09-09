@@ -254,7 +254,9 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
         <ul>
           {progress.units.map((u) => {
             const unit = YEBOM91.units[u.seq - 1];
-            const st = rowState(u, progress.currentSeq);
+            // 비로그인은 진행 표시를 하지 않는다(지시서 §1). 진도가 없으니 모든 회차가
+            // currentSeq=1 로 계산되는데, 그대로 두면 아무 근거 없이 "지금 1회차" 가 뜬다.
+            const st: RowState = isLoggedIn ? rowState(u, progress.currentSeq) : "todo";
             const isNow = st === "now";
             const isDone = st === "done";
             const checked = manualSeqs.has(u.seq);
@@ -327,7 +329,7 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
                 </button>
 
                 <div className="flex items-center justify-center">
-                  {checkMode && isLoggedIn ? (
+                  {!isLoggedIn ? null : checkMode ? (
                     <input
                       type="checkbox"
                       checked={checked}
