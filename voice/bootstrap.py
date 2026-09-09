@@ -251,6 +251,45 @@ def register_protocol():
         return False
 
 
+def desktop_dir():
+    """바탕화면 경로. OneDrive 로 옮겨진 경우가 흔해서 레지스트리를 먼저 본다."""
+    try:
+        import winreg
+        k = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+        v, _ = winreg.QueryValueEx(k, "Desktop")
+        d = Path(os.path.expandvars(v))
+        if d.is_dir():
+            return d
+    except Exception:
+        pass
+    for c in (Path.home() / "Desktop", Path.home() / "OneDrive" / "Desktop"):
+        if c.is_dir():
+            return c
+    return None
+
+
+def make_desktop_shortcut():
+    """바탕화면에 실행 파일을 둔다.
+
+    설치 폴더가 %LOCALAPPDATA% 안이라 사람이 찾아가기 어렵다 — 바탕화면에
+    없으면 다음에 어떻게 켜는지 알 수가 없다."""
+    src = HOME / "실행.bat"
+    if not src.exists():
+        return None
+    d = desktop_dir()
+    if not d:
+        return None
+    try:
+        dst = d / "예봄성경 음원생성.bat"
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8", newline="")
+        return dst
+    except Exception as e:
+        print(f"  (바탕화면 바로가기 실패: {e})", flush=True)
+        return None
+
+
 def run_studio():
     step("로컬 스튜디오 실행")
     os.chdir(HOME)
@@ -297,7 +336,17 @@ def main():
 
     print("\n" + "=" * 56, flush=True)
     print("  설치 완료", flush=True)
-    print(f"  다음부터는 '{HOME / '실행.bat'}' 를 더블클릭하면 바로 열립니다.", flush=True)
+    print("", flush=True)
+    shortcut = make_desktop_shortcut()
+    if shortcut:
+        print("  다음부터는 바탕화면의", flush=True)
+        print(f"     [ {shortcut.name} ]", flush=True)
+        print("  를 더블클릭하면 바로 열립니다.", flush=True)
+    else:
+        print("  다음부터 실행할 파일:", flush=True)
+        print(f"     {HOME / '실행.bat'}", flush=True)
+    print("", flush=True)
+    print(f"  설치 폴더: {HOME}", flush=True)
     print("=" * 56, flush=True)
     run_studio()
 

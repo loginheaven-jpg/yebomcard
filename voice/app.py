@@ -145,6 +145,63 @@ def ui_books(ver_label):
             "")
 
 
+def ui_diagnose():
+    """서버 연결을 한 단계씩 짚어 결과를 그대로 보여준다.
+
+    새 PC 에서 책 목록이 비면 원인이 여럿이다(접속 정보 없음 / 서버 도달 실패 /
+    토큰 만료 / Supabase 차단). 추측 대신 어느 단계에서 끊겼는지 알려준다."""
+    lines = []
+    fatal = []          # 이게 있으면 생성 자체가 안 된다
+    warn = []           # 생성은 되지만 반쪽인 것
+
+    conf = server.config()
+    if conf:
+        lines.append(f"1. 접속 정보   OK   {conf['base']}")
+        try:
+            rc = server.remote_config()
+            lines.append(f"2. 서버 응답   OK   토큰 만료 {rc.get('tokenExpires', '?')[:10]}")
+        except Exception as e:
+            lines.append(f"2. 서버 응답   실패 — {e}")
+            fatal.append("서버 응답")
+    else:
+        # 이 저장소에서 직접 돌릴 때는 .env.local 을 쓰므로 정상이다.
+        # 설치된 PC 라면 자동 업로드가 안 되므로 짚어 준다.
+        lines.append("1. 접속 정보   없음 — 로컬 .env.local 로 동작합니다")
+        lines.append(f"     (찾아본 곳: {server.HERE / 'studio.json'})")
+        warn.append("서버 연동이 없어 생성물이 예봄성경에 자동 업로드되지 않습니다")
+
+    try:
+        books = engine.get_books(engine.VERSIONS["새번역"])
+        lines.append(f"3. 성경 본문   OK   새번역 {len(books)}권")
+    except Exception as e:
+        lines.append(f"3. 성경 본문   실패 — {e}")
+        fatal.append("성경 본문")
+
+    try:
+        vs = engine.list_voices()
+        lines.append(f"4. 보이스      OK   {', '.join(vs) if vs else '(없음)'}")
+        if not vs:
+            warn.append("보이스가 없습니다 — 설치 파일을 다시 실행하면 받아옵니다")
+    except Exception as e:
+        lines.append(f"4. 보이스      실패 — {e}")
+        fatal.append("보이스")
+
+    try:
+        engine.ffmpeg_exe()
+        lines.append("5. ffmpeg      OK")
+    except Exception as e:
+        lines.append(f"5. ffmpeg      실패 — {e}")
+        warn.append("ffmpeg 이 없어 업로드용 mp3 를 만들 수 없습니다")
+
+    if fatal:
+        head = f"생성할 수 없습니다 — {', '.join(fatal)} 단계 실패. 아래 내용을 알려주세요."
+    elif warn:
+        head = "생성은 가능하지만 확인이 필요합니다: " + " / ".join(warn)
+    else:
+        head = "모두 정상입니다."
+    return "\n".join([head, *lines])
+
+
 # ═══════════════════ 2. 생성 ═══════════════════
 def _pick_books(books, which):
     if which == "신약":
@@ -162,10 +219,15 @@ def ui_select_group(ver_label, which):
     try:
         books = engine.get_books(engine.VERSIONS[ver_label])
     except Exception as e:
-        return gr.update(), f"책 목록을 불러오지 못했습니다: {e}"
+        msg = f"책 목록을 불러오지 못했습니다: {e}"
+        return gr.update(), gr.update(), gr.update(), msg
     names = [n for n, _, _ in books]
     picked = _pick_books(books, which)
-    return gr.update(choices=names, value=picked), f"{which} {len(picked)}권 선택"
+    # 범위 드롭다운도 같이 채운다 — 시작 시 로딩이 실패했어도 여기서 복구된다
+    return (gr.update(choices=names, value=picked),
+            gr.update(choices=names, value=(picked[0] if picked else names[0])),
+            gr.update(choices=names, value=(picked[-1] if picked else names[-1])),
+            f"{which} {len(picked)}권 선택")
 
 
 def ui_select_range(ver_label, first, last):
@@ -278,6 +340,15 @@ def ui_job_rows():
         rows.append([j["id"], j["voice"], j["title"], j["status"],
                      f"{ok}/{tot}", held, pend, up])
     return rows
+
+
+def _boot_diag():
+    """시작할 때 성경 본문 조회가 되는지만 조용히 확인. 되면 아무것도 안 띄운다."""
+    try:
+        engine.get_books(engine.VERSIONS["새번역"])
+        return gr.update(visible=False)
+    except Exception:
+        return gr.update(value=ui_diagnose(), visible=True)
 
 
 def ui_progress():
@@ -420,6 +491,8 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         with gr.Row():
             b_voice = gr.Dropdown([], label="보이스", scale=2)
             b_btn_ref = gr.Button("보이스 새로고침")
+            b_btn_diag = gr.Button("서버 연결 확인")
+        b_diag = gr.Textbox(label="연결 상태", lines=7, visible=False)
         b_mode = gr.Radio(["성경 범위", "직접 입력", "텍스트 파일"], value="성경 범위", label="입력")
         with gr.Group():
             with gr.Row():
@@ -493,9 +566,10 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
 
     b_btn_ref.click(refresh_voices, None, b_voice)
     b_ver.change(ui_books, [b_ver], [a_book, b_books, b_from, b_to, b_msg])
-    b_g1.click(lambda v: ui_select_group(v, "신약"), [b_ver], [b_books, b_msg])
-    b_g2.click(lambda v: ui_select_group(v, "구약"), [b_ver], [b_books, b_msg])
-    b_g3.click(lambda v: ui_select_group(v, "전체"), [b_ver], [b_books, b_msg])
+    b_btn_diag.click(lambda: gr.update(value=ui_diagnose(), visible=True), None, b_diag)
+    b_g1.click(lambda v: ui_select_group(v, "신약"), [b_ver], [b_books, b_from, b_to, b_msg])
+    b_g2.click(lambda v: ui_select_group(v, "구약"), [b_ver], [b_books, b_from, b_to, b_msg])
+    b_g3.click(lambda v: ui_select_group(v, "전체"), [b_ver], [b_books, b_from, b_to, b_msg])
     b_grange.click(ui_select_range, [b_ver, b_from, b_to], [b_books, b_msg])
     b_g0.click(lambda: (gr.update(value=[]), "선택 해제"), None, [b_books, b_msg])
     b_btn_est.click(ui_estimate,
@@ -525,6 +599,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     # 생성 탭 역본(b_ver)으로 채운다 — 예전엔 검수 탭 역본(a_ver)을 보고 채워서,
     # 생성 탭으로 바로 간 경우 책 목록이 비어 있을 수 있었다.
     demo.load(ui_books, [b_ver], [a_book, b_books, b_from, b_to, b_msg])
+    # 책 목록을 못 가져오면 원인을 바로 보여준다 — 예전엔 빈 목록만 남아
+    # 왜 안 되는지 알 수 없었다
+    demo.load(_boot_diag, None, b_diag)
 
 
 if __name__ == "__main__":
