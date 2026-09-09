@@ -32,10 +32,53 @@ PHRASE_ENDINGS = ("이요", "바요", "하고", "하며", "이며",
 DASH_EDGE = re.compile(r"^\s*[-\u2013\u2014]+\s*|\s*[-\u2013\u2014]+\s*$")
 
 
+def _unbalanced_close(t: str) -> int:
+    """짝이 맞지 않는 닫는 괄호 개수"""
+    depth = stray = 0
+    for c in t:
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            if depth:
+                depth -= 1
+            else:
+                stray += 1
+    return stray
+
+
+# 끝의 고아 괄호를 지웠을 때 문장이 온전히 끝나는가.
+# 작은따옴표(')로 끝나는 것은 "또는 '…'" 같은 주석 문구일 때가 많아 제외한다.
+_SENT_END = re.compile(r'[.!?]["”]?$')
+
+
+def strip_orphan_paren(text: str) -> str:
+    """맨 끝의 짝 없는 ')' 하나만 지운다. 지워서 문장이 완결될 때만.
+
+    새번역 31,075절 중 345절에 짝 없는 ')' 가 남아 있다(주석의 여는 괄호가 유실된 흔적).
+    그중 211절은 그 괄호 하나만 군더더기이고 본문은 온전하다:
+
+        …너희 이웃의 소유는 어떤 것도 탐내지 못한다.")   →   …못한다."
+
+    이런 절까지 생성을 막으면 멀쩡한 본문에 구멍이 생긴다. 반대로 주석 문구가
+    남아 있는 134절은 손대지 않는다 — 어디까지가 본문인지 기계가 알 수 없다.
+
+        …말을 한다.' 또는 '주님께서 산에서 친히 보이신다')   ← 그대로 둔다
+    """
+    t = (text or "").rstrip()
+    if not t.endswith(")"):
+        return text
+    cut = t[:-1].rstrip()
+    if _unbalanced_close(cut) == 0 and _SENT_END.search(cut):
+        return cut
+    return text
+
+
 def clean_for_tts(text: str) -> str:
-    """생성 입력용 정리 — 공백 정규화 + 양끝 대시 제거. (원문은 바꾸지 않는다)"""
+    """생성 입력용 정리 — 공백 정규화 + 양끝 대시 제거 + 끝의 고아 괄호 제거.
+    (원문은 바꾸지 않는다 — 공유 캐시 키는 원문 sha1 이다)"""
     t = re.sub(r"\s+", " ", (text or "").strip())
     t = DASH_EDGE.sub("", t)
+    t = strip_orphan_paren(t)
     return t.strip()
 
 
