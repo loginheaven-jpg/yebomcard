@@ -109,6 +109,16 @@ interface KoreanVoiceConfig {
   supId?: string; // engine=supertone (voice_id)
   supModel?: string; // sona_speech_2 | supertonic_api_3(클론)
   supStyle?: string; // 클론 보이스는 style 미지정 (있으면 400)
+  /**
+   * 라이브 합성 엔진이 없고 **사전 생성 음원만** 있는 성우(영희).
+   * 두 가지가 달라진다:
+   *  1) 캐시 미스면 fallbackVoice 의 성우로 대신 읽는다(그 성우의 키로 캐시).
+   *  2) 이 성우의 키에는 **라이브 산출물을 절대 저장하지 않는다.**
+   *     저장하면 나중에 올라올 진짜 음원이 "이미 있음"으로 건너뛰어져 영영 반영되지 않는다.
+   */
+  pregenerated?: boolean;
+  /** pregenerated 성우가 아직 준비 안 된 절에서 대신 읽을 성우 */
+  fallbackVoice?: string;
 }
 const KOREAN_VOICE_CONFIG: Record<string, KoreanVoiceConfig> = {
   m1: { engine: "eleven", gender: "male", elevenId: "657hGmxIvJTkmFa17K9v" }, // 천사장
@@ -119,9 +129,9 @@ const KOREAN_VOICE_CONFIG: Record<string, KoreanVoiceConfig> = {
   f1: { engine: "eleven", gender: "female", elevenId: "vDA1h0ZXkQiojUReMmR9" }, // 김단아
   f2: { engine: "chirp", gender: "female", chirpName: "ko-KR-Chirp3-HD-Aoede" }, // Aoede
   f3: { engine: "supertone", gender: "female", supId: "39f27eaab088024ff6f9ac", supModel: "sona_speech_2", supStyle: "neutral" }, // Cindy
-  // 영희 — 커스텀 클론(로컬 GPU 사전 생성). 라이브 합성 엔진 없음.
-  // R2 공유 캐시(tts/v1/ko/f4/{sha1})에 있으면 그것이 서빙되고, 없으면 Chirp(여) 폴백.
-  f4: { engine: "chirp", gender: "female", chirpName: "ko-KR-Chirp3-HD-Aoede" },
+  // 영희 — 커스텀 클론(로컬 GPU 사전 생성). 라이브 합성 엔진이 없다.
+  // 캐시에 있으면 그것을 서빙하고, 아직 안 만든 절은 김단아(f1)가 대신 읽는다.
+  f4: { engine: "eleven", gender: "female", pregenerated: true, fallbackVoice: "f1" },
 };
 
 function ttsAudioResponse(
@@ -252,7 +262,7 @@ export async function POST(req: NextRequest) {
     const voiceKey = isEng
       ? `${accent === "gb" ? "gb" : "us"}-${isMale ? "male" : "female"}`
       : koreanVoice || "m1";
-    const r2Key = ttsCacheKey(ttsText, voiceKey, isEng ? "en" : "ko");
+    let r2Key = ttsCacheKey(ttsText, voiceKey, isEng ? "en" : "ko");
     const cachedR2 = await getR2Audio(r2Key);
     if (cachedR2) {
       return ttsAudioResponse(cachedR2.buffer, cachedR2.voice || "r2", "hit");
@@ -265,6 +275,22 @@ export async function POST(req: NextRequest) {
     if (!isEng) {
       const kv = koreanVoice || "m1";
       koreanCfg = KOREAN_VOICE_CONFIG[kv] ?? KOREAN_VOICE_CONFIG.m1;
+
+      // 사전 생성 성우(영희)인데 이 절이 아직 없다 → 대체 성우로 읽는다.
+      // **대체 성우의 키로** 조회·저장한다. 그래야 같은 절을 그 성우로 듣는 사람과
+      // 음원을 공유해 두 번 합성하지 않고, 영희 키가 오염되지도 않는다.
+      if (koreanCfg.pregenerated && koreanCfg.fallbackVoice) {
+        const fb = KOREAN_VOICE_CONFIG[koreanCfg.fallbackVoice];
+        if (fb) {
+          const fbKey = ttsCacheKey(ttsText, koreanCfg.fallbackVoice, "ko");
+          const fbCached = await getR2Audio(fbKey);
+          if (fbCached) {
+            return ttsAudioResponse(fbCached.buffer, fbCached.voice || "r2", "hit");
+          }
+          koreanCfg = fb;          // 이후 합성·캐시는 전부 대체 성우 기준
+          r2Key = fbKey;
+        }
+      }
       // 서킷 브레이커: 최근 실패로 down 이면 1순위 엔진을 건너뛰고 곧장 폴백(무의미한 왕복 제거).
       if (koreanCfg.engine === "eleven") {
         if (isEngineDown("elevenlabs")) {

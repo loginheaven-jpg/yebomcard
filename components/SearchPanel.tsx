@@ -704,6 +704,12 @@ export default function SearchPanel({
     tts.currentTrack?.bookCode === bookCode &&
     tts.currentTrack?.chapter === chapter;
 
+  // 역본이 바뀌면 기본 성우를 맞춘다. 새번역은 영희(f4) 사전 생성 음원을 쓴다.
+  // 사용자가 성우를 직접 고른 적이 있으면 컨텍스트가 알아서 무시한다.
+  useEffect(() => {
+    tts.applyVersionDefault(mainVersion);
+  }, [mainVersion, tts]);
+
   const buildTtsTracks = useCallback(
     (verses: BibleVerse[]): TtsTrack[] =>
       verses

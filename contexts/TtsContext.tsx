@@ -65,7 +65,7 @@ export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   f3: "지성",
   // 커스텀 클론 보이스 — 사전 생성분만 존재하므로 현재 범위를 라벨에 밝힌다.
   // 범위가 늘면 접미사를 갱신/제거할 것.
-  f4: "영희(욥기)",
+  f4: "영희",
 };
 /** 선택 목록 표시 순서 — 여성(생생·지성·김단아) 먼저, 남성(활력·감미·품격·천사장·할부지) */
 export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f2", "f3", "f1", "f4", "m2", "m3", "m4", "m1", "m5"];
@@ -82,7 +82,7 @@ export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supe
   // f4(영희)는 라이브 엔진이 없는 **사전 생성 전용** 보이스다.
   // R2 공유 캐시에 있으면 그 음원이 나가고, 없으면 Chirp 로 폴백된다.
   // 엔진을 chirp 로 두어야 헬스체크(크레딧)로 비활성화되지 않는다.
-  f4: "chirp",
+  f4: "eleven",   // 사전 생성 음원. 아직 없는 절은 김단아(f1)가 대신 읽는다
 };
 export function koreanVoiceGender(kv: KoreanVoice): "male" | "female" {
   return kv.startsWith("m") ? "male" : "female";
@@ -240,6 +240,11 @@ interface TtsContextValue {
   jumpTo: (index: number) => void;
   setVoice: (v: TTSVoice) => void;
   setKoreanVoice: (v: KoreanVoice) => void;
+  /**
+   * 역본이 바뀌었을 때 기본 성우를 맞춘다. **사용자가 직접 고른 적이 있으면 아무것도 안 한다.**
+   * 새번역은 영희(f4) 사전 생성 음원이 쌓이고 있어 그것을 기본으로 쓴다.
+   */
+  applyVersionDefault: (version: string) => void;
   setSpeed: (s: TtsSpeed) => void;
   setAutoNext: (b: boolean) => void;
   setReadVerseNumber: (b: boolean) => void;
@@ -327,6 +332,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const statusRef = useRef<TtsStatus>("idle");
   const voiceRef = useRef<TTSVoice>("male");
   const koreanVoiceRef = useRef<KoreanVoice>("m1");
+  /** 사용자가 성우를 직접 고른 적이 있는가 — 있으면 역본 기본값이 덮지 않는다 */
+  const voicePickedRef = useRef(false);
+  /** 역본이 새번역이 아닐 때 돌아갈 그날의 기본 성우 */
+  const dayDefaultRef = useRef<KoreanVoice>("f2");
   const speedRef = useRef<TtsSpeed>(1.0);
   const speedTypeRef = useRef<SpeedType>("ai");
   const autoNextRef = useRef(true);
@@ -350,6 +359,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     );
     // 기본 성우: 저장값 없으면 홀수날 생생(f2)/짝수날 활력(m2) — 둘 다 GCP Chirp 라 항상 가용
     const dayDefault: KoreanVoice = new Date().getDate() % 2 === 1 ? "f2" : "m2";
+    dayDefaultRef.current = dayDefault;
+    // 저장값이 있다 = 사용자가 직접 골랐다. 역본 기본값이 이를 덮지 않는다.
+    voicePickedRef.current = readStorage<string | null>(LS.koreanVoice, null, (x) => x) !== null;
     const kv = readStorage<KoreanVoice>(LS.koreanVoice, dayDefault, (s) =>
       (KOREAN_VOICES as string[]).includes(s) ? (s as KoreanVoice) : dayDefault,
     );
@@ -437,6 +449,18 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     setKoreanVoiceState(v);
     koreanVoiceRef.current = v;
     writeStorage(LS.koreanVoice, v);
+    voicePickedRef.current = true;   // 이후로는 역본 기본값이 덮지 않는다
+  }, []);
+
+  // 역본별 기본 성우. 새번역은 영희(f4) — 사전 생성 음원이 쌓여 있고,
+  // 아직 없는 절은 서버가 김단아(f1)로 대신 읽는다.
+  // 사용자가 플레이어나 설정에서 한 번이라도 성우를 고르면 그 선택이 우선한다.
+  const applyVersionDefault = useCallback((version: string) => {
+    if (voicePickedRef.current) return;
+    const want: KoreanVoice = version === "rnksv" ? "f4" : dayDefaultRef.current;
+    if (koreanVoiceRef.current === want) return;
+    setKoreanVoiceState(want);
+    koreanVoiceRef.current = want;   // 저장하지 않는다 — 기본값이지 선택이 아니다
   }, []);
   const setSpeed = useCallback((s: TtsSpeed) => {
     setSpeedState(s);
@@ -850,6 +874,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       jumpTo,
       setVoice,
       setKoreanVoice,
+      applyVersionDefault,
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
@@ -877,6 +902,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       jumpTo,
       setVoice,
       setKoreanVoice,
+      applyVersionDefault,
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
