@@ -64,6 +64,8 @@ interface SearchPanelProps {
   onVerseUpdated?: (updated: BibleVerse) => void;
   /** 하단 5탭에서 들어오는 네비게이션 요청 (Phase 2a) */
   navRequest?: NavRequest;
+  /** 현재 보고 있는 위치 보고 — 이동시키지 않는다. 플랜 헤더(단계 3)가 쓴다 */
+  onPositionChange?: (book: string, chapter: number) => void;
   /** SettingsSheet 에서 전체화면 진입 요청 (Phase 2b) — nonce 갱신 시 전체화면 열림 */
   fullscreenRequestNonce?: number;
   /** 책갈피 메뉴 안 스크랩 버튼 클릭 시 — app/page.tsx 에서 ScrapList 열기 (Phase 2b 후속) */
@@ -98,6 +100,7 @@ export default function SearchPanel({
   bulkEditMode = false,
   onVerseUpdated,
   navRequest,
+  onPositionChange,
   fullscreenRequestNonce,
   onOpenScrap,
   scrapCount,
@@ -556,6 +559,38 @@ export default function SearchPanel({
   useHardwareBack(showSearchRow, () => setShowSearchRow(false));
   useHardwareBack(showBookmarkMenu, () => setShowBookmarkMenu(false));
 
+  // 장 이동 활성 판정 — **이 두 값이 유일한 판정이다.** 렌더 조건·disabled·콜백 undefined
+  // 세 가지 방식으로 소비되므로 goChapter 안에 숨기지 않고 밖으로 노출한다.
+  //
+  // canNextChapter 에 `chapterIdx >= 0` 가드가 붙은 이유:
+  // chapters 는 현재 책의 장 배열인데, 책을 바꾸면 RPC 응답 전까지 이전 책 배열이 남는다.
+  // 그 사이 현재 장이 배열에 없으면 indexOf 가 -1 이고, 가드가 없으면
+  // `-1 < length-1` 이 참이라 chapters[0] 으로 튄다. 키보드(구 지역 계산)와
+  // TTS(loadNextChapterForTts)가 이미 이 가드를 갖고 있어 **엄격 쪽으로 통일**했다.
+  const chapterIdx = chapters.indexOf(chapter);
+  const canPrevChapter = chapterIdx > 0;
+  const canNextChapter = chapterIdx >= 0 && chapterIdx < chapters.length - 1;
+
+  /**
+   * 장 이동 — **모든 조작이 이 함수 하나를 통과한다.**
+   * 스와이프 · 키보드(← → Space) · PC 좌우 여백 · 상단 ◀▶ · 풀스크린 오버스크롤.
+   * TTS 자동 다음 장(loadNextChapterForTts)만 예외다 — 절을 미리 조회한 뒤에
+   * 커밋해야 해서 순서가 다르다.
+   *
+   * 각 경로의 고유 조건(Space 의 하단 도달, 여백 버튼의 렌더 조건, 풀스크린의
+   * undefined 폴백)은 **호출부에 남는다.** 여기로 끌어오면 다른 경로까지 그 조건에 걸린다.
+   */
+  const goChapter = useCallback(
+    (delta: -1 | 1) => {
+      if (delta === -1 && canPrevChapter) {
+        setChapter(chapters[chapterIdx - 1]);
+      } else if (delta === 1 && canNextChapter) {
+        setChapter(chapters[chapterIdx + 1]);
+      }
+    },
+    [canPrevChapter, canNextChapter, chapters, chapterIdx],
+  );
+
   // ─── 키보드: ← 이전장 / → 다음장 / Space 스마트 다음장 (PC) ───
   useEffect(() => {
     if (mode !== "chapter" || browseStep !== "verse") return;
@@ -574,23 +609,23 @@ export default function SearchPanel({
       // (verse 핸들러 1개는 기본 — 그 이상이면 책갈피 메뉴, 검색 펼침, 편집 등이 열린 상태)
       if (getActiveModalCount() > 1) return;
 
-      const idx = chapters.indexOf(chapter);
-      const canPrev = idx > 0;
-      const canNext = idx >= 0 && idx < chapters.length - 1;
-
+      // 지역 재계산을 없애고 단일 판정(canPrevChapter/canNextChapter)을 쓴다.
+      // 값의 의미는 그대로다 — 지역 계산이 엄격했고 모듈 판정을 거기 맞췄다.
       if (e.key === "ArrowLeft") {
-        if (canPrev) {
+        if (canPrevChapter) {
           e.preventDefault();
-          setChapter(chapters[idx - 1]);
+          goChapter(-1);
         }
       } else if (e.key === "ArrowRight") {
-        if (canNext) {
+        if (canNextChapter) {
           e.preventDefault();
-          setChapter(chapters[idx + 1]);
+          goChapter(1);
         }
       } else if (e.key === " " || e.code === "Space") {
-        if (!canNext) return;
-        // 스마트 Space: 본문 컨테이너가 하단까지 스크롤됐을 때만 다음 장
+        if (!canNextChapter) return;
+        // 스마트 Space: 본문 컨테이너가 하단까지 스크롤됐을 때만 다음 장.
+        // **이 판정은 호출부에 남는다** — goChapter 안으로 옮기면 화살표·스와이프·
+        // 여백 클릭까지 하단 도달을 요구하게 되어 동작이 바뀐다.
         const container = scrollRef.current;
         if (container) {
           const atBottom =
@@ -598,13 +633,28 @@ export default function SearchPanel({
           if (!atBottom) return; // 평소처럼 스크롤 (preventDefault 안 함)
         }
         e.preventDefault();
-        setChapter(chapters[idx + 1]);
+        goChapter(1);
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [mode, browseStep, showFullscreen, chapters, chapter]);
+    // chapters/chapter 는 goChapter·판정에 이미 반영돼 있어 직접 참조하지 않는다
+  }, [mode, browseStep, showFullscreen, goChapter, canPrevChapter, canNextChapter]);
+
+  // 현재 위치 보고 — 순수 보고다. 이동시키지 않고 알리기만 한다(소비자는 단계 3).
+  //
+  // chapters 에 현재 장이 없는 동안은 보고하지 않는다. 목차에서 책만 바꾸면
+  // setBookCode 만 호출되고 장은 이후 loadChapters effect 가 정리하는데,
+  // 그 사이의 '새 책 + 이전 책의 장 번호' 는 존재하지 않는 위치다.
+  //
+  // 이 컴포넌트는 다른 뷰에서도 언마운트되지 않으므로, 본문을 보고 있지 않을 때의
+  // 위치 변화까지 올라간다. 뷰 판단은 상위(app/page.tsx)가 한다 — isReadingView 와 같은 구조다.
+  useEffect(() => {
+    if (!onPositionChange) return;
+    if (!chapters.includes(chapter)) return;
+    onPositionChange(bookCode, chapter);
+  }, [bookCode, chapter, chapters, onPositionChange]);
 
   // verse 단계 진입 후 3초 머물면 Recent 자동 갱신
   useEffect(() => {
@@ -1563,10 +1613,6 @@ export default function SearchPanel({
   }
 
   // Chapter navigation helpers
-  const chapterIdx = chapters.indexOf(chapter);
-  const canPrevChapter = chapterIdx > 0;
-  const canNextChapter = chapterIdx < chapters.length - 1;
-
   // Phase 2c + 3 — 좌우 스와이프(장 이동) + 길게 누르기(전체화면) 통합 터치 핸들러
   // 활성: 본문 영역 가운데 60% (가장자리 20% 제외 — iOS swipe-back 보호)
   // 임계 스와이프: |dx| > 50px, 각도 30° 이내
@@ -1577,17 +1623,6 @@ export default function SearchPanel({
   const longPressedRef = useRef(false);
   // visibleMain 은 아래 useMemo 로 정의 — 핸들러 클로저에서는 ref 로 접근
   const visibleMainCountRef = useRef(0);
-
-  const goChapter = useCallback(
-    (delta: -1 | 1) => {
-      if (delta === -1 && canPrevChapter) {
-        setChapter(chapters[chapterIdx - 1]);
-      } else if (delta === 1 && canNextChapter) {
-        setChapter(chapters[chapterIdx + 1]);
-      }
-    },
-    [canPrevChapter, canNextChapter, chapters, chapterIdx],
-  );
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -1715,7 +1750,7 @@ export default function SearchPanel({
           {canPrevChapter && (
             <button
               type="button"
-              onClick={() => setChapter(chapters[chapterIdx - 1])}
+              onClick={() => goChapter(-1)}
               className="hidden lg:flex fixed left-0 top-24 bottom-24 z-20 items-center justify-start pl-2 group cursor-pointer bg-transparent"
               style={{ width: "max(40px, calc((100vw - 1400px) / 2))" }}
               title="이전 장"
@@ -1729,7 +1764,7 @@ export default function SearchPanel({
           {canNextChapter && (
             <button
               type="button"
-              onClick={() => setChapter(chapters[chapterIdx + 1])}
+              onClick={() => goChapter(1)}
               className="hidden lg:flex fixed right-0 top-24 bottom-24 z-20 items-center justify-end pr-2 group cursor-pointer bg-transparent"
               style={{ width: "max(40px, calc((100vw - 1400px) / 2))" }}
               title="다음 장"
@@ -1766,12 +1801,12 @@ export default function SearchPanel({
           
           onOverscrollNext={
             mode === "chapter" && browseStep === "verse" && canNextChapter
-              ? () => setChapter(chapters[chapterIdx + 1])
+              ? () => goChapter(1)
               : undefined
           }
           onOverscrollPrev={
             mode === "chapter" && browseStep === "verse" && canPrevChapter
-              ? () => setChapter(chapters[chapterIdx - 1])
+              ? () => goChapter(-1)
               : undefined
           }
           onClose={() => setShowFullscreen(false)}
@@ -2345,7 +2380,7 @@ export default function SearchPanel({
                 {/* 중앙: ◀ 책이름 장 ▶ */}
                 <div className="flex items-center gap-0">
                   <button
-                    onClick={() => canPrevChapter && setChapter(chapters[chapterIdx - 1])}
+                    onClick={() => goChapter(-1)}
                     disabled={!canPrevChapter}
                     className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                   >
@@ -2364,7 +2399,7 @@ export default function SearchPanel({
                     <span className="text-gray-400">/{chapters.length}장</span>
                   </button>
                   <button
-                    onClick={() => canNextChapter && setChapter(chapters[chapterIdx + 1])}
+                    onClick={() => goChapter(1)}
                     disabled={!canNextChapter}
                     className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
                   >
