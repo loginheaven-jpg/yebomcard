@@ -393,6 +393,79 @@ def ui_resume(jid):
     return f"{jid} 이어서 진행"
 
 
+# 교체 작업은 남은 절 작업(진도표 순번 1~66, 스튜디오 작업 9999)이 **모두 끝난 뒤에** 돌게 한다.
+# 워커는 순번이 낮은 작업부터 집으므로, 버튼을 일찍 누르거나 스튜디오를 다시 켜도 순서가 뒤집히지 않는다.
+REPLACE_SEQ_BASE = 10000
+
+
+def enqueue_replacement(voice, version, books, upload_key, batch=4, retry_max=3, temp=0.75, punct=True):
+    """구방식 음원 교체 작업을 책마다 건다 — 그 책에서 **아직 구방식인 절만** 담는다.
+
+    2026-09-10 까지의 영희 음원은 음성 복제 기본값인 '본문 흘려 넣기' 모드로 만들어 절 끝 음절이
+    짧게 잘린 것이 많다. 새 방식으로 남은 절을 다 만든 뒤 이것으로 교체한다. 교체 대상은 서버가
+    판정한다(올라온 시각이 LEGACY_BEFORE 이전인 파일) — 어느 PC 가 만들었든 상관없다.
+    서버는 교체 업로드도 구방식 파일일 때만 덮어쓴다.
+
+    books: [(진도표 순번, 책 이름)].  반환: [(순번, 책 이름, 작업 ID 또는 None, 절 수)]
+    같은 책의 교체 작업이 이미 있으면 다시 쓰고(끝났으면 건너뜀), 없으면 새로 만든다.
+    서버에서 구방식 목록을 못 받으면 RuntimeError — 모르고 다 만드는 것보다 멈추는 편이 낫다.
+    """
+    legacy = server.cache_index(upload_key, legacy=True)
+    if legacy is None:
+        raise RuntimeError("서버에서 구방식 목록을 받지 못했습니다")
+    existing = {j["title"]: j for j in jobs.list_jobs() if j["voice"] == voice}
+    out = []
+    for seq, name in books:
+        title = f"{version} {name} (교체)"
+        j = existing.get(title)
+        if j:
+            _ok, _held, pend = jobs.counts(j)
+            if j["status"] == "done" and pend == 0:
+                out.append((seq, name, None, 0))
+                continue
+            jobs.requeue(j["id"])
+            out.append((seq, name, j["id"], len(j["items"])))
+            continue
+        items = build_items(voice, "성경 범위", version, [name], None, None, "", None)
+        items = [it for it in items if engine.text_hash(it["text"]) in legacy]
+        if not items:
+            out.append((seq, name, None, 0))
+            continue
+        jid = jobs.new_job(voice, title, items, temp=temp, punct=punct, batch=batch,
+                           retry_max=retry_max, seq=REPLACE_SEQ_BASE + seq,
+                           upload_key=upload_key, replace=True)
+        out.append((seq, name, jid, len(items)))
+    return out
+
+
+def ui_replace_legacy(voice, ver_label, which, batch, temp, punct, retry):
+    """구방식 교체 작업을 한꺼번에 건다 — 고른 쪽(구약/신약)의 모든 책을 진도표 순서로."""
+    if not voice:
+        return "보이스를 먼저 선택하세요", gr.update()
+    upload_key = engine.voice_upload_key(voice)
+    if not upload_key:
+        return f"보이스 '{voice}' 에 예봄성경 성우 슬롯이 없어 교체할 수 없습니다", gr.update()
+    if not server.enabled():
+        return "서버 연동 정보가 없어 교체할 수 없습니다", gr.update()
+    import plan
+    want = {"구약": "old", "신약": "new"}[which]
+    try:
+        tm = {c: t for _, c, t in engine.get_books(engine.VERSIONS[ver_label])}
+        books = [(seq, name) for seq, code, name, _ in plan.PLAN_ORDER if tm.get(code) == want]
+        planned = enqueue_replacement(voice, ver_label, books, upload_key, batch=int(batch),
+                                      retry_max=int(retry), temp=float(temp), punct=bool(punct))
+    except Exception as e:
+        return f"실패: {e}", gr.update()
+    made = [(n, c) for _, n, jid, c in planned if jid]
+    total = sum(c for _, c in made)
+    empty = sum(1 for _, _, jid, _ in planned if not jid)
+    msg = (f"{which} 구방식 교체 작업 {len(made)}권 · {total:,}절을 걸었습니다.\n"
+           f"남은 절 작업이 모두 끝난 뒤 진도표 순서로 진행합니다.")
+    if empty:
+        msg += f"\n교체할 구방식 절이 없는 책 {empty}권은 건너뜁니다."
+    return msg, ui_job_rows()
+
+
 # ═══════════════════ 3. 검수 ═══════════════════
 def ui_job_choices():
     return gr.update(choices=[j["id"] for j in jobs.list_jobs()])
@@ -555,6 +628,15 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         with gr.Row():
             b_jid = gr.Dropdown([], label="이어할 작업 ID", scale=2)
             b_btn_resume = gr.Button("이어하기")
+        gr.Markdown("### 구방식 교체 — 남은 절을 다 만든 뒤에")
+        gr.Markdown(
+            "2026-09-10 이전 영희 음원은 절 끝 글자가 짧게 잘린 것이 많습니다. "
+            "남은 절을 새 방식으로 다 만든 뒤, 이 버튼으로 같은 책들을 다시 만들어 교체합니다. "
+            "먼저 걸어 두어도 **남은 절 작업이 모두 끝난 다음에** 진행하고, "
+            "이미 새 방식으로 바뀐 절은 서버가 알아서 건너뜁니다.")
+        with gr.Row():
+            b_rep_which = gr.Radio(["구약", "신약"], value="구약", label="교체할 쪽")
+            b_btn_rep = gr.Button("구방식 교체 작업 걸기", variant="secondary")
         b_timer = gr.Timer(3.0)
 
     # ── 3. 검수 ──
@@ -602,6 +684,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                      b_batch, b_temp, b_punct, b_retry, b_upload], [b_msg, b_jobs])
     b_btn_stop.click(ui_stop, None, b_msg)
     b_btn_resume.click(ui_resume, [b_jid], b_msg)
+    b_btn_rep.click(ui_replace_legacy,
+                    [b_voice, b_ver, b_rep_which, b_batch, b_temp, b_punct, b_retry],
+                    [b_msg, b_jobs])
     b_timer.tick(ui_progress, None, [b_status, b_jobs])
     b_timer.tick(ui_book_rows, None, b_bookprog)
 

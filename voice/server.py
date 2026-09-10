@@ -103,7 +103,7 @@ def fetch_voice(name):
     return d["meta"], base64.b64decode(d["refWavBase64"])
 
 
-def upload_verses(voice_key, items, timeout=180):
+def upload_verses(voice_key, items, replace=False, timeout=180):
     """items: [{'ref':…, 'text': 원문(정제 전 그대로), 'mp3': bytes}]
 
     키는 **서버가** 본문으로 계산한다. 로컬이 계산한 키는 보내지 않는다 —
@@ -114,6 +114,7 @@ def upload_verses(voice_key, items, timeout=180):
         raise ServerError("서버 연동이 설정되지 않았습니다 (studio.json 없음)")
     payload = {
         "voiceKey": voice_key,
+        "replace": bool(replace),   # 구방식 교체 — 서버가 구방식 파일일 때만 덮어쓴다
         "items": [
             {
                 "ref": it["ref"],
@@ -181,16 +182,19 @@ def regen_requests(timeout=60):
     return r.json().get("regenerate", [])
 
 
-def cache_index(voice_key, timeout=120):
+def cache_index(voice_key, legacy=False, timeout=120):
     """이미 만들어진 절의 해시 집합. 서버가 안 되면 None(= 건너뛰기 판단 안 함).
 
     책 하나를 시작할 때 한 번 부른다. 이걸로 다른 PC 가 이미 만든 절을 피한다.
-    실패해도 생성은 계속돼야 하므로 예외를 밖으로 던지지 않는다."""
+    실패해도 생성은 계속돼야 하므로 예외를 밖으로 던지지 않는다.
+
+    legacy=True 면 **아직 구방식인 파일만** 받는다 — 교체할 절을 고를 때 쓴다."""
     if not enabled():
         return None
     try:
         r = requests.get(f"{config()['base']}/api/voice-studio/cache-index",
-                         params={"voiceKey": voice_key}, headers=_headers(), timeout=timeout)
+                         params={"voiceKey": voice_key, **({"legacy": "1"} if legacy else {})},
+                         headers=_headers(), timeout=timeout)
         if not r.ok:
             return None
         return {h for h in r.text.split() if h}

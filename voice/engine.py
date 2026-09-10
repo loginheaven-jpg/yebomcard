@@ -38,6 +38,18 @@ ASR_MODEL = "small"
 SR_TARGET = 24000
 MAX_LEN = 120
 
+# 생성 방식 — 음성 복제 기본값인 '본문 흘려 넣기'(non_streaming_mode=False)는 라이브러리 설명대로
+# 흘려 넣기를 **흉내만 내는** 모드다. 참조 원고 + 대상 본문 + 끝 신호가 참조 음성 프레임 위에 겹쳐
+# 놓이는데, 우리 본문은 그 안에 다 들어가 **대상 본문의 끝 신호가 참조 음성 한가운데에 찍힌다.**
+# 모델이 어디서 끝나는지를 흐릿하게 알고 절 끝 음절을 짧게 맺는다.
+#   실측(출 33:2·4·11 × 4회): 절 끝 중앙값 흘려 넣기 98ms(12회 중 9회 150ms 미만)
+#                                         통째로 넣기 218ms(3회) · 절 안 문장끝 310ms
+# 2026-09-10 부터 새 방식으로 만든다. 그 이전 음원 목록은 scripts/data/f4-legacy-streaming.json
+# — 성경 전체를 새 방식으로 마친 뒤 그 목록의 절을 다시 만들어 교체한다.
+NON_STREAMING = True
+METHOD = "ns1"          # 작업 파일 항목에 남기는 생성 방식 표지 — 구방식 항목에는 표지가 없다
+END_MIN_MS = 150        # 절 끝 음절 덩이가 이보다 짧으면 끝이 잘린 것으로 보고 다시 만든다
+
 # 예봄성경 app/api/tts/route.ts 와 동일 — 바꾸지 말 것
 NOTE_RE = re.compile(r"\s*\(\s*주\s*[:：][\s\S]*$")
 NORM_RE = re.compile(r"[\s.,!?·\"'“”‘’()\[\]:;]")
@@ -254,6 +266,9 @@ def get_tts():
         _tts = Qwen3TTSModel.from_pretrained(
             MODEL_PATH, device_map="cuda:0", dtype=torch.bfloat16,
             attn_implementation="sdpa")
+        # 새 PC 에서 새 방식이 적용됐는지 눈으로 확인하는 줄 — 설치본은 실행할 때 서버에서 코드를 받는다
+        print(f"[생성 방식] {'본문 통째로 넣기' if NON_STREAMING else '본문 흘려 넣기(구방식)'}"
+              f" · 절 끝 {END_MIN_MS}ms 미만이면 다시 만듦", flush=True)
     return _tts
 
 
@@ -330,10 +345,12 @@ def split_text(text, max_len=MAX_LEN, force=False):
 
 
 def gen_kwargs(temp=0.75):
+    # non_streaming_mode — 본문을 통째로 넣는다(위 NON_STREAMING 설명). 한 건씩·배치 모두 여기를 거친다.
     return dict(max_new_tokens=2048, do_sample=True, top_k=50, top_p=1.0,
                 temperature=temp, repetition_penalty=1.05,
                 subtalker_dosample=True, subtalker_top_k=50, subtalker_top_p=1.0,
-                subtalker_temperature=temp)
+                subtalker_temperature=temp,
+                non_streaming_mode=NON_STREAMING)
 
 
 def synth_one(text, voice, temp=0.75, punct=True):
@@ -462,6 +479,32 @@ def num_to_kor(text: str) -> str:
     t = re.sub(r"\d+", lambda m: _sino(int(m.group(0))), t)      # 500 → 오백
     return t
 
+
+
+def final_syllable_ms(wav, sr):
+    """절 끝 음절 덩이 길이(ms) — 끝 글자가 짧게 잘렸는지 가늠한다.
+
+    5ms 단위 세기에서 최대치의 4%를 넘는 **마지막 소리 덩이**의 길이다. 음절 경계를 정확히
+    가르는 자는 아니지만(덩이가 이웃 음절과 붙기도 한다) 잘린 끝을 가려내기에는 충분했다 —
+    구방식 절 끝 중앙값 98ms, 새 방식 218ms, 절 안 문장끝 310ms.
+    """
+    x = np.asarray(wav, dtype=np.float32)
+    if x.ndim > 1:
+        x = x[:, 0]
+    n = max(1, int(sr * 0.005))
+    m = len(x) // n
+    if m == 0:
+        return 0.0
+    e = np.sqrt(np.mean(x[: m * n].reshape(m, n) ** 2, axis=1))
+    v = e > e.max() * 0.04
+    idx = np.where(v)[0]
+    if len(idx) == 0:
+        return 0.0
+    end = int(idx[-1])
+    start = end
+    while start > 0 and v[start - 1]:
+        start -= 1
+    return (end - start + 1) * 5.0
 
 
 def qc_threshold(n_chars, base=0.85):

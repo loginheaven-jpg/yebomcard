@@ -35,6 +35,40 @@ def ensure_job(voice, version, book_name, batch, retry, seq, upload_key=None):
     return jid, len(items), False
 
 
+def run_job(jid, total, label):
+    """작업이 끝날 때까지 진행을 찍으며 기다린다. 멈추거나 오류면 False."""
+    print(f"{label} ({total}절) 시작 · 작업 {jid}", flush=True)
+    t0, last = time.time(), -1
+    while True:
+        job = jobs.load(jid)
+        if job is None:
+            print("   작업 파일 사라짐 — 중단")
+            return False
+        ok, held, pend = jobs.counts(job)
+        done = ok + held
+        if done != last and done % 25 == 0:
+            el = time.time() - t0
+            eta = (total - done) * (el / max(1, done)) if done else 0
+            print(f"     {done}/{total} (합격 {ok} · 보류 {held}) "
+                  f"· 경과 {el/60:.0f}분 · 남은 {eta/60:.0f}분", flush=True)
+            last = done
+        if job["status"] in ("done", "error"):
+            break
+        if job["status"] == "stopped":
+            print("   워커 정지됨 — 중단")
+            return False
+        time.sleep(10)
+    job = jobs.load(jid)
+    ok, held, _ = jobs.counts(job)
+    audio = sum(i.get("audio_sec") or 0 for i in job["items"])
+    print(f"     완료 — 합격 {ok} · 보류 {held} · 오디오 {audio/3600:.2f}h "
+          f"· {(time.time()-t0)/60:.0f}분", flush=True)
+    if job["status"] == "error":
+        print("   오류:", job.get("error"))
+        return False
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--voice", required=True)
@@ -51,6 +85,11 @@ def main():
     ap.add_argument("--upload-key", default=None,
                     help="예봄성경 성우 슬롯(예: f4). 생략하면 보이스 meta.json 의 voiceKey")
     ap.add_argument("--no-upload", action="store_true", help="자동 업로드 끄기")
+    # ── 구방식 교체 (2026-09-10 결정) ──
+    ap.add_argument("--then-replace", action="store_true",
+                    help="남은 절을 다 만든 뒤, 같은 책들의 구방식 음원을 새 방식으로 다시 만들어 교체")
+    ap.add_argument("--replace-legacy", action="store_true",
+                    help="남은 절은 건너뛰고 구방식 교체만 한다")
     a = ap.parse_args()
 
     if a.start not in plan.BY_NAME:
@@ -85,43 +124,38 @@ def main():
           f"({todo[0][2]} → {todo[-1][2]})", flush=True)
 
     t_all = time.time()
-    for seq, code, name, day in todo:
-        jid, total, already = ensure_job(a.voice, a.version, name, a.batch, a.retry, seq,
-                                         upload_key)
-        if already:
-            print(f"[{seq:2d}/66] {name} — 이미 완료, 건너뜀", flush=True)
-            continue
-        print(f"[{seq:2d}/66] {name} ({total}절) 시작 · 작업 {jid}", flush=True)
-        t0, last = time.time(), -1
-        while True:
-            job = jobs.load(jid)
-            if job is None:
-                print("   작업 파일 사라짐 — 중단"); return
-            ok, held, pend = jobs.counts(job)
-            done = ok + held
-            if done != last and done % 25 == 0:
-                el = time.time() - t0
-                rate = (done - (total - pend - ok - held + ok)) if False else done
-                eta = (total - done) * (el / max(1, done)) if done else 0
-                print(f"     {done}/{total} (합격 {ok} · 보류 {held}) "
-                      f"· 경과 {el/60:.0f}분 · 남은 {eta/60:.0f}분", flush=True)
-                last = done
-            if job["status"] in ("done", "error"):
-                break
-            if job["status"] == "stopped":
-                print("   워커 정지됨 — 중단"); return
-            time.sleep(10)
-        job = jobs.load(jid)
-        ok, held, _ = jobs.counts(job)
-        audio = sum(i.get("audio_sec") or 0 for i in job["items"])
-        print(f"     완료 — 합격 {ok} · 보류 {held} · 오디오 {audio/3600:.2f}h "
-              f"· {(time.time()-t0)/60:.0f}분", flush=True)
-        if job["status"] == "error":
-            print("   오류:", job.get("error")); return
+    if not a.replace_legacy:
+        for seq, code, name, day in todo:
+            jid, total, already = ensure_job(a.voice, a.version, name, a.batch, a.retry, seq,
+                                             upload_key)
+            if already:
+                print(f"[{seq:2d}/66] {name} — 이미 완료, 건너뜀", flush=True)
+                continue
+            if not run_job(jid, total, f"[{seq:2d}/66] {name}"):
+                return
+        print(f"\n[남은 절 완료] {len(todo)}권 · {(time.time()-t_all)/3600:.1f}시간", flush=True)
+
+    if a.replace_legacy or a.then_replace:
+        if not upload_key:
+            print("[교체] 업로드 없이는 교체할 수 없습니다 — --no-upload 를 빼고 다시 실행하세요")
+            return
+        print("\n[교체] 2026-09-10 이전 구방식 음원(절 끝이 짧게 잘림)을 새 방식으로 다시 만들어 교체합니다",
+              flush=True)
+        try:
+            planned = ui.enqueue_replacement(a.voice, a.version, [(p[0], p[2]) for p in todo],
+                                             upload_key, batch=a.batch, retry_max=a.retry)
+        except RuntimeError as e:
+            print(f"   {e} — 교체를 멈춥니다", flush=True)
+            return
+        for seq, name, jid, n in planned:
+            if not jid:
+                print(f"[교체 {seq:2d}/66] {name} — 구방식 절 없음", flush=True)
+                continue
+            if not run_job(jid, n, f"[교체 {seq:2d}/66] {name}"):
+                return
 
     print(f"\n[전체 완료] {len(todo)}권 · {(time.time()-t_all)/3600:.1f}시간", flush=True)
     jobs.stop_worker()
-
 
 if __name__ == "__main__":
     main()

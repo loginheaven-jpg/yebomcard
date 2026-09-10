@@ -103,17 +103,19 @@ export async function studioDelete(key: string): Promise<boolean> {
 }
 
 /** prefix 아래 키 목록 (최대 1000개 — 보이스 수는 이보다 훨씬 적다) */
-export async function studioList(prefix: string): Promise<{ key: string; size: number }[]> {
+export async function studioList(
+  prefix: string,
+): Promise<{ key: string; size: number; lastModified?: Date }[]> {
   const c = getClient();
   if (!c) return [];
-  const out: { key: string; size: number }[] = [];
+  const out: { key: string; size: number; lastModified?: Date }[] = [];
   let token: string | undefined;
   do {
     const r = await c.send(
       new ListObjectsV2Command({ Bucket: BUCKET, Prefix: prefix, ContinuationToken: token }),
     );
     for (const o of r.Contents || []) {
-      if (o.Key) out.push({ key: o.Key, size: o.Size || 0 });
+      if (o.Key) out.push({ key: o.Key, size: o.Size || 0, lastModified: o.LastModified });
     }
     token = r.IsTruncated ? r.NextContinuationToken : undefined;
   } while (token);

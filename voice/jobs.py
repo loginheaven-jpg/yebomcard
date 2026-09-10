@@ -9,6 +9,7 @@
 #
 # 상태 파일: jobs/{job_id}.json
 
+import shutil
 import json
 import threading
 import time
@@ -60,7 +61,7 @@ def counts(job):
 
 # ───────────────────────── 작업 생성 ─────────────────────────
 def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, seq=9999,
-            upload_key=None):
+            upload_key=None, replace=False):
     """items: [{key, ref, text, out}] — out 은 절별 wav 절대경로(str)
 
     upload_key: 예봄성경 성우 슬롯(예: "f4"). 주면 **합격한 절을 그때그때
@@ -80,6 +81,7 @@ def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, se
     job = {"id": jid, "voice": voice, "title": title, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
            "status": "queued", "temp": temp, "punct": punct, "batch": batch,
            "retry_max": retry_max, "seq": seq, "upload_key": upload_key,
+           "replace": bool(replace),   # 구방식 교체 작업 — 이미 있는 절도 다시 만들어 덮어쓴다
            "items": prepared}
     save(job)
     start_worker()
@@ -119,7 +121,7 @@ def _upload_ready(job):
         if not payload:
             continue
         try:
-            res = server.upload_verses(key, payload)
+            res = server.upload_verses(key, payload, replace=bool(job.get("replace")))
         except Exception as e:
             # 네트워크 장애로 생성을 멈추지는 않는다 — 다음 회차에 다시 올린다
             job["upload_error"] = str(e)[:200]
@@ -128,7 +130,7 @@ def _upload_ready(job):
         by_ref = {r["ref"]: r for r in res.get("results", [])}
         for it in chunk:
             r = by_ref.get(it["ref"])
-            if r and r["status"] in ("uploaded", "exists"):
+            if r and r["status"] in ("uploaded", "replaced", "exists"):
                 it["uploaded"] = True
                 it.pop("upload_error", None)
             elif r:
@@ -318,6 +320,8 @@ def _skip_already_made(job):
     key = job.get("upload_key")
     if not key:
         return 0
+    if job.get("replace"):
+        return _skip_already_replaced(job, key)
     try:
         import server
         have = server.cache_index(key)
@@ -333,6 +337,31 @@ def _skip_already_made(job):
             it["status"] = "ok"
             it["uploaded"] = True          # 서버에 이미 있으니 올릴 것도 없다
             it["reason"] = "이미 서버에 있음"
+            n += 1
+    return n
+
+
+def _skip_already_replaced(job, key):
+    """교체 작업 — 그 사이 이미 새 방식으로 바뀐 절(다른 PC 가 교체했거나 본문이 바뀌어 새 키가 된 절)은
+    건너뛴다. 서버에 '아직 구방식인 목록' 을 책마다 한 번 묻는다.
+
+    서버가 안 되면 아무것도 건너뛰지 않는다 — 다 만들어도 서버가 새 방식 파일은 덮어쓰지 않으므로
+    낭비일 뿐 사고는 아니다."""
+    try:
+        import server
+        legacy = server.cache_index(key, legacy=True)
+    except Exception:
+        legacy = None
+    if legacy is None:
+        return 0
+    n = 0
+    for it in job["items"]:
+        if it["status"] != "pending":
+            continue
+        if engine.text_hash(it["text"]) not in legacy:
+            it["status"] = "ok"
+            it["uploaded"] = True
+            it["reason"] = "이미 새 방식으로 교체됨"
             n += 1
     return n
 
@@ -359,6 +388,75 @@ def _flag_note_residue(job):
 
 
 # ───────────────────────── 워커 ─────────────────────────
+_BEST_KEYS = ("best_end_ms", "best_ratio", "best_asr", "best_audio_sec", "end_retry")
+
+
+def _best_path(p):
+    return p.with_name(p.stem + ".best.wav")
+
+
+def _drop_best(it, p):
+    bp = _best_path(p)
+    if bp.exists():
+        bp.unlink()
+    for k in _BEST_KEYS:
+        it.pop(k, None)
+
+
+def _accept_best(it, p):
+    """끝이 가장 긴 시도를 쓴다 — 절 끝 검사로 다시 만들다 재시도 상한에 닿았을 때의 마무리."""
+    bp = _best_path(p)
+    if bp.exists() and it.get("best_end_ms", -1) > it.get("end_ms", -1):
+        shutil.copyfile(bp, p)
+        it["end_ms"] = it["best_end_ms"]
+        it["ratio"] = it.get("best_ratio", it.get("ratio"))
+        it["asr"] = it.get("best_asr", it.get("asr", ""))
+        it["audio_sec"] = it.get("best_audio_sec", it.get("audio_sec"))
+    _drop_best(it, p)
+    it["status"] = "ok"
+    it["reason"] = f"절 끝 짧음({it.get('end_ms', 0):.0f}ms) — 가장 나은 시도 사용"
+
+
+def _judge(job, it, p, w, sr, ok):
+    """받아쓰기 결과와 절 끝 길이로 절의 다음 상태를 정한다.
+
+    절 끝 검사: 받아쓰기는 통과했는데 끝 음절이 짧게 잘렸으면(engine.END_MIN_MS 미만) 다시
+    만든다. 끝이 가장 긴 시도는 따로 보관해 두었다가, 상한에 닿으면 그것을 쓴다 —
+    **보류하지 않는다.** 내용은 맞고 끝맺음만 아쉬운 것이라 사람이 판단할 일이 아니다.
+    """
+    last = it["tries"] >= job["retry_max"]
+    if ok:
+        end_ms = engine.final_syllable_ms(w, sr)
+        it["end_ms"] = round(end_ms)
+        if end_ms >= engine.END_MIN_MS:
+            _drop_best(it, p)
+            it["status"] = "ok"
+            return
+        if end_ms > it.get("best_end_ms", -1):
+            shutil.copyfile(p, _best_path(p))
+            it["best_end_ms"] = round(end_ms)
+            it["best_ratio"] = it.get("ratio")
+            it["best_asr"] = it.get("asr", "")
+            it["best_audio_sec"] = it.get("audio_sec")
+        if last:
+            _accept_best(it, p)
+        else:
+            it["end_retry"] = True
+            it["reason"] = f"절 끝 짧음({end_ms:.0f}ms<{engine.END_MIN_MS}) — 다시 만듦"
+            it["status"] = "pending"
+        return
+    # 받아쓰기 불합격 — 다음 재시도는 본문을 더 잘게 쪼개는 기존 경로로 간다
+    it["end_retry"] = False
+    if last:
+        if _best_path(p).exists():
+            it["end_ms"] = -1          # 앞서 받아쓰기를 통과한 시도가 있으면 반드시 그것을 쓴다
+            _accept_best(it, p)
+        else:
+            it["status"] = "held"      # 상한 초과 → 보류(사람이 판단)
+    else:
+        it["status"] = "pending"
+
+
 def _process(job):
     job["status"] = "running"
     save(job)
@@ -380,15 +478,21 @@ def _process(job):
         if not pend:
             break
         # 같은 재시도 회차끼리 묶는다 — 회차가 오를수록 더 잘게 쪼개 잘림을 피한다
-        tries0 = pend[0]["tries"]
-        group = [i for i in pend if i["tries"] == tries0][:batch]
-        max_len = max(40, engine.MAX_LEN // (1 + tries0))
+        # 단 '절 끝만 짧아서' 다시 만드는 절은 본문을 더 쪼개지 않는다 — 쪼개면 절 중간에 쉼이
+        # 끼어 호흡이 달라진다. 끝만 다시 뽑으면 되므로 처음과 같은 조건으로 만든다.
+        key0 = (pend[0]["tries"], bool(pend[0].get("end_retry")))
+        group = [i for i in pend if (i["tries"], bool(i.get("end_retry"))) == key0][:batch]
+        tries0, end_retry = key0
+        if end_retry:
+            max_len, force = engine.MAX_LEN, False
+        else:
+            max_len, force = max(40, engine.MAX_LEN // (1 + tries0)), tries0 >= 1
         _cur["note"] = (f"{group[0]['ref']} 외 {len(group)-1}건" if len(group) > 1
                         else group[0]["ref"]) + (f" (재시도{tries0})" if tries0 else "")
         try:
             wavs, sr = engine.synth_batch([g["text"] for g in group], voice,
                                           job["temp"], job["punct"], max_len=max_len,
-                                          force=(tries0 >= 1))
+                                          force=force)
         except Exception as e:
             job["status"] = "error"
             job["error"] = str(e)[:500]
@@ -397,6 +501,7 @@ def _process(job):
 
         for it, w in zip(group, wavs):
             it["tries"] += 1
+            it["method"] = engine.METHOD      # 어떤 방식으로 만들었는가 — 구방식 항목에는 이 표지가 없다
             p = Path(it["out"])
             p.parent.mkdir(parents=True, exist_ok=True)
             sf.write(str(p), w, sr)
@@ -409,11 +514,7 @@ def _process(job):
             it["reason"] = reason
             it["asr"] = hyp          # 중앙 검수에서 원문과 나란히 봐야 판단이 된다
 
-            if ok:
-                it["status"] = "ok"
-            elif it["tries"] >= job["retry_max"]:
-                it["status"] = "held"          # 상한 초과 → 보류(사람이 판단)
-            # else: pending 유지 → 다음 루프에서 재시도
+            _judge(job, it, p, w, sr, ok)
         _upload_ready(job)
         _report_held_if_due(job)
         save(job)

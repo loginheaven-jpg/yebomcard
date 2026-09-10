@@ -8,7 +8,7 @@
  * R2_* 환경변수가 없으면 no-op(null/skip) → 로컬/미설정 환경에서도 route 는 정상 동작(매번 합성).
  */
 
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
@@ -78,6 +78,21 @@ export async function getR2Audio(key: string): Promise<{ buffer: Buffer; voice: 
     return { buffer: Buffer.from(bytes), voice: r.Metadata?.["x-tts-voice"] || "" };
   } catch {
     return null; // NoSuchKey 등 → 캐시 미스
+  }
+}
+
+/**
+ * 공유 캐시에 있는지와 올라온 시각만 본다(음원을 내려받지 않는다).
+ * 있으면 { lastModified }, 없거나 조회 실패면 null.
+ */
+export async function headR2Audio(key: string): Promise<{ lastModified: Date } | null> {
+  const c = getClient();
+  if (!c) return null;
+  try {
+    const r = await c.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    return { lastModified: r.LastModified ?? new Date(0) };
+  } catch {
+    return null;
   }
 }
 

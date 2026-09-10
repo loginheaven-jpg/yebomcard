@@ -9,12 +9,18 @@
  * 덤으로 키 규칙을 서버가 직접 계산하므로, 로컬 코드가 어긋나 엉뚱한 키로
  * 올라가 조용히 캐시 미스가 나는 사고도 막힌다. 로컬은 **본문**을 보내고,
  * 키는 서버가 만든다.
+ *
+ * 교체(replace: true)
+ *   평소에는 같은 키가 이미 있으면 건너뛴다(exists). 구방식 교체 작업은 replace 를 실어 보내는데,
+ *   그때도 **기존 파일이 LEGACY_BEFORE 이전에 올라온 것일 때만** 덮어쓴다(replaced).
+ *   두 PC 가 같은 절을 교체하더라도 새 방식 파일을 구방식으로 되돌리는 일이 생기지 않는다.
+ *   있는지 확인은 HEAD 로 한다 — 예전에는 확인하려고 음원을 통째로 내려받았다.
  */
 
 import { NextResponse } from "next/server";
 import { requireDevice } from "@/lib/voiceStudio/auth";
-import { putR2Audio, getR2Audio, r2CacheEnabled } from "@/lib/tts/r2Cache";
-import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS } from "@/lib/tts/verseText";
+import { putR2Audio, headR2Audio, r2CacheEnabled } from "@/lib/tts/r2Cache";
+import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS, LEGACY_BEFORE } from "@/lib/tts/verseText";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { voiceKey?: string; items?: Item[] };
+  let body: { voiceKey?: string; items?: Item[]; replace?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -64,13 +70,21 @@ export async function POST(req: Request) {
     );
   }
 
+  const replace = body.replace === true;
+  const legacyBefore = Date.parse(LEGACY_BEFORE[voiceKey] || "");
+
   const items = body.items || [];
   if (!items.length) return NextResponse.json({ error: "items 가 비어 있습니다" }, { status: 400 });
   if (items.length > MAX_BATCH) {
     return NextResponse.json({ error: `한 번에 최대 ${MAX_BATCH}건까지` }, { status: 400 });
   }
 
-  const results: { ref: string; status: "uploaded" | "exists" | "error"; key?: string; error?: string }[] = [];
+  const results: {
+    ref: string;
+    status: "uploaded" | "replaced" | "exists" | "error";
+    key?: string;
+    error?: string;
+  }[] = [];
 
   for (const it of items) {
     const ref = it.ref || "?";
@@ -92,20 +106,26 @@ export async function POST(req: Request) {
       // 키는 서버가 만든다 — 로컬이 계산한 키는 받지 않는다
       const key = ttsCacheKey(cleanForTts(it.text), voiceKey, "ko");
 
-      if (await getR2Audio(key)) {
-        results.push({ ref, status: "exists", key });
-        continue;
+      const existing = await headR2Audio(key);
+      if (existing) {
+        const isLegacy =
+          replace && Number.isFinite(legacyBefore) && existing.lastModified.getTime() < legacyBefore;
+        if (!isLegacy) {
+          results.push({ ref, status: "exists", key });
+          continue;
+        }
       }
       await putR2Audio(key, mp3, `voice:${voiceKey}`);
-      results.push({ ref, status: "uploaded", key });
+      results.push({ ref, status: existing ? "replaced" : "uploaded", key });
     } catch (e) {
       results.push({ ref, status: "error", error: e instanceof Error ? e.message : "실패" });
     }
   }
 
   const uploaded = results.filter((r) => r.status === "uploaded").length;
+  const replaced = results.filter((r) => r.status === "replaced").length;
   const exists = results.filter((r) => r.status === "exists").length;
   const failed = results.filter((r) => r.status === "error").length;
 
-  return NextResponse.json({ uploaded, exists, failed, results });
+  return NextResponse.json({ uploaded, replaced, exists, failed, results });
 }

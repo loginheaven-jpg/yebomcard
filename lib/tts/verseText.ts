@@ -31,3 +31,15 @@ export function ttsCacheKey(cleanedText: string, voiceKey: string, lang: "ko" | 
 
 /** 로컬 스튜디오가 사전 생성한 음원을 올릴 수 있는 성우 슬롯 */
 export const PREGENERATED_VOICE_KEYS = ["f4"] as const;
+
+/**
+ * 구방식 음원 기준 시각 — 이 시각 **이전**에 올라온 사전 생성 음원은 교체 대상이다.
+ *
+ * f4(영희)는 2026-09-10 까지 음성 복제 기본값인 '본문 흘려 넣기' 모드로 만들어, 대상 본문의 끝 신호가
+ * 참조 음성 한가운데에 찍힌 탓에 **절 끝 음절이 짧게 잘린 것이 많다**(실측 절 끝 중앙값 98ms,
+ * 통째로 넣기 218ms). 새 방식으로 성경 전체를 마친 뒤 이 시각 이전 파일을 다시 만들어 덮어쓴다.
+ * 값은 scripts/data/f4-legacy-streaming.json 의 snapshotAt 과 같다 — 그 목록이 감사 기록이다.
+ */
+export const LEGACY_BEFORE: Partial<Record<string, string>> = {
+  f4: "2026-09-10T10:28:53.602Z",
+};
