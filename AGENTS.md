@@ -18,10 +18,10 @@
 
 | # | 규칙 | 출처 |
 |---|---|---|
-| 1 | **자동 commit/push 금지** — 사용자가 "commit & push" 명시 요청 시에만 git 진행 | feedback_local_first_workflow |
+| 1 | **작업을 마치면 항상 commit & push** — 사용자가 그 작업에 대해 미리 특별히 금한 경우만 예외 (2026-09-10 지시, 이전 '명시 요청 시에만' 규칙 대체). 비밀값·임시 파일은 파일을 지정해 add 하여 제외 | feedback_local_first_workflow |
 | 2 | **보류 사항은 [plan.md](plan.md) 단일 파일에 누적** — 기능별 문서 분리 X | feedback_plan_md |
 | 3 | **빈도·심각도 낮은 이슈는 변경 자제** — 보험성 변경 제안 시 "변경 안 함" 옵션도 함께 제시 | feedback_low_freq_issues |
-| 4 | **master 직접 push 허용** (예봄 계열은 master 가 기본 브랜치) — 단 명시 요청 시 |  |
+| 4 | **master 직접 push** (예봄 계열은 master 가 기본 브랜치) — push 후 운영 반영까지 확인 |  |
 
 ## 2. 핵심 시스템 단면
 
