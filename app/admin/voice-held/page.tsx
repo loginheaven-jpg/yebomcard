@@ -50,6 +50,8 @@ export default function VoiceHeldPage() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [showDone, setShowDone] = useState(false);
+  /** 본문이 정정되어 볼 필요가 없어진 보류 수 — 목록이 왜 줄었는지 알려준다 */
+  const [stale, setStale] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -58,6 +60,7 @@ export default function VoiceHeldPage() {
       const d = await res.json();
       setItems(d.items || []);
       setActions(d.actions || {});
+      setStale(d.stale || 0);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "불러오기 실패");
@@ -132,6 +135,12 @@ export default function VoiceHeldPage() {
           판단 대기 {pending.length}
         </button>
         <button
+          onClick={load}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+        >
+          새로고침
+        </button>
+        <button
           onClick={() => setShowDone(true)}
           className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${
             showDone
@@ -148,6 +157,13 @@ export default function VoiceHeldPage() {
           새로고침
         </button>
       </div>
+
+      {stale > 0 && (
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+          본문이 정정되어 볼 필요가 없어진 보류 <b>{stale}건</b>은 목록에서 감췄습니다.
+          그 절들은 정정된 본문으로 다시 만들어집니다.
+        </p>
+      )}
 
       {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
 
