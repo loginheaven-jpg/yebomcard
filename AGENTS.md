@@ -42,12 +42,13 @@
 
 ### TTS 파이프라인
 - `TtsContext` + `TTSMiniPlayer`(속도·재생/정지 + **한국어 성우 선택** 팝오버). 발음/자동다음장/절번호는 `SettingsSheet`(성우도 병행).
-- **한국어 성우 8종 — 성우별 엔진 라우팅**(`app/api/tts/route.ts` `KOREAN_VOICE_CONFIG`):
-  - 라벨/순서(`TtsContext` `KOREAN_VOICE_LABELS`/`KOREAN_VOICE_ORDER`): 여 생생(f2)·지성(f3)·김단아(f1) / 남 활력(m2)·감미(m3)·품격(m4)·천사장(m1)·할부지(m5)
-  - 엔진: 천사장·김단아=ElevenLabs / 활력·생생=GCP Chirp3-HD / 감미·품격·할부지(클론)·지성=Supertone
+- **한국어 성우 7종(선택 가능) — 성우별 엔진 라우팅**(`app/api/tts/route.ts` `KOREAN_VOICE_CONFIG`):
+  - 라벨/순서(`TtsContext` `KOREAN_VOICE_LABELS`/`KOREAN_VOICE_ORDER`): 여 영희(f4)·지성(f3)·김단아(f1) / 남 감미(m3)·품격(m4)·천사장(m1)·할부지(m5)
+  - **생생(f2)·활력(m2)은 선택 목록에서 제외**(`RETIRED_KOREAN_VOICES`, 2026-09-10 — 새번역 낭독의 띄어쓰기가 부자연스러움). 저장값이 이 둘이면 고른 적 없는 것으로 보고 기본 성우로 되돌림
+  - 엔진: 천사장·김단아=ElevenLabs / 감미·품격·할부지(클론)·지성=Supertone / 영희=사전 생성(R2, 새번역) — 음원이 없는 절·다른 역본은 김단아가 대신 읽고 **김단아 키로** 캐시 / GCP Chirp3-HD(옛 생생·활력)=폴백 전용
   - **폴백 순서**: 1순위 엔진 → GCP **Chirp3-HD(성별)** → Neural2 → WaveNet → WebSpeech (Chirp 를 2순위로 통일, 음질 우선)
   - Supertone: 요청당 300자 제한 → `splitForSupertone` 문장분할+이어붙이기, 속도는 `voice_settings.speed`, 클론은 `model=supertonic_api_3`+style 생략
-  - **기본 성우**: 저장값 없으면 홀수날 생생/짝수날 활력(둘 다 Chirp=항상 가용)
+  - **기본 성우**: 저장값 없으면 영희(f4, `DEFAULT_KOREAN_VOICE`) — 모든 역본 공통
 - **서킷 브레이커 + 헬스**(`lib/tts/engineHealth.ts`, `app/api/tts/health`):
   - ElevenLabs/Supertone 가 401/402/403/429/타임아웃이면 해당 엔진을 쿨다운(10분) `down` 표시 → 그 동안 1순위 시도 건너뛰고 폴백 직행(매 절 실패 왕복 제거). 성공 시 자동 복구.
   - `/api/tts/health`(5분 캐시): EL `subscription`·Supertone `/credits` 로 잔여 판단 + 브레이커 병합 → 클라(`ttsHealth`)가 소진/장애 성우를 **disable+뱃지**(소진/키오류/미설정/지연). `koreanVoiceStatusFrom`.

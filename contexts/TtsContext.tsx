@@ -68,8 +68,16 @@ export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   // 범위가 늘면 접미사를 갱신/제거할 것.
   f4: "영희",
 };
-/** 선택 목록 표시 순서 — 여성(생생·지성·김단아) 먼저, 남성(활력·감미·품격·천사장·할부지) */
-export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f2", "f3", "f1", "f4", "m2", "m3", "m4", "m1", "m5"];
+/**
+ * 선택 목록에서 뺀 성우 — 생생(f2)·활력(m2)은 GCP Chirp3-HD 인데, 새번역 낭독에서 띄어쓰기(끊어 읽기)가
+ * 너무 부자연스러워 뺐다(2026-09-10). 엔진 자체는 유료 엔진이 실패할 때의 서버 폴백으로 계속 쓰인다.
+ * 예전에 이 둘을 골라 저장한 사용자는 고른 적이 없는 것으로 보고 기본 성우로 돌린다.
+ */
+export const RETIRED_KOREAN_VOICES: readonly KoreanVoice[] = ["f2", "m2"];
+/** 기본 성우 — 영희. 새번역은 사전 생성 음원, 음원이 없는 절과 다른 역본은 서버가 김단아(f1)로 대신 읽는다 */
+export const DEFAULT_KOREAN_VOICE: KoreanVoice = "f4";
+/** 선택 목록 표시 순서 — 여성(영희·지성·김단아) 먼저, 남성(감미·품격·천사장·할부지) */
+export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f4", "f3", "f1", "m3", "m4", "m1", "m5"];
 /** 성우별 1순위 엔진 — route.ts KOREAN_VOICE_CONFIG 와 일치. chirp 는 GCP 라 항상 가용 */
 export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supertone"> = {
   m1: "eleven",
@@ -339,8 +347,6 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const koreanVoiceRef = useRef<KoreanVoice>("m1");
   /** 사용자가 성우를 직접 고른 적이 있는가 — 있으면 역본 기본값이 덮지 않는다 */
   const voicePickedRef = useRef(false);
-  /** 역본이 새번역이 아닐 때 돌아갈 그날의 기본 성우 */
-  const dayDefaultRef = useRef<KoreanVoice>("f2");
   const speedRef = useRef<TtsSpeed>(1.0);
   const speedTypeRef = useRef<SpeedType>("ai");
   const autoNextRef = useRef(true);
@@ -366,14 +372,15 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         s === "female" ? "female" : "male",
       ),
     );
-    // 기본 성우: 저장값 없으면 홀수날 생생(f2)/짝수날 활력(m2) — 둘 다 GCP Chirp 라 항상 가용
-    const dayDefault: KoreanVoice = new Date().getDate() % 2 === 1 ? "f2" : "m2";
-    dayDefaultRef.current = dayDefault;
     // 저장값이 있다 = 사용자가 직접 골랐다. 역본 기본값이 이를 덮지 않는다.
-    voicePickedRef.current = readStorage<string | null>(LS.koreanVoice, null, (x) => x) !== null;
-    const kv = readStorage<KoreanVoice>(LS.koreanVoice, dayDefault, (s) =>
-      (KOREAN_VOICES as string[]).includes(s) ? (s as KoreanVoice) : dayDefault,
-    );
+    // 단 목록에서 뺀 성우(생생·활력)나 모르는 값이면 고른 적이 없는 것으로 보고 기본 성우(영희)로 간다.
+    const stored = readStorage<string | null>(LS.koreanVoice, null, (x) => x);
+    const usable =
+      stored !== null &&
+      (KOREAN_VOICES as string[]).includes(stored) &&
+      !(RETIRED_KOREAN_VOICES as readonly string[]).includes(stored);
+    voicePickedRef.current = usable;
+    const kv: KoreanVoice = usable ? (stored as KoreanVoice) : DEFAULT_KOREAN_VOICE;
     setKoreanVoiceState(kv);
     koreanVoiceRef.current = kv;
     // 속도는 재생 시작 시 유형별로 로드(SPEED_DEFAULT/유형별 기억) — 단일 전역 속도 복원 없음
@@ -491,12 +498,13 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     voicePickedRef.current = true;   // 이후로는 역본 기본값이 덮지 않는다
   }, []);
 
-  // 역본별 기본 성우. 새번역은 영희(f4) — 사전 생성 음원이 쌓여 있고,
-  // 아직 없는 절은 서버가 김단아(f1)로 대신 읽는다.
+  // 역본별 기본 성우 — 지금은 모든 역본이 영희(f4)다. 새번역은 사전 생성 음원이 쌓여 있고,
+  // 아직 없는 절과 다른 역본은 서버가 김단아(f1)로 대신 읽는다.
+  // 역본마다 달리 둘 때를 위해 자리는 남긴다(예전엔 새번역 외 역본이 그날의 Chirp 성우였다).
   // 사용자가 플레이어나 설정에서 한 번이라도 성우를 고르면 그 선택이 우선한다.
-  const applyVersionDefault = useCallback((version: string) => {
+  const applyVersionDefault = useCallback(() => {
     if (voicePickedRef.current) return;
-    const want: KoreanVoice = version === "rnksv" ? "f4" : dayDefaultRef.current;
+    const want: KoreanVoice = DEFAULT_KOREAN_VOICE;
     if (koreanVoiceRef.current === want) return;
     setKoreanVoiceState(want);
     koreanVoiceRef.current = want;   // 저장하지 않는다 — 기본값이지 선택이 아니다
