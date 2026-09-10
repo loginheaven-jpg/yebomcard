@@ -5,6 +5,9 @@
  * 확인해 해당 절을 다시 만든다 — 관리자가 PC 앞에 갈 필요가 없다.
  *
  * 재생성에 성공하면 그 절은 그 PC 의 보류 목록에서 빠지고 자동 업로드된다.
+ *
+ * decided — '이대로 사용'·'비워 둠' 판단. PC 가 다시 만들 일은 없지만, 알려 줘야 PC 의 작업
+ * 파일에서 '이대로 사용' 절이 보류로 남지 않는다(생성 탭 보류 숫자가 관리자 화면과 어긋났다).
  */
 
 import { NextResponse } from "next/server";
@@ -25,7 +28,7 @@ export async function GET(req: Request) {
   const device = gate.claims.id;
   const index = await studioGetJson<{ items?: HeldItem[] }>(`${HELD}${device}/index.json`);
   const mine = index?.items || [];
-  if (mine.length === 0) return NextResponse.json({ regenerate: [] });
+  if (mine.length === 0) return NextResponse.json({ regenerate: [], decided: [] });
 
   const actionKeys = await studioList(ACTIONS);
   const wanted = new Set(
@@ -35,11 +38,15 @@ export async function GET(req: Request) {
   );
 
   const regenerate: { id: string; ref: string; text: string }[] = [];
+  const decided: { id: string; ref: string; text: string; action: "use" | "discard" }[] = [];
   for (const it of mine) {
     if (!wanted.has(it.id)) continue;
     const a = await studioGetJson<HeldAction>(`${ACTIONS}${it.id}.json`);
     if (a?.action === "regen") regenerate.push({ id: it.id, ref: it.ref, text: it.text });
+    else if (a?.action === "use" || a?.action === "discard") {
+      decided.push({ id: it.id, ref: it.ref, text: it.text, action: a.action });
+    }
   }
 
-  return NextResponse.json({ regenerate }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ regenerate, decided }, { headers: { "Cache-Control": "no-store" } });
 }

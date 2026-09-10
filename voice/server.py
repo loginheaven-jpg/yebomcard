@@ -12,6 +12,7 @@
 # 개발 중인 이 저장소에서 그냥 돌릴 때는 studio.json 이 없어도 되고,
 # 그 경우 조용히 "서버 연동 없음" 으로 동작한다(로컬 .env.local 사용).
 
+import hashlib
 import base64
 import json
 import os
@@ -134,11 +135,21 @@ def upload_verses(voice_key, items, replace=False, timeout=180):
     return r.json()
 
 
-def report_held(voice, voice_key, items, timeout=300):
+def _held_id(voice_key, text):
+    """서버 heldId(held/route.ts) 와 같은 규칙 — 성우 슬롯 + 본문."""
+    return hashlib.sha1(f"{voice_key} {text}".encode("utf-8")).hexdigest()
+
+
+def report_held(voice, voice_key, items, timeout=120):
     """보류 절을 서버로 보고한다 — 여러 PC 의 문제 절을 한 곳에서 판단하기 위해.
 
-    items: [{'ref','book','text','asr','ratio','reason','audio_sec','tries','mp3'(bytes|None)}]
+    items: [{'ref','book','text','asr','ratio','reason','audio_sec','tries','out'(wav 경로|None)}]
     이 PC 의 목록을 통째로 갈아끼우므로, 해결된 절은 다음 보고에서 자동으로 빠진다.
+
+    음원은 목록에 싣지 않고 **서버에 없는 것만 한 건씩** 올린다. 예전엔 목록에 전부 실어 보냈는데,
+    보류가 스무 개를 넘으면 요청이 서버 한도(4.5MB)를 넘어 보고 전체가 거절됐다 — 새 PC 는
+    2026-09-10 오후부터 보고가 끊겨 관리자 화면에 보류가 하나도 안 보였다.
+    반환: {'reported': n, 'audio_uploaded': k}
     """
     if not enabled():
         return None
@@ -155,8 +166,6 @@ def report_held(voice, voice_key, items, timeout=300):
                 "reason": it.get("reason", ""),
                 "audioSec": it.get("audio_sec") or 0,
                 "tries": it.get("tries") or 0,
-                **({"mp3Base64": base64.b64encode(it["mp3"]).decode("ascii")}
-                   if it.get("mp3") else {}),
             }
             for it in items
         ],
@@ -168,18 +177,46 @@ def report_held(voice, voice_key, items, timeout=300):
     )
     if not r.ok:
         _raise(r)
-    return r.json()
+    missing = set(r.json().get("missingAudio") or [])
+    sent = 0
+    if missing:
+        import engine    # mp3 인코딩(ffmpeg) — 필요할 때만 불러온다
+        for it in items:
+            out = it.get("out")
+            if _held_id(voice_key, it["text"]) not in missing or not out or not Path(out).exists():
+                continue
+            a = requests.post(
+                f"{config()['base']}/api/voice-studio/held/audio",
+                headers={**_headers(), "Content-Type": "application/json"},
+                data=json.dumps({
+                    "voiceKey": voice_key,
+                    "text": it["text"],
+                    "mp3Base64": base64.b64encode(engine.encode_mp3(out)).decode("ascii"),
+                }),
+                timeout=timeout,
+            )
+            if a.ok:
+                sent += 1
+    return {"reported": len(items), "audio_uploaded": sent}
 
 
-def regen_requests(timeout=60):
-    """관리자가 '재생성 요청'을 누른 절 목록. [{'id','ref','text'}]"""
+def held_tasks(timeout=60):
+    """관리자 판단 — {'regenerate': [{'id','ref','text'}], 'decided': [{'id','ref','text','action'}]}
+
+    decided 는 '이대로 사용'·'비워 둠' 처럼 PC 가 다시 만들 필요가 없는 판단이다(옛 서버는 주지 않는다)."""
     if not enabled():
-        return []
+        return {"regenerate": [], "decided": []}
     r = requests.get(f"{config()['base']}/api/voice-studio/held/tasks",
                      headers=_headers(), timeout=timeout)
     if not r.ok:
         _raise(r)
-    return r.json().get("regenerate", [])
+    d = r.json()
+    return {"regenerate": d.get("regenerate", []), "decided": d.get("decided", [])}
+
+
+def regen_requests(timeout=60):
+    """관리자가 '재생성 요청'을 누른 절 목록. [{'id','ref','text'}]"""
+    return held_tasks(timeout)["regenerate"]
 
 
 def cache_index(voice_key, legacy=False, timeout=120):

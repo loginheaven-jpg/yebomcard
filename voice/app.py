@@ -641,6 +641,10 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
 
     # ── 3. 검수 ──
     with gr.Tab("3. 검수"):
+        gr.Markdown(
+            "이 PC 작업 파일의 절별 결과입니다. **행을 클릭하면 그 절을 들을 수 있습니다.**  \n"
+            "보류 절의 판단(이대로 사용 · 재생성 요청 · 비워 둠)은 예봄성경 **설정 → 음원보류절 검수**에서 합니다. "
+            "모든 PC 의 보류가 거기 모이고, 판단 결과는 10분 안에 이 PC 작업에도 반영됩니다.")
         with gr.Row():
             c_jid = gr.Dropdown([], label="작업", scale=3)
             c_btn_ref = gr.Button("새로고침")

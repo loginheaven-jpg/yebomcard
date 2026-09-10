@@ -164,64 +164,128 @@ def _report_held_if_due(job):
 
 
 def _report_held(job):
+    """이 PC 의 보류를 **작업 전부에서** 모아 보고한다.
+
+    서버는 PC 마다 목록을 통째로 갈아끼운다. 예전엔 지금 작업의 보류만 보내서, 보류 0 인 책이
+    끝나면 앞 책의 보류가 관리자 화면에서 사라졌다(2026-09-10 갈 3:7). 같은 성우·슬롯의 작업을 다 모은다.
+    음원은 여기서 싣지 않는다 — server.report_held 가 서버에 없는 것만 한 건씩 올린다."""
     key = job.get("upload_key")
     if not key:
         return
-    held = [i for i in job["items"] if i["status"] == "held"]
+    held, seen, found_self = [], set(), False
+    for j in list_jobs():
+        if j.get("id") == job["id"]:
+            j, found_self = job, True    # 진행 중인 작업은 메모리 사본이 최신이다
+        if j.get("upload_key") != key or j.get("voice") != job.get("voice"):
+            continue
+        for it in j.get("items", []):
+            if it.get("status") == "held" and it["text"] not in seen:
+                seen.add(it["text"])
+                held.append(it)
+    if not found_self:
+        held += [it for it in job["items"] if it["status"] == "held" and it["text"] not in seen]
     try:
         import server
         if not server.enabled():
             return
-        items = []
-        for it in held:
-            mp3 = None
-            try:
-                if Path(it["out"]).exists():
-                    mp3 = engine.encode_mp3(it["out"])   # 관리자가 들어보고 판단할 수 있게
-            except Exception:
-                pass
-            items.append({
-                "ref": it["ref"], "book": it["ref"].split(" ")[0],
-                "text": it["text"], "asr": it.get("asr", ""),
-                "ratio": it.get("ratio"), "reason": it.get("reason", ""),
-                "audio_sec": it.get("audio_sec"), "tries": it.get("tries"),
-                "mp3": mp3,
-            })
+        items = [{
+            "ref": it["ref"], "book": it["ref"].split(" ")[0],
+            "text": it["text"], "asr": it.get("asr", ""),
+            "ratio": it.get("ratio"), "reason": it.get("reason", ""),
+            "audio_sec": it.get("audio_sec"), "tries": it.get("tries"),
+            "out": it.get("out"),        # 관리자가 들어보고 판단할 수 있게 — 서버에 없을 때만 올라간다
+        } for it in held]
         server.report_held(job["voice"], key, items)
         job.pop("held_report_error", None)
     except Exception as e:
         job["held_report_error"] = str(e)[:200]
 
 
-def _apply_regen_requests(job):
-    """관리자가 '재생성 요청'을 누른 절을 다시 큐에 올린다.
-    tries=1 로 두어 첫 재생성부터 강제 분할이 걸리게 한다.
-
-    한 요청은 **한 번만** 처리한다. 재생성이 또 실패해 다시 보류가 되면
-    요청은 서버에 그대로 남아 있는데, 그걸 매번 다시 집으면 같은 절을
-    무한히 반복 생성하게 된다(관리자가 판단을 바꿀 때까지 끝나지 않는다)."""
-    if not job.get("upload_key"):
-        return 0
+def _held_tasks():
+    """관리자 판단 — {'regenerate': [...], 'decided': [...]}. 서버가 안 되면 None."""
     try:
         import server
         if not server.enabled():
-            return 0
-        wanted = {r["text"] for r in server.regen_requests()}
+            return None
+        return server.held_tasks()
     except Exception:
-        return 0
+        return None
+
+
+def _apply_admin_tasks(tasks, job):
+    """관리자 판단을 작업 하나에 반영한다. 반환: (다시 만들 절 수, 이대로 쓰기로 한 절 수)
+
+    재생성 요청 — 다시 큐에 올린다. tries=1 로 두어 첫 재생성부터 강제 분할이 걸리게 한다.
+      한 요청은 **한 번만** 처리한다. 재생성이 또 실패해 다시 보류가 되면 요청은 서버에
+      그대로 남아 있는데, 그걸 매번 다시 집으면 같은 절을 무한히 반복 생성하게 된다.
+    이대로 사용 — 서버가 보관 음원을 이미 올렸다. 여기서는 합격·업로드됨으로 표시만 한다.
+      그래야 생성 탭의 보류 숫자가 관리자 화면의 '판단 대기'와 맞는다.
+    비워 둠 — 손대지 않는다(보류로 남는다)."""
+    regen = {r["text"] for r in tasks.get("regenerate", [])}
+    use = {d["text"] for d in tasks.get("decided", []) if d.get("action") == "use"}
     already = set(job.get("regen_applied") or [])
-    n = 0
+    n_regen = n_use = 0
     for it in job["items"]:
-        if it["status"] == "held" and it["text"] in wanted and it["key"] not in already:
+        if it["status"] != "held":
+            continue
+        if it["text"] in regen and it["key"] not in already:
             it["status"] = "pending"
             it["tries"] = 1
             it["reason"] = "관리자 재생성 요청"
             it.pop("uploaded", None)
             already.add(it["key"])
-            n += 1
-    if n:
+            n_regen += 1
+        elif it["text"] in use:
+            it["status"] = "ok"
+            it["uploaded"] = True
+            it["reason"] = "관리자 판단: 이대로 사용 (서버가 올림)"
+            n_use += 1
+    if n_regen:
         job["regen_applied"] = sorted(already)
-    return n
+    return n_regen, n_use
+
+
+def _apply_regen_requests(job):
+    """작업이 끝날 때 — 이 작업에 걸린 관리자 판단을 반영한다. 다시 만들 절 수를 돌려준다."""
+    if not job.get("upload_key"):
+        return 0
+    tasks = _held_tasks()
+    return _apply_admin_tasks(tasks, job)[0] if tasks else 0
+
+
+ADMIN_SYNC_INTERVAL = 600      # 초
+_last_admin_sync = [0.0]
+
+
+def _sync_admin_if_due(job):
+    """관리자 판단을 **이 PC 의 작업 전부에** 주기적으로 반영한다.
+
+    예전엔 작업이 끝날 때 그 작업 것만 봤다. 그래서 이미 끝난 책의 보류는 재생성을 요청해도
+    다시 만들어지지 않았고, 구약 전체를 한 작업으로 도는 PC 는 요청이 며칠 뒤에야 처리됐다.
+    끝난 작업에 다시 만들 절이 생기면 큐에 올린다 — 워커는 지금 작업을 마친 뒤 진도표 순서로 집는다."""
+    key = job.get("upload_key")
+    if not key or time.time() - _last_admin_sync[0] < ADMIN_SYNC_INTERVAL:
+        return
+    _last_admin_sync[0] = time.time()
+    tasks = _held_tasks()
+    if not tasks:
+        return
+    changed = False
+    for j in list_jobs():
+        if j.get("upload_key") != key or j.get("voice") != job.get("voice"):
+            continue
+        if j.get("id") == job["id"]:
+            r, u = _apply_admin_tasks(tasks, job)   # 진행 중인 작업은 메모리 사본을 고친다 — 곧 저장된다
+            changed |= bool(r or u)
+            continue
+        r, u = _apply_admin_tasks(tasks, j)
+        if r or u:
+            if r and j.get("status") == "done":
+                j["status"] = "queued"
+            save(j)
+            changed = True
+    if changed:
+        _report_held(job)       # 판단이 반영된 절은 보류 목록에서 빠진다
 
 
 def book_progress(job):
@@ -517,6 +581,7 @@ def _process(job):
             _judge(job, it, p, w, sr, ok)
         _upload_ready(job)
         _report_held_if_due(job)
+        _sync_admin_if_due(job)
         save(job)
 
     if not _stop.is_set():

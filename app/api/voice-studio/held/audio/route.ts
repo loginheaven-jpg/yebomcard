@@ -1,18 +1,50 @@
 /**
- * GET /api/voice-studio/held/audio?id=…&device=… — 보류 절 음원 듣기 (관리자 세션).
+ * GET  /api/voice-studio/held/audio?id=…&device=… — 보류 절 음원 듣기 (관리자 세션).
+ * POST /api/voice-studio/held/audio — 생성 PC 가 보류 절 음원 하나를 올린다 (기기 토큰).
  *
  * 판단의 마지막 단계는 결국 **듣는 것**이다. 원문·ASR 만으로는 애매한 경우가 있어
  * 관리자 화면에서 바로 재생할 수 있어야 한다.
+ *
+ * 음원을 목록 보고(held POST)와 따로 받는 이유: 목록에 전부 실으면 보류 스무 개 남짓에서
+ * 요청이 서버 한도(4.5MB)를 넘어 보고 전체가 거절됐다. 목록은 가볍게, 음원은 없는 것만 한 건씩.
  */
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/voiceStudio/auth";
-import { studioGetBytes, studioList } from "@/lib/voiceStudio/r2";
+import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
+import { studioGetBytes, studioList, studioPutBytes } from "@/lib/voiceStudio/r2";
+import { heldId } from "../route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const HELD = "voice-studio/held/";
+const MAX_MP3_BYTES = 5 * 1024 * 1024;
+
+export async function POST(req: Request) {
+  const gate = await requireDevice(req);
+  if (!gate.ok) return gate.res;
+
+  let body: { voiceKey?: string; text?: string; mp3Base64?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+  const voiceKey = (body.voiceKey || "").trim();
+  const text = body.text || "";
+  if (!voiceKey || !text.trim() || !body.mp3Base64) {
+    return NextResponse.json({ error: "voiceKey / text / mp3Base64 가 필요합니다" }, { status: 400 });
+  }
+  const mp3 = Buffer.from(body.mp3Base64, "base64");
+  if (mp3.length === 0 || mp3.length > MAX_MP3_BYTES) {
+    return NextResponse.json({ error: `크기 이상 (${mp3.length} bytes)` }, { status: 400 });
+  }
+  // id 는 목록 보고와 같은 규칙으로 서버가 정한다 — 그래야 목록 항목과 음원이 짝지어진다
+  const id = heldId(voiceKey, text);
+  const ok = await studioPutBytes(`${HELD}${gate.claims.id}/${id}.mp3`, mp3, "audio/mpeg");
+  if (!ok) return NextResponse.json({ error: "R2 저장 실패" }, { status: 500 });
+  return NextResponse.json({ ok: true, id });
+}
 
 export async function GET(req: Request) {
   const gate = await requireAdmin();
