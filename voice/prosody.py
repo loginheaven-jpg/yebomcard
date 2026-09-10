@@ -29,6 +29,10 @@ PHRASE_ENDINGS = ("이요", "바요", "하고", "하며", "이며",
 
 # 절 양끝에 남은 편집용 대시 — 새번역 삽입구('— … —')의 닫는 기호가 절 끝에 남는 경우가 있다.
 # TTS 입력에 그대로 들어가면 이상하게 읽히고 종결 판정도 틀어진다.
+# 편집자 주석 "(주: …)" — 화면엔 두되 낭독에서 뺀다. engine.NOTE_RE 와 같은 규칙이며
+# engine 을 import 하면 순환이 되므로 여기 따로 둔다. 두 곳이 어긋나면 안 된다.
+NOTE_RE = re.compile(r"\s*\(\s*주\s*[:：][\s\S]*$")
+
 DASH_EDGE = re.compile(r"^\s*[-\u2013\u2014]+\s*|\s*[-\u2013\u2014]+\s*$")
 
 
@@ -84,16 +88,20 @@ def clean_for_tts(text: str) -> str:
 
 def is_terminal(verse_text: str) -> bool:
     """문장이 끝났는가. 구두점이 있는 본문(새번역)은 부호로, 없는 본문(개역)은 어미로 판정."""
-    t = clean_for_tts(verse_text)
+    # 각주는 낭독하지 않으므로 판정에서도 뺀다. 호출부가 이미 뗀 본문을 주더라도
+    # (지금은 그렇다) 이 함수만 따로 불렀을 때 틀리지 않게 여기서 한 번 더 본다.
+    t = clean_for_tts(NOTE_RE.sub("", verse_text or ""))
+    if not t:
+        return True
+    # **닫는 따옴표/괄호를 먼저 뗀다.** 새번역은 인용으로 끝나는 절이 매우 많아
+    # (…다." 꼴이 31,075절 중 4,381절), 부호를 먼저 보면 그 절이 전부 연결로 잘못 잡힌다.
+    t = re.sub(r"[\"')\]\u201d\u2019]+$", "", t)
     if not t:
         return True
     if t[-1] in ".!?":
         return True
     if t[-1] in ",;:":
         return False
-    t = re.sub(r"[\"')\]\u201d\u2019]+$", "", t)  # 닫는 따옴표/괄호 제거 후 어미 판정
-    if not t:
-        return True
     if t.endswith(CONNECTIVE_TAIL) and not t.endswith(TERMINAL_TAIL):
         return False
     return t.endswith(TERMINAL_TAIL)

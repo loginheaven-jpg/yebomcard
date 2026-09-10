@@ -32,13 +32,15 @@ const NOTE_RE = /\s*\(\s*주\s*[:：][\s\S]*$/;
 export function isTerminalVerse(text: string): boolean {
   let t = (text || "").replace(NOTE_RE, "").replace(/\s+/g, " ").trim();
   if (!t) return true;
+  // **닫는 따옴표·괄호를 먼저 뗀다.** 새번역은 인용으로 끝나는 절이 매우 많아
+  // (…다." 꼴이 31,075절 중 4,381절), 부호를 먼저 보면 그 절이 전부 연결로 잘못 잡힌다.
+  t = t.replace(/["')\]”’]+$/, "");
+  if (!t) return true;
   const last = t[t.length - 1];
   if (".!?".includes(last)) return true;
   if (",;:".includes(last)) return false;
-  // 닫는 따옴표·괄호를 떼고 어미로 판정
-  t = t.replace(/["')\]”’]+$/, "");
-  if (!t) return true;
-  const ends = (list: string[]) => list.some((s) => t.endsWith(s));
+  // 구두점이 없는 본문(개역개정)은 어미로 판정한다
+  const ends = (list: string[]) => list.some((x) => t.endsWith(x));
   if (ends(CONNECTIVE_TAIL) && !ends(TERMINAL_TAIL)) return false;
   return ends(TERMINAL_TAIL);
 }
