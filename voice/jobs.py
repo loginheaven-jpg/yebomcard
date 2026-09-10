@@ -480,13 +480,21 @@ def resume_all():
     누르기 전까지 아무 일도 일어나지 않았다. 며칠짜리 작업에서는 치명적이다.
 
     반환: 이어갈 작업 수"""
+    # 본문 최신화는 **끝난 작업까지** 훑는다.
+    # 보류가 풀리면 만들 것이 다시 생기는데, unfinished() 는 pending 이 있어야 골라내므로
+    # 보류만 남은 작업은 영영 대상에서 빠진다 — 그러면 고쳐진 절의 음원이 끝내 안 생긴다.
+    for j in list_jobs():
+        if not refresh_job_text(j):
+            continue
+        if j.get("status") == "done" and any(i.get("status") == "pending" for i in j.get("items", [])):
+            j["status"] = "queued"
+            print(f"[본문 최신화] '{j.get('title')}' 에 만들 절이 생겨 다시 큐에 올립니다", flush=True)
+        save(j)
+
     jobs_ = unfinished()
     for j in jobs_:
-        changed = refresh_pending_text(j)
         if j.get("status") == "stopped":
             j["status"] = "queued"
-            save(j)
-        elif changed:
             save(j)
     if jobs_:
         start_worker()
@@ -526,7 +534,7 @@ def regenerate(jid, keys):
     return n
 
 
-def refresh_pending_text(job):
+def refresh_job_text(job):
     """아직 안 만든 절의 본문을 지금 DB 값으로 맞춘다. 바뀐 절 수를 돌려준다.
 
     작업을 만들 때 본문을 통째로 복사해 둔다. 그래서 작업을 만든 **뒤에** 본문이
@@ -541,16 +549,23 @@ def refresh_pending_text(job):
     이어갈 때마다 한 번 맞춘다. 이미 만든 절은 건드리지 않는다 — 그것들은 산출물이
     있고, 본문이 바뀌었다면 어차피 다시 만들어야 하므로 여기서 판단할 일이 아니다.
 
+    **보류(held)도 함께 푼다.** 보류는 그때의 본문에 대한 판정이므로, 본문이 고쳐졌으면
+    그 판정은 사라진 본문에 대한 것이 되어 더 이상 유효하지 않다. 풀지 않으면 그 절은
+    영원히 보류로 남아 음원이 생기지 않는다 — 화면에는 멀쩡한 본문이 보이는데 낭독만
+    다른 성우로 나가고, 아무도 이유를 모른다.
+
+    본문이 그대로인 보류는 손대지 않는다. 그것이 사람이 들어보고 판단할 일이다.
+
     조회에 실패하면 아무것도 바꾸지 않는다. 옛 본문으로 만드는 것이 손해이긴 해도,
     반쯤 바뀐 작업 파일을 남기는 것보다는 낫다.
     """
-    pend = [i for i in job.get("items", []) if i.get("status") == "pending"]
-    if not pend:
+    todo = [i for i in job.get("items", []) if i.get("status") in ("pending", "held")]
+    if not todo:
         return 0
 
     # key 는 "{ver}_{code}_{ch:03d}_{v:03d}" — 책 단위로 묶어 한 번씩만 조회한다
     groups = {}
-    for it in pend:
+    for it in todo:
         parts = (it.get("key") or "").split("_")
         if len(parts) != 4:
             continue
@@ -561,6 +576,7 @@ def refresh_pending_text(job):
             continue
 
     changed = 0
+    released = 0
     for (ver, code), lst in groups.items():
         try:
             rows = engine.get_book_verses(ver, code)
@@ -570,11 +586,22 @@ def refresh_pending_text(job):
         now = {(ch, v): t for ch, v, t in rows}
         for ch, v, it in lst:
             cur = now.get((ch, v))
-            if cur and cur != it.get("text"):
-                it["text"] = cur
-                changed += 1
+            if not cur or cur == it.get("text"):
+                continue
+            it["text"] = cur
+            changed += 1
+            if it.get("status") == "held":
+                # 본문이 바뀌었으니 그때의 판정은 무효다. 다시 만들 기회를 준다.
+                it["status"] = "pending"
+                it["reason"] = ""
+                it["ratio"] = None
+                it["tries"] = 0
+                released += 1
     if changed:
-        print(f"[본문 최신화] 대기 중인 절 {changed}건의 본문을 최신 DB 로 맞췄습니다", flush=True)
+        msg = f"[본문 최신화] 절 {changed}건의 본문을 최신 DB 로 맞췄습니다"
+        if released:
+            msg += f" (그중 보류 {released}건은 다시 만들도록 풀었습니다)"
+        print(msg, flush=True)
     return changed
 
 
@@ -583,7 +610,7 @@ def requeue(jid):
     job = load(jid)
     if not job:
         return False
-    changed = refresh_pending_text(job)
+    changed = refresh_job_text(job)
     if job["status"] in ("stopped", "error", "done"):
         job["status"] = "queued"
         save(job)
