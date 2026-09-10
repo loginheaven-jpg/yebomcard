@@ -26,6 +26,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { verseGapMs, type VerseGap } from "@/lib/tts/verseGap";
 import {
   fetchCloudTtsAudio,
   type TTSVoice,
@@ -224,6 +225,8 @@ interface TtsContextValue {
   speed: TtsSpeed;
   autoNext: boolean;
   readVerseNumber: boolean;
+  /** 절과 절 사이의 쉼 — 절 끝이 급하게 맺히는 것을 막는다 */
+  verseGap: VerseGap;
   isWebSpeechFallback: boolean;
   /** 영문 발음 — 영문 역본 TTS 시에만 적용 ("us"|"gb") */
   englishAccent: TTSAccent;
@@ -248,6 +251,7 @@ interface TtsContextValue {
   setSpeed: (s: TtsSpeed) => void;
   setAutoNext: (b: boolean) => void;
   setReadVerseNumber: (b: boolean) => void;
+  setVerseGap: (g: VerseGap) => void;
   setEnglishAccent: (a: TTSAccent) => void;
 }
 
@@ -272,6 +276,7 @@ const LS = {
   autoNext: "yebom_tts_auto_next",
   readVerseNumber: "yebom_tts_read_verse_number",
   englishAccent: "yebom_tts_english_accent",
+  verseGap: "yebom_tts_verse_gap",
 } as const;
 
 /** 재생 유형 — ai(TTS 합성) / recko(녹음·한글) / recen(녹음·영문) */
@@ -340,6 +345,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const speedTypeRef = useRef<SpeedType>("ai");
   const autoNextRef = useRef(true);
   const readVerseNumberRef = useRef(false);
+  const [verseGap, setVerseGapState] = useState<VerseGap>("normal");
+  const verseGapRef = useRef<VerseGap>("normal");
+  /** 절 사이 쉼 타이머 — 정지·일시정지 때 반드시 걷어내야 한다 */
+  const gapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadNextChapterRef = useRef<LoadNextChapterFn | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -377,6 +386,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     );
     setEnglishAccentState(acc);
     englishAccentRef.current = acc;
+    const vg = readStorage<VerseGap>(LS.verseGap, "normal", (v) =>
+      v === "short" || v === "long" ? v : "normal",
+    );
+    setVerseGapState(vg);
+    verseGapRef.current = vg;
   }, []);
 
   // 엔진 헬스(크레딧 소진/장애) 조회 — 소진 성우 disable·뱃지용. 마운트 + 5분 주기 + 재생 시작 시.
@@ -424,6 +438,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   }, [status]);
 
   const cleanupAudio = useCallback(() => {
+    // 절 사이 쉼 중에 멈췄을 수 있다 — 걷어내지 않으면 멈춘 뒤에 다음 절이 튀어나온다
+    if (gapTimerRef.current) {
+      clearTimeout(gapTimerRef.current);
+      gapTimerRef.current = null;
+    }
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.onended = null;
@@ -439,6 +458,26 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       abortRef.current = null;
     }
     webSpeechRef.current?.stop();
+  }, []);
+
+  /**
+   * 절 하나가 끝나면 쉼을 주고 다음 절로 넘어간다.
+   *
+   * 곧바로 넘기면 절 끝 글자가 급하게 맺힌다 — 음원 꼬리에 무음이 거의 없기 때문이다
+   * (lib/tts/verseGap.ts 설명 참조). 쉼 길이는 문장이 끝났는지에 따라 다르고,
+   * 설정에서 짧게/보통/길게로 고를 수 있다.
+   */
+  const advanceAfterGap = useCallback((text: string, gen: number) => {
+    const next = () => {
+      gapTimerRef.current = null;
+      if (playGenRef.current !== gen) return;
+      if (statusRef.current !== "speaking") return;
+      playIndexRef.current(indexRef.current + 1);
+    };
+    const ms = verseGapMs(text || "", verseGapRef.current, speedRef.current);
+    if (ms <= 0) return next();
+    if (gapTimerRef.current) clearTimeout(gapTimerRef.current);
+    gapTimerRef.current = setTimeout(next, ms);
   }, []);
 
   const setVoice = useCallback((v: TTSVoice) => {
@@ -475,6 +514,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const setReadVerseNumber = useCallback((b: boolean) => {
     setReadVerseNumberState(b);
     writeStorage(LS.readVerseNumber, b ? "1" : "0");
+  }, []);
+  const setVerseGap = useCallback((g: VerseGap) => {
+    setVerseGapState(g);
+    verseGapRef.current = g;
+    writeStorage(LS.verseGap, g);
   }, []);
   const setEnglishAccent = useCallback((a: TTSAccent) => {
     setEnglishAccentState(a);
@@ -589,7 +633,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         audio.onended = () => {
           if (playGenRef.current !== gen) return;
           if (statusRef.current !== "speaking") return;
-          playIndexRef.current(indexRef.current + 1);
+          advanceAfterGap(track.text, gen);
         };
         audio.onerror = () => {
           if (playGenRef.current !== gen) return;
@@ -716,7 +760,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       audio.onended = () => {
         if (playGenRef.current !== gen) return;
         if (statusRef.current !== "speaking") return;
-        playIndexRef.current(indexRef.current + 1);
+        advanceAfterGap(track.text, gen);
       };
       audio.onerror = () => {
         if (playGenRef.current !== gen) return;
@@ -738,7 +782,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         statusRef.current = "idle";
       }
     },
-    [cleanupAudio, prefetchIndex],
+    [cleanupAudio, prefetchIndex, advanceAfterGap],
   );
 
   useEffect(() => {
@@ -862,6 +906,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       speed,
       autoNext,
       readVerseNumber,
+      verseGap,
       isWebSpeechFallback,
       englishAccent,
       engine,
@@ -878,6 +923,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
+      setVerseGap,
       setEnglishAccent,
     }),
     [
@@ -890,6 +936,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       speed,
       autoNext,
       readVerseNumber,
+      verseGap,
       isWebSpeechFallback,
       englishAccent,
       engine,
@@ -906,6 +953,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setSpeed,
       setAutoNext,
       setReadVerseNumber,
+      setVerseGap,
       setEnglishAccent,
     ],
   );

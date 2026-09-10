@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice } from "@/contexts/TtsContext";
 import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
+import { VERSE_GAP_LABELS, type VerseGap } from "@/lib/tts/verseGap";
 
 interface Props {
   onClose: () => void;
@@ -560,6 +561,34 @@ export default function SettingsSheet({
                   className="w-4 h-4"
                 />
               </label>
+
+              {/* 절 사이 쉼 — 음원 꼬리에 무음이 거의 없어, 쉼이 없으면 절 끝이 급하게 맺힌다 */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-sm text-[var(--ink)] dark:text-gray-100">절 사이 쉼</span>
+                  <div className="flex gap-1">
+                    {(Object.keys(VERSE_GAP_LABELS) as VerseGap[]).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => tts.setVerseGap(g)}
+                        aria-pressed={tts.verseGap === g}
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg border ${
+                          tts.verseGap === g
+                            ? "bg-[var(--amber)] text-white border-transparent"
+                            : "bg-white dark:bg-gray-800 text-[var(--ink-soft)] dark:text-gray-300 border-[var(--line)] dark:border-gray-700"
+                        }`}
+                      >
+                        {VERSE_GAP_LABELS[g]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[11px] text-[var(--ink-faint)] dark:text-gray-500 leading-relaxed">
+                  절과 절 사이에 두는 쉼입니다. 길게 두면 한 절씩 새겨 듣기 좋고,
+                  짧게 두면 물 흐르듯 이어집니다.
+                </p>
+              </div>
             </div>
           </section>
 
