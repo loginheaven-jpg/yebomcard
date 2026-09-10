@@ -482,8 +482,11 @@ def resume_all():
     반환: 이어갈 작업 수"""
     jobs_ = unfinished()
     for j in jobs_:
+        changed = refresh_pending_text(j)
         if j.get("status") == "stopped":
             j["status"] = "queued"
+            save(j)
+        elif changed:
             save(j)
     if jobs_:
         start_worker()
@@ -523,13 +526,68 @@ def regenerate(jid, keys):
     return n
 
 
+def refresh_pending_text(job):
+    """아직 안 만든 절의 본문을 지금 DB 값으로 맞춘다. 바뀐 절 수를 돌려준다.
+
+    작업을 만들 때 본문을 통째로 복사해 둔다. 그래서 작업을 만든 **뒤에** 본문이
+    고쳐지면(주석 잔재 정정 등) 작업 파일은 옛 본문을 계속 들고 있다. 그대로 만들면
+    두 가지가 어긋난다.
+
+      1) 화면에 보이는 본문과 다른 것을 읽는다
+      2) 공유 캐시 키가 sha1(본문)이라 **키가 어긋나 앱에서 조용히 캐시 미스**가 난다.
+         오류도 경고도 없이 그 절만 다른 성우로 읽힌다.
+
+    며칠짜리 작업에서는 그 사이에 본문이 고쳐지는 일이 실제로 일어난다. 그래서
+    이어갈 때마다 한 번 맞춘다. 이미 만든 절은 건드리지 않는다 — 그것들은 산출물이
+    있고, 본문이 바뀌었다면 어차피 다시 만들어야 하므로 여기서 판단할 일이 아니다.
+
+    조회에 실패하면 아무것도 바꾸지 않는다. 옛 본문으로 만드는 것이 손해이긴 해도,
+    반쯤 바뀐 작업 파일을 남기는 것보다는 낫다.
+    """
+    pend = [i for i in job.get("items", []) if i.get("status") == "pending"]
+    if not pend:
+        return 0
+
+    # key 는 "{ver}_{code}_{ch:03d}_{v:03d}" — 책 단위로 묶어 한 번씩만 조회한다
+    groups = {}
+    for it in pend:
+        parts = (it.get("key") or "").split("_")
+        if len(parts) != 4:
+            continue
+        ver, code, ch, v = parts[0], parts[1], parts[2], parts[3]
+        try:
+            groups.setdefault((ver, code), []).append((int(ch), int(v), it))
+        except ValueError:
+            continue
+
+    changed = 0
+    for (ver, code), lst in groups.items():
+        try:
+            rows = engine.get_book_verses(ver, code)
+        except Exception as e:
+            print(f"[본문 최신화] {ver}/{code} 조회 실패 — 건너뜀: {e}", flush=True)
+            continue
+        now = {(ch, v): t for ch, v, t in rows}
+        for ch, v, it in lst:
+            cur = now.get((ch, v))
+            if cur and cur != it.get("text"):
+                it["text"] = cur
+                changed += 1
+    if changed:
+        print(f"[본문 최신화] 대기 중인 절 {changed}건의 본문을 최신 DB 로 맞췄습니다", flush=True)
+    return changed
+
+
 def requeue(jid):
-    """중단된 작업을 이어서 진행."""
+    """중단된 작업을 이어서 진행. 이어가기 전에 본문을 최신 DB 로 맞춘다."""
     job = load(jid)
     if not job:
         return False
+    changed = refresh_pending_text(job)
     if job["status"] in ("stopped", "error", "done"):
         job["status"] = "queued"
+        save(job)
+    elif changed:
         save(job)
     _stop.clear()
     start_worker()
