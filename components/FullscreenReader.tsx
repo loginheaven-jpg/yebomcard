@@ -437,7 +437,9 @@ export default function FullscreenReader({
           minHeight: 0,
         }}
       >
-        {/* 페이지 표시 — 카드 위 우측 정렬 */}
+        {/* 페이지 표시 + 닫기 — 카드 위 우측 정렬.
+            닫기를 하단 바에 두면 모바일 브라우저의 전체화면 안내 팝업(아래에서 올라옴)에 가려지고,
+            하단 바와 함께 흐려져 찾기 어려웠다 — 우상단에 늘 보이게 둔다. */}
         <div
           style={{
             width: "min(1200px, 88%)",
@@ -445,6 +447,8 @@ export default function FullscreenReader({
             paddingBottom: "clamp(6px, 0.8vw, 12px)",
             display: "flex",
             justifyContent: "flex-end",
+            alignItems: "center",
+            gap: "clamp(10px, 1.2vw, 16px)",
             color: vars.muted,
           }}
         >
@@ -460,6 +464,40 @@ export default function FullscreenReader({
             <span style={{ opacity: 0.5, margin: "0 6px" }}>/</span>
             {verses.length}
           </span>
+          <button
+            onClick={onClose}
+            aria-label="닫기 (Esc)"
+            title="닫기 (Esc)"
+            style={{
+              position: "relative",
+              zIndex: 4,
+              flexShrink: 0,
+              width: 40,
+              height: 40,
+              padding: 0,
+              borderRadius: "50%",
+              border: `1px solid ${vars.ctrlBorder}`,
+              background: vars.card,
+              color: vars.text,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              transition: "border-color .15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = vars.muted;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = vars.ctrlBorder;
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
 
         {/* 외부 좌측 클릭존 — 이전 구절 */}
@@ -923,38 +961,6 @@ export default function FullscreenReader({
               )}
             </div>
           )}
-
-          {/* 닫기 버튼 — absolute 우측끝 */}
-          <button
-            onClick={onClose}
-            aria-label="닫기 (Esc)"
-            style={{
-              position: "absolute",
-              right: 0,
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              border: "none",
-              background: "transparent",
-              color: vars.muted,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              transition: "background .15s, color .15s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = vars.ctrlHover;
-              e.currentTarget.style.color = vars.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = vars.muted;
-            }}
-          >
-            ✕
-          </button>
         </div>
       </footer>
       {/* 읽기 중 하단 플레이어 — 전체화면(z-1000) 내부에 렌더해야 전역 미니플레이어(z-50)가 가려지지 않음.
