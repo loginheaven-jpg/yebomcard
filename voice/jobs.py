@@ -556,10 +556,16 @@ def refresh_job_text(job):
 
     본문이 그대로인 보류는 손대지 않는다. 그것이 사람이 들어보고 판단할 일이다.
 
+    **이미 만든 절도 본다.** 본문이 바뀌었는데 그때 읽은 내용까지 달라졌다면(각주를 소리 내어
+    읽은 경우) 그 음원은 사라진 본문을 읽고 있으므로 다시 만든다. 읽은 내용이 같으면
+    — 끝의 고아 괄호처럼 생성 입력에서 이미 떨어져 나간 차이면 — 본문만 고쳐 두고
+    다시 만들지 않는다. 음원은 멀쩡하고 캐시 키만 어긋난 것이라 재생성은 낭비다
+    (scripts/rekey-tts-cache.mjs 가 복사로 해결한다).
+
     조회에 실패하면 아무것도 바꾸지 않는다. 옛 본문으로 만드는 것이 손해이긴 해도,
     반쯤 바뀐 작업 파일을 남기는 것보다는 낫다.
     """
-    todo = [i for i in job.get("items", []) if i.get("status") in ("pending", "held")]
+    todo = [i for i in job.get("items", []) if i.get("status") in ("pending", "held", "ok")]
     if not todo:
         return 0
 
@@ -577,6 +583,7 @@ def refresh_job_text(job):
 
     changed = 0
     released = 0
+    remade = 0
     for (ver, code), lst in groups.items():
         try:
             rows = engine.get_book_verses(ver, code)
@@ -588,19 +595,37 @@ def refresh_job_text(job):
             cur = now.get((ch, v))
             if not cur or cur == it.get("text"):
                 continue
+            was = it.get("status")
+            spoken_changed = prosody.clean_for_tts(it.get("text") or "") != prosody.clean_for_tts(cur)
             it["text"] = cur
             changed += 1
-            if it.get("status") == "held":
+            if was == "held":
                 # 본문이 바뀌었으니 그때의 판정은 무효다. 다시 만들 기회를 준다.
                 it["status"] = "pending"
                 it["reason"] = ""
                 it["ratio"] = None
                 it["tries"] = 0
                 released += 1
+            elif was == "ok" and spoken_changed:
+                # 이미 만든 절인데 **읽은 내용이 달라졌다** — 그 음원은 사라진 본문을 읽고 있다
+                # (각주를 소리 내어 읽은 경우가 이것이다). 키만 옮기면 틀린 소리가 되므로
+                # 다시 만든다.
+                #
+                # 읽은 내용이 같으면(끝의 고아 괄호처럼 생성 입력에서 이미 떨어져 나간 차이)
+                # 본문만 고쳐 두고 다시 만들지 않는다 — 음원은 멀쩡하고 키만 어긋난 것이라
+                # scripts/rekey-tts-cache.mjs 가 복사로 해결한다.
+                it["status"] = "pending"
+                it["reason"] = ""
+                it["ratio"] = None
+                it["tries"] = 0
+                it.pop("uploaded", None)
+                remade += 1
     if changed:
         msg = f"[본문 최신화] 절 {changed}건의 본문을 최신 DB 로 맞췄습니다"
         if released:
-            msg += f" (그중 보류 {released}건은 다시 만들도록 풀었습니다)"
+            msg += f" · 보류 {released}건 해제"
+        if remade:
+            msg += f" · 낭독 내용이 달라진 {remade}건 재생성"
         print(msg, flush=True)
     return changed
 
