@@ -76,6 +76,38 @@ export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
 export const RETIRED_KOREAN_VOICES: readonly KoreanVoice[] = ["f2", "m2"];
 /** 기본 성우 — 영희. 새번역은 사전 생성 음원, 음원이 없는 절과 다른 역본은 서버가 김단아(f1)로 대신 읽는다 */
 export const DEFAULT_KOREAN_VOICE: KoreanVoice = "f4";
+
+/**
+ * 사전 생성 전용 성우 — 서버 lib/tts/verseText.ts 의 PREGENERATED_VOICE_KEYS 와 같게 둔다
+ * (그 모듈은 서버 전용 crypto 를 불러 여기서 가져올 수 없다).
+ */
+const PREGENERATED_KOREAN_VOICES: readonly KoreanVoice[] = ["f4"];
+
+/**
+ * 사전 생성 성우를 골랐는데 서버가 **대신 읽는 목소리**를 준 음원인가 — 그 절의 영희 음원이 아직 없었다는 뜻.
+ * 기기 캐시 키에는 본문이 없어서(절 번호·성우만) 이런 음원을 저장하면, 나중에 영희 음원이 생겨도 그 기기는
+ * 대신 읽은 음원을 계속 튼다(2026-09-11 롬 3:10·3:13). 저장하지 않고, 이미 저장된 것도 무시한다.
+ * 영희 파일은 서버가 X-TTS-Voice "voice:f4" 로 준다.
+ */
+function isPregeneratedFallback(kv: KoreanVoice | undefined, voiceUsed: string): boolean {
+  return !!kv && PREGENERATED_KOREAN_VOICES.includes(kv) && !voiceUsed.startsWith(`voice:${kv}`);
+}
+
+/** 받은 음원을 기억한다 — 대신 읽기 음원은 이 세션 메모리에만(절 사이 끊김 방지), 나머지는 기기 캐시에 */
+function rememberAudio(
+  volatile: Map<string, { blob: Blob; voiceUsed: string }>,
+  key: string,
+  kv: KoreanVoice | undefined,
+  blob: Blob,
+  voiceUsed: string,
+) {
+  if (isPregeneratedFallback(kv, voiceUsed)) {
+    volatile.set(key, { blob, voiceUsed });
+    if (volatile.size > 30) volatile.delete(volatile.keys().next().value as string);
+    return;
+  }
+  void putCachedAudio(key, blob, voiceUsed);
+}
 /** 선택 목록 표시 순서 — 여성(영희·지성·김단아) 먼저, 남성(감미·품격·천사장·할부지) */
 export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f4", "f3", "f1", "m3", "m4", "m1", "m5"];
 /** 성우별 1순위 엔진 — route.ts KOREAN_VOICE_CONFIG 와 일치. chirp 는 GCP 라 항상 가용 */
@@ -361,6 +393,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const objectUrlRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prefetchAbortRef = useRef<AbortController | null>(null);
+  /** 대신 읽기 음원(영희 음원이 아직 없던 절) — 기기에 저장하지 않고 이 세션에만 둔다 */
+  const volatileAudioRef = useRef(new Map<string, { blob: Blob; voiceUsed: string }>());
   const webSpeechRef = useRef<WebSpeechController | null>(null);
   const playGenRef = useRef(0);
   const playIndexRef = useRef<(i: number) => void>(() => {});
@@ -556,9 +590,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       accent: isEng ? englishAccentRef.current : "ko",
       koreanVoice: isEng ? undefined : kv,
     });
+    const kvKey = isEng ? undefined : kv;
+    if (volatileAudioRef.current.has(cacheKey)) return; // 이번 세션에 대신 읽기 음원을 이미 받아 둠
     try {
       const cached = await getCachedAudio(cacheKey);
-      if (cached) return; // 이미 캐시됨 → 프리페치 불필요
+      if (cached && !isPregeneratedFallback(kvKey, cached.voiceUsed)) return; // 이미 캐시됨 → 프리페치 불필요
     } catch {
       /* 캐시 조회 실패 시 그냥 프리페치 진행 */
     }
@@ -581,7 +617,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         koreanVoice: isEng ? undefined : kv,
         signal: ctrl.signal,
       });
-      void putCachedAudio(cacheKey, result.blob, result.voiceUsed);
+      rememberAudio(volatileAudioRef.current, cacheKey, kvKey, result.blob, result.voiceUsed);
     } catch {
       /* 프리페치 실패/취소는 무시 — 실제 재생 시 정상 경로로 재시도 */
     }
@@ -689,11 +725,20 @@ export function TtsProvider({ children }: { children: ReactNode }) {
 
       let blob: Blob | null = null;
       let resolvedVoice = "";
+      const kvKey = isEng ? undefined : kv;
       try {
         const cached = await getCachedAudio(cacheKey);
-        if (cached) {
+        if (cached && !isPregeneratedFallback(kvKey, cached.voiceUsed)) {
           blob = cached.blob;
           resolvedVoice = cached.voiceUsed;
+        } else {
+          // 영희 음원이 아직 없어 대신 읽기 음원을 받았던 절 — 기기에 저장된 것은 무시하고(그 사이 서버에
+          // 영희가 생겼을 수 있다), 이번 세션에 받아 둔 것만 쓴다
+          const vol = volatileAudioRef.current.get(cacheKey);
+          if (vol) {
+            blob = vol.blob;
+            resolvedVoice = vol.voiceUsed;
+          }
         }
       } catch {
         blob = null;
@@ -716,7 +761,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
           if (playGenRef.current !== gen) return;
           blob = result.blob;
           resolvedVoice = result.voiceUsed;
-          void putCachedAudio(cacheKey, blob, resolvedVoice);
+          rememberAudio(volatileAudioRef.current, cacheKey, kvKey, blob, resolvedVoice);
         } catch (err) {
           if (playGenRef.current !== gen) return;
           console.warn(
