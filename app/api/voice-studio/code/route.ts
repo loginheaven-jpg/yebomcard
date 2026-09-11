@@ -19,7 +19,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // 로컬 PC 에서 돌아야 하는 파일만. 산출물·참조음·작업 상태는 각 PC 것이므로 제외.
+// bootstrap.py 도 넣는다 — 설치 때 한 번 받은 뒤로 갱신되지 않아서, 실행 파일 규칙 같은
+// 설치 절차의 수정이 이미 설치된 PC 에는 닿지 않았다.
 const FILES = [
+  "bootstrap.py",
   "engine.py",
   "jobs.py",
   "prosody.py",

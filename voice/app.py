@@ -11,7 +11,12 @@
 # 이 파일은 그 위에 얹은 얇은 UI 층이다(전량 생성은 UI 없이 CLI 로도 가능).
 
 import sys
+import warnings
 from pathlib import Path
+
+# gradio 가 새 starlette 에서 이름이 바뀐 상수(HTTP_422_UNPROCESSABLE_ENTITY)를 쓰면서 찍는 경고.
+# 동작과 무관한데 오류처럼 보여서 끈다.
+warnings.filterwarnings("ignore", message=r".*HTTP_422_UNPROCESSABLE_ENTITY")
 
 import gradio as gr
 import numpy as np
@@ -727,5 +732,14 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
 
 
 if __name__ == "__main__":
+    # 설치본(%LOCALAPPDATA%\YebomVoice)이면 예전 설치가 남긴 실행 파일(바탕화면 등)을 새 규칙으로 고친다.
+    # 옛 bootstrap.py 는 이 일을 못 하는데, 켤 때 새로 받아 오는 이 파일은 바로 돌므로 한 번 켜면 고쳐진다.
+    if (BASE / "실행.bat").exists():
+        try:
+            import bootstrap
+            for p in bootstrap.repair_launchers():
+                print(f"[실행 파일] 새 방식으로 고쳤습니다: {p.name}", flush=True)
+        except Exception as e:
+            print(f"[실행 파일] 고치기 건너뜀: {e}", flush=True)
     jobs.start_worker()
     demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)
