@@ -25,3 +25,7 @@ package-lock.json
 
 # 서버 연동 정보(기기 토큰) — 커밋 금지
 studio.json
+
+# PC 마다 다른 것 — 속도 측정 결과(bench.py), 도는 작업의 배치 바꾸기 요청
+bench/
+batch_requests.json
