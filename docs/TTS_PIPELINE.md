@@ -18,6 +18,7 @@
         └ 한국어: 고른 성우(공유 캐시 → 그 엔진으로 생성) → 영희 음원(새번역) → 김단아(캐시 → ElevenLabs 생성)
                   → GCP Chirp3-HD(고른 성우의 성별) → Neural2 → WaveNet
                   각 단계 한 번씩 — route.ts KOREAN_STAND_INS (2026-09-11). 대신 읽은 음원은 기기에 저장 안 함
+                  한국어 Chirp 는 쉼표를 무시해 markup 입력 + 쉼표마다 [pause short] 로 보낸다(koChirpMarkup)
         └ 영문: Chirp3-HD (1차) → Neural2 (Chirp 실패 시 폴백)
         실패 시 ↓
 

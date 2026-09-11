@@ -268,6 +268,17 @@ async function synthLive(text: string, cfg: KoreanVoiceConfig): Promise<{ body: 
   return null;
 }
 
+/**
+ * 한국어 Chirp3-HD 는 쉼표를 무시한다(2025-08 Google 개발자 포럼 보고, 고친다는 약속 없음) — 쉼표에서 안 쉬고
+ * 엉뚱한 곳에서 쉬어 띄어쓰기가 어색하게 들린다. markup 입력의 쉼 표시로 쉼표마다 쉬게 한다
+ * (2026-09-11 새번역 7절 시험: 쉼표마다 0.4~0.6초, 엉뚱한 쉼 사라짐). 마침표에서는 원래 쉰다.
+ * 본문의 [ ](새번역 88절, 예: 마 18:15 "[너에게]")는 쉼 표시와 문법이 겹쳐 괄호 글자만 뺀다(말은 그대로 읽는다).
+ */
+const KO_CHIRP_COMMA_PAUSE = "[pause short]";
+function koChirpMarkup(text: string): string {
+  return text.replace(/[[\]]/g, "").replace(/[,，]\s*(?=\S)/g, `, ${KO_CHIRP_COMMA_PAUSE} `);
+}
+
 export async function POST(req: NextRequest) {
   try {
     // speed 는 더 이상 서버에서 사용 안 함 — 합성은 항상 1.0x, 재생 속도는 클라이언트 playbackRate.
@@ -361,18 +372,22 @@ export async function POST(req: NextRequest) {
         audioConfig.pitch = pitch ?? 0;
       }
 
-      const apiResponse = await fetch(TTS_API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          input: { text: ttsText },
-          voice: { languageCode, name: voiceName },
-          audioConfig,
-        }),
-      });
+      const synth = (input: Record<string, string>) =>
+        fetch(TTS_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ input, voice: { languageCode, name: voiceName }, audioConfig }),
+        });
+      // 한국어 Chirp 는 쉼표마다 쉼 표시를 넣어 보낸다(koChirpMarkup). 거절되면 그냥 글자로 다시
+      const markup = isChirp && !isEng ? koChirpMarkup(ttsText) : null;
+      let apiResponse = await synth(markup ? { markup } : { text: ttsText });
+      if (markup && apiResponse.status === 400) {
+        console.error("[TTS] Chirp 쉼 표시 거절 → 글자로 다시", (await apiResponse.text()).slice(0, 150));
+        apiResponse = await synth({ text: ttsText });
+      }
 
       if (apiResponse.ok) {
         const data = await apiResponse.json();
