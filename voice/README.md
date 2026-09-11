@@ -329,13 +329,22 @@ PC 가 여러 대면 그 판단거리가 각 PC 의 `jobs/*.json` 안에 흩어�
 PC 끼리 비교하거나 배치·줄기 수를 정할 때 쓴다. 고정된 새번역 8절을 만들어 시간당 절 수와 그래픽 메모리를 잰다.
 **생성을 멈추고** 잰다 — 스튜디오 검은 창을 닫는다(같은 GPU 에 모델이 두 벌 올라가면 비교가 되지 않는다).
 
+명령 프롬프트(cmd):
+
 ```bat
 cd /d %LOCALAPPDATA%\YebomVoice
 "%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe" bench.py
-"%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe" bench.py --pair
 ```
 
-- 첫 줄은 배치 1·4·8, 둘째 줄은 생성 줄기 2개를 동시에(각 배치 4) — 각각 10분 안팎
+PowerShell(프롬프트가 `PS` 로 시작) — `%…%` 대신 `$env:…`, 따옴표 경로 앞에 `&`:
+
+```powershell
+cd "$env:LOCALAPPDATA\YebomVoice"
+& "$env:LOCALAPPDATA\Python\pythoncore-3.14-64\python.exe" bench.py
+```
+
+- `bench.py` 는 배치 1·4·8 — 10분 안팎
+- `bench.py --pair` 는 생성 줄기 2개 동시(각 배치 4). 12GB 에서는 오히려 느린 것을 이미 확인했다(위 '새 방식 속도')
 - 파이썬 경로는 PC 마다 다르다. 바탕화면 `예봄성경 음원생성.bat` 을 메모장으로 열면 보인다
 - 결과는 화면과 `bench\` 폴더(JSON)에 남는다. 다 재면 바탕화면 실행 파일로 다시 켠다
 
