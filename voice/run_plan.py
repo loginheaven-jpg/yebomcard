@@ -7,10 +7,77 @@
 # 다음 책으로 계속 넘어가며, 중단되어도 다시 실행하면 이어간다.
 
 import argparse
+import os
+import subprocess
 import sys
 import time
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+# ── 무거운 모듈을 불러오기 전에 ──
+# 바탕화면 배치 파일(신약 음원 이어하기 / 중지)은 영문·숫자만 쓴다. chcp 65001 뒤의 한글 줄을 cmd 가
+# 잘못 끊어 조각을 명령으로 실행했다("'하지' is not recognized ..."). 그래서 배치가 하던 한글 안내,
+# 창 제목, 두 번 실행 막기, 중지를 여기서 한다. 파이썬이 찍는 한글은 깨지지 않는다.
+def _console_title(title):
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleTitleW(title)
+    except Exception:
+        pass
+
+
+def _other_workers():
+    """이 프로세스 말고 run_plan.py 로 도는 파이썬(중지 명령은 뺀다).
+
+    워커는 한 번에 하나만 — GPU 하나를 둘이 나눠 쓰면 둘 다 느려지고 같은 절을 두 번 만든다."""
+    cmd = ("Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and "
+           "$_.CommandLine -like '*run_plan.py*' -and $_.CommandLine -notlike '*--stop*' } | "
+           "ForEach-Object { $_.ProcessId }")
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", cmd],
+                             capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return []
+    me = os.getpid()
+    return [int(x) for x in out.split() if x.strip().isdigit() and int(x) != me]
+
+
+def _testament_label(argv):
+    if "--testament" in argv:
+        i = argv.index("--testament")
+        nxt = argv[i + 1] if i + 1 < len(argv) else ""
+        return {"new": "신약", "old": "구약"}.get(nxt, "성경")
+    return "성경"
+
+
+_LABEL = _testament_label(sys.argv)
+
+if "--stop" in sys.argv:
+    _console_title(f"예봄성경 {_LABEL} 음원 생성 중지")
+    print("\n  생성 프로세스를 찾는 중...\n", flush=True)
+    pids = _other_workers()
+    if not pids:
+        print("   돌고 있는 생성이 없습니다.")
+    for pid in pids:
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
+        print(f"   중지: PID {pid}", flush=True)
+    if pids:
+        time.sleep(2)
+        print("   중지했습니다.")
+    print("\n  진행 상황은 그대로 저장되어 있습니다.")
+    print(f"  나중에 '{_LABEL} 음원 이어하기' 를 누르면 멈춘 자리부터 계속합니다.\n")
+    sys.exit(0)
+
+if __name__ == "__main__" or "--guard" in sys.argv:
+    _console_title(f"예봄성경 {_LABEL} 음원 생성 (이어하기)")
+    if _other_workers():
+        print("\n  이미 생성이 돌고 있습니다. 창을 두 개 띄우지 마세요.")
+        print("  진행 상황은 이미 떠 있는 창에서 볼 수 있습니다.\n")
+        sys.exit(3)
+    if "--guard" in sys.argv:
+        print("  돌고 있는 생성이 없습니다(--guard 시험).")
+        sys.exit(0)
 
 import app as ui
 import engine
@@ -71,7 +138,10 @@ def run_job(jid, total, label):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--voice", required=True)
+    ap.add_argument("--voice", default=None, help="보이스 이름(예: 영희)")
+    ap.add_argument("--voice-key", default=None,
+                    help="보이스를 성우 슬롯으로 고른다(예: f4) — 배치 파일에 한글을 쓰지 않으려고")
+    ap.add_argument("--stop", action="store_true", help="돌고 있는 생성을 멈춘다(맨 위에서 처리)")
     ap.add_argument("--version", default="새번역")
     ap.add_argument("--start", default="욥기", help="시작 책(진도표 기준)")
     ap.add_argument("--books", type=int, default=0, help="처리할 권 수(0=끝까지)")
@@ -91,6 +161,11 @@ def main():
     ap.add_argument("--replace-legacy", action="store_true",
                     help="남은 절은 건너뛰고 구방식 교체만 한다")
     a = ap.parse_args()
+    if not a.voice and a.voice_key:
+        a.voice = next((n for n in engine.list_voices() if engine.voice_upload_key(n) == a.voice_key), None)
+    if not a.voice:
+        print("보이스를 찾지 못했습니다 — --voice 또는 --voice-key 를 확인하세요")
+        sys.exit(1)
 
     if a.start not in plan.BY_NAME:
         print("진도표에 없는 책:", a.start); sys.exit(1)
@@ -111,6 +186,10 @@ def main():
         print("처리할 책이 없습니다"); sys.exit(1)
 
     # 분담 생성 시 각 PC 에서 이 지문이 **반드시 같아야** 한다(같은 참조음/텍스트).
+    print(f"\n  {_LABEL} 음원 생성을 이어서 진행합니다.\n"
+          "  - 이미 만든 절과 끝난 책은 건너뜁니다\n"
+          "  - 합격한 절은 그때그때 예봄성경으로 자동 업로드됩니다\n"
+          "  - 중단하려면 이 창을 닫으시면 됩니다 (지금까지 만든 것은 남습니다)\n", flush=True)
     upload_key = None if a.no_upload else (a.upload_key or engine.voice_upload_key(a.voice))
     print(f"[보이스] {a.voice} · 지문 {engine.voice_fingerprint(a.voice)}", flush=True)
     if upload_key:
@@ -166,3 +245,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print("\n  생성이 종료되었습니다.")
