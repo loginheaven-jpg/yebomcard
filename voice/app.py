@@ -483,6 +483,46 @@ def ui_replace_legacy(voice, ver_label, which, batch, temp, punct, retry):
     return msg, ui_job_rows()
 
 
+def ui_withdraw_replacement(ver_label, which):
+    """걸어 둔 구방식 교체 작업을 걷는다 — 고른 쪽(구약/신약)에서 아직 만들 절이 남은 교체 작업만.
+    지금 도는 작업은 두고 알린다. 끝난 교체 작업은 기록으로 남긴다.
+
+    두 PC 가 같은 쪽을 교체하지 않게 나눌 때 쓴다. 2026-09-11 분담 변경 — 이 PC 는 신약 남은 절을 마치고
+    구약 교체(말씀의삶 1기가 구약부터 읽는다), 새 PC 는 구약 남은 절을 마치고 신약 교체. 새 PC 에 예전에 걸어
+    둔 구약 교체는 여기서 걷는다. 교체 작업은 책을 시작할 때 이미 바뀐 절을 건너뛰므로 겹쳐도 사고는 아니지만,
+    두 PC 가 같은 책을 동시에 만들면 그만큼 헛수고다."""
+    import plan
+    want = {"구약": "old", "신약": "new"}[which]
+    try:
+        tm = {c: t for _, c, t in engine.get_books(engine.VERSIONS[ver_label])}
+    except Exception as e:
+        return f"책 목록을 불러오지 못했습니다: {e}", gr.update()
+    prefix, suffix = f"{ver_label} ", " (교체)"
+    cur = jobs.current().get("job")
+    removed, verses, kept = [], 0, []
+    for j in jobs.list_jobs():
+        t = j.get("title", "")
+        if not j.get("replace") or not (t.startswith(prefix) and t.endswith(suffix)):
+            continue
+        name = t[len(prefix):-len(suffix)]   # 제목의 책 이름은 진도표(plan.PLAN_ORDER) 이름이다
+        if tm.get(plan.BY_NAME.get(name, (None, None))[1]) != want:
+            continue
+        _ok, _held, pend = jobs.counts(j)
+        if not pend:
+            continue
+        if j["id"] == cur or not jobs.delete_job(j["id"]):
+            kept.append(name)
+            continue
+        removed.append(name)
+        verses += pend
+    if not removed and not kept:
+        return f"걸어 둔 {which} 교체 작업이 없습니다", ui_job_rows()
+    msg = f"{which} 교체 작업 {len(removed)}권 · {verses:,}절을 걷었습니다" if removed else ""
+    if kept:
+        msg += ("\n" if msg else "") + f"지금 도는 작업이라 두었습니다: {', '.join(kept)}"
+    return msg, ui_job_rows()
+
+
 # ═══════════════════ 3. 검수 ═══════════════════
 def ui_job_choices():
     return gr.update(choices=[j["id"] for j in jobs.list_jobs_view()])
@@ -655,6 +695,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         with gr.Row():
             b_rep_which = gr.Radio(["구약", "신약"], value="구약", label="교체할 쪽")
             b_btn_rep = gr.Button("구방식 교체 작업 걸기", variant="secondary")
+            b_btn_rep_del = gr.Button("교체 작업 걷기")
         b_timer = gr.Timer(3.0)
 
     # ── 3. 검수 ──
@@ -710,6 +751,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     b_btn_rep.click(ui_replace_legacy,
                     [b_voice, b_ver, b_rep_which, b_batch, b_temp, b_punct, b_retry],
                     [b_msg, b_jobs])
+    b_btn_rep_del.click(ui_withdraw_replacement, [b_ver, b_rep_which], [b_msg, b_jobs])
     b_timer.tick(ui_progress, None, [b_status, b_jobs])
     b_timer.tick(ui_book_rows, None, b_bookprog)
 

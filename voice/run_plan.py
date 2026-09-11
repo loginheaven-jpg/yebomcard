@@ -70,7 +70,8 @@ if "--stop" in sys.argv:
     sys.exit(0)
 
 if __name__ == "__main__" or "--guard" in sys.argv:
-    _console_title(f"예봄성경 {_LABEL} 음원 생성 (이어하기)")
+    _console_title(f"예봄성경 {_LABEL} 구방식 음원 교체" if "--replace-legacy" in sys.argv
+                   else f"예봄성경 {_LABEL} 음원 생성 (이어하기)")
     if _other_workers():
         print("\n  이미 생성이 돌고 있습니다. 창을 두 개 띄우지 마세요.")
         print("  진행 상황은 이미 떠 있는 창에서 볼 수 있습니다.\n")

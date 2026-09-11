@@ -872,6 +872,17 @@ def stop_worker():
     _stop.set()
 
 
+def delete_job(jid):
+    """작업 파일을 지운다 — 지금 도는 작업은 지우지 않는다. 지웠으면 True"""
+    if _cur.get("job") == jid:
+        return False
+    try:
+        _path(jid).unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def set_batch(jid, n):
     """작업의 배치를 바꾼다(1~8). 도는 중이면 다음 묶음부터, 아니면 그 작업을 시작할 때. 반환: 적용할 값"""
     n = max(1, min(8, int(n)))
