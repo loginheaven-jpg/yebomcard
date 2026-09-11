@@ -27,6 +27,7 @@ import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
 import { studioList, studioGetJson, studioPutBytes, studioPutJson } from "@/lib/voiceStudio/r2";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getBookByName } from "@/lib/books";
+import { cleanForTts } from "@/lib/tts/verseText";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -221,7 +222,10 @@ async function dropStale(items: HeldItem[]): Promise<{ fresh: HeldItem[]; stale:
       for (const [k, list] of e.refs) {
         const cur = now.get(k);
         for (const it of list) {
-          if (cur !== undefined && norm(cur) !== norm(it.text)) stale++;
+          // 생성기는 편집자 주석 "(주: …)" 을 뗀 본문을 들고 있다(engine.get_book_verses). DB 원문도
+          // 똑같이 떼고 비교해야 한다 — 예전엔 원문 그대로 비교해서 **주석이 달린 절의 보류는 늘
+          // '본문 바뀜'으로 감춰졌다**(2026-09-11, 신 19:6 등 8절).
+          if (cur !== undefined && norm(cleanForTts(cur)) !== norm(it.text)) stale++;
           else fresh.push(it);
         }
       }
