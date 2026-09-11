@@ -169,6 +169,7 @@ def report_held(voice, voice_key, items, timeout=120):
                 "audioSec": it.get("audio_sec") or 0,
                 "tries": it.get("tries") or 0,
                 "method": it.get("method") or "",
+                "stamp": it.get("stamp") or "",
             }
             for it in items
         ],
@@ -201,6 +202,7 @@ def report_held(voice, voice_key, items, timeout=120):
                 data=json.dumps({
                     "voiceKey": voice_key,
                     "text": it["text"],
+                    "stamp": it.get("stamp") or "",
                     "mp3Base64": base64.b64encode(engine.encode_mp3(out)).decode("ascii"),
                 }),
                 timeout=timeout,

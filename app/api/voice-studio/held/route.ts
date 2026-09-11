@@ -98,6 +98,8 @@ export async function POST(req: Request) {
       tries?: number;
       mp3Base64?: string;
       method?: string;
+      /** 보류 음원 파일의 표지(크기-수정시각). 서버가 받아 둔 표지와 다르면 음원을 다시 받는다 */
+      stamp?: string;
     }[];
   };
   try {
@@ -127,6 +129,9 @@ export async function POST(req: Request) {
       .filter((k) => k.key.endsWith(".mp3"))
       .map((k) => k.key.slice(devPrefix.length, -".mp3".length)),
   );
+  // 받아 둔 음원의 표지 — 같은 절(같은 id)을 다시 만들면 표지가 달라진다. 예전엔 id 만 보고 '있음'으로
+  // 여겨, 다시 보류된 절의 **옛 음원**이 계속 재생되고 '이대로 사용'이 그것을 올릴 뻔했다(욥 39:8).
+  const stamps = (await studioGetJson<Record<string, string>>(`${devPrefix}stamps.json`)) || {};
 
   // 음원이 없는 항목을 **보낸 목록의 위치**로도 알려 준다. PC 가 id 를 따로 계산해 짝을 맞추면
   // 규칙이 조금만 어긋나도 아무것도 안 올라간다 — 2026-09-11 실제로 그랬다.
@@ -135,7 +140,8 @@ export async function POST(req: Request) {
   for (const [pos, it] of items.entries()) {
     if (!it.text?.trim() || !it.ref) continue;
     const id = heldId(voiceKey, it.text);
-    let hasAudio = haveAudio.has(id);
+    // 표지를 보낸 PC 는 표지가 같을 때만 '있음'. 표지가 없는 옛 PC 코드는 예전처럼 id 만 본다.
+    let hasAudio = haveAudio.has(id) && (!it.stamp || stamps[id] === it.stamp);
 
     // 옛 PC 코드는 음원을 목록에 실어 보낸다 — 계속 받는다
     if (it.mp3Base64) {

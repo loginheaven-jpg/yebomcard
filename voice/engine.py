@@ -353,6 +353,29 @@ def gen_kwargs(temp=0.75):
                 non_streaming_mode=NON_STREAMING)
 
 
+PIECE_END_TRIES = 3   # 조각 끝이 짧을 때 그 조각을 뽑는 최대 횟수(처음 포함)
+
+
+def _gen_piece(tts, text, prompt, kw):
+    """나눠 만드는 절의 조각 하나 — 끝 음절이 END_MIN_MS 보다 짧으면 그 조각만 다시 뽑고 가장 긴 것을 쓴다.
+
+    나눠 만들면 조각 끝마다 '절 끝'이 생긴다(모델에게는 조각 하나가 한 절이다). 새 방식에서도 끝이 짧게
+    나오는 일이 있는데, 절 단위 끝 검사(jobs._judge)는 음원 전체의 마지막만, 받아쓰기 합격 때만 본다 —
+    그래서 절 중간 문장끝이 잘린 채 남았다(2026-09-11 욥 39:8 30ms, 마 18:18 90ms). 조각은 짧아 다시
+    뽑는 비용이 작다."""
+    best, best_end, sr = None, -1.0, SR_TARGET
+    for _ in range(PIECE_END_TRIES):
+        wavs, sr = tts.generate_voice_clone(
+            text=text, language="Korean", voice_clone_prompt=prompt, **kw)
+        w = np.asarray(wavs[0], dtype=np.float32)
+        e = final_syllable_ms(w, sr)
+        if e > best_end:
+            best, best_end = w, e
+        if e >= END_MIN_MS:
+            break
+    return best, sr
+
+
 def synth_one(text, voice, temp=0.75, punct=True):
     """텍스트 하나를 합성해 (wav, sr) 반환. 길면 내부 분할 후 이어붙임."""
     with _lock:
@@ -365,9 +388,13 @@ def synth_one(text, voice, temp=0.75, punct=True):
         kw = gen_kwargs(temp)
         parts, sr = [], SR_TARGET
         for c in chunks:
-            wavs, sr = tts.generate_voice_clone(
-                text=c, language="Korean", voice_clone_prompt=prompt, **kw)
-            parts.append(np.asarray(wavs[0], dtype=np.float32))
+            if len(chunks) > 1:
+                w, sr = _gen_piece(tts, c, prompt, kw)   # 나눠 만들면 조각 끝마다 검사
+            else:
+                wavs, sr = tts.generate_voice_clone(
+                    text=c, language="Korean", voice_clone_prompt=prompt, **kw)
+                w = np.asarray(wavs[0], dtype=np.float32)
+            parts.append(w)
         if len(parts) == 1:
             return parts[0], sr
         gap = np.zeros(int(sr * 0.15), dtype=np.float32)
@@ -412,9 +439,8 @@ def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=Fals
         for i in multi:
             parts = []
             for c in prepared[i]:
-                wavs, sr = tts.generate_voice_clone(
-                    text=c, language="Korean", voice_clone_prompt=prompt, **kw)
-                parts.append(np.asarray(wavs[0], dtype=np.float32))
+                w, sr = _gen_piece(tts, c, prompt, kw)   # 조각 끝마다 검사 — 절 중간 문장끝이 잘리지 않게
+                parts.append(w)
             gap = np.zeros(int(sr * 0.15), dtype=np.float32)
             m = parts[0]
             for p in parts[1:]:

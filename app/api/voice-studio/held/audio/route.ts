@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
-import { studioGetBytes, studioList, studioPutBytes } from "@/lib/voiceStudio/r2";
+import { studioGetBytes, studioGetJson, studioList, studioPutBytes, studioPutJson } from "@/lib/voiceStudio/r2";
 import { heldId } from "../route";
 
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const gate = await requireDevice(req);
   if (!gate.ok) return gate.res;
 
-  let body: { voiceKey?: string; text?: string; mp3Base64?: string };
+  let body: { voiceKey?: string; text?: string; mp3Base64?: string; stamp?: string };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +43,14 @@ export async function POST(req: Request) {
   const id = heldId(voiceKey, text);
   const ok = await studioPutBytes(`${HELD}${gate.claims.id}/${id}.mp3`, mp3, "audio/mpeg");
   if (!ok) return NextResponse.json({ error: "R2 저장 실패" }, { status: 500 });
+  // 음원이 실제로 올라간 뒤에만 표지를 적는다 — 목록 보고(held POST)가 이것과 비교해 바뀐 음원을 다시 받는다.
+  // PC 는 음원을 한 건씩 차례로 올리므로 읽고-고쳐-쓰기가 겹치지 않는다.
+  if (typeof body.stamp === "string" && body.stamp) {
+    const key = `${HELD}${gate.claims.id}/stamps.json`;
+    const stamps = (await studioGetJson<Record<string, string>>(key)) || {};
+    stamps[id] = body.stamp.slice(0, 64);
+    await studioPutJson(key, stamps);
+  }
   return NextResponse.json({ ok: true, id });
 }
 

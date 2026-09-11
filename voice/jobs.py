@@ -168,6 +168,15 @@ def _report_held_if_due(job):
     _last_held_report[job["id"]] = (time.time(), held)
 
 
+def _audio_stamp(path):
+    """보류 음원 파일의 표지 — 크기와 수정 시각. 다시 만들면 바뀌므로 서버가 옛 음원을 새로 받는다."""
+    try:
+        st = Path(path).stat()
+        return f"{st.st_size}-{int(st.st_mtime)}"
+    except (OSError, TypeError):
+        return ""
+
+
 def _report_held(job):
     """이 PC 의 보류를 **작업 전부에서** 모아 보고한다.
 
@@ -200,6 +209,7 @@ def _report_held(job):
             "audio_sec": it.get("audio_sec"), "tries": it.get("tries"),
             "out": it.get("out"),        # 관리자가 들어보고 판단할 수 있게 — 서버에 없을 때만 올라간다
             "method": it.get("method") or "",   # 구방식 음원은 '이대로 사용' 할 수 없다(관리자 화면)
+            "stamp": _audio_stamp(it.get("out")),  # 음원이 바뀌면 서버가 다시 받는다
         } for it in held]
         server.report_held(job["voice"], key, items)
         job.pop("held_report_error", None)
