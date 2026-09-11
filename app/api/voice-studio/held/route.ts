@@ -71,6 +71,13 @@ export interface HeldAction {
   at: string;
   /** regen 을 PC 가 처리했으면 true */
   done?: boolean;
+  /** 판단한 음원의 지문(audioSec|asr). 지금 보류 항목과 다르면 옛 음원에 대한 판단이라 버린다 */
+  fp?: string;
+}
+
+/** 이 판단이 지금 보류 음원에 대한 것인가 — 지문이 없는 옛 기록은 예전처럼 유효로 본다 */
+export function actionIsCurrent(a: HeldAction | undefined, it: HeldItem): boolean {
+  return !!a && (!a.fp || a.fp === `${it.audioSec}|${it.asr}`);
 }
 
 // 구분자는 NUL(\0) — 성우 슬롯과 본문이 이어 붙어 다른 조합과 겹치지 않게. 예전엔 소스에 NUL 문자가
@@ -273,6 +280,11 @@ export async function GET() {
   for (const k of actionKeys) {
     const a = await studioGetJson<HeldAction>(k.key);
     if (a?.id) actions[a.id] = a;
+  }
+
+  // 다시 만들어 음원이 바뀐 절의 옛 판단은 버린다 — 새 음원은 다시 판단해야 한다
+  for (const it of items) {
+    if (actions[it.id] && !actionIsCurrent(actions[it.id], it)) delete actions[it.id];
   }
 
   // 판단 안 된 것이 위로 — 이게 사람이 할 일이다

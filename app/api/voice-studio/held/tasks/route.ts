@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { requireDevice } from "@/lib/voiceStudio/auth";
 import { studioList, studioGetJson } from "@/lib/voiceStudio/r2";
-import type { HeldItem, HeldAction } from "../route";
+import { actionIsCurrent, type HeldItem, type HeldAction } from "../route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +42,8 @@ export async function GET(req: Request) {
   for (const it of mine) {
     if (!wanted.has(it.id)) continue;
     const a = await studioGetJson<HeldAction>(`${ACTIONS}${it.id}.json`);
+    // 판단 뒤에 다시 만들어 음원이 바뀌었으면 옛 음원에 대한 판단이다 — PC 에 주지 않는다
+    if (!actionIsCurrent(a ?? undefined, it)) continue;
     if (a?.action === "regen") regenerate.push({ id: it.id, ref: it.ref, text: it.text });
     else if (a?.action === "use" || a?.action === "discard") {
       decided.push({ id: it.id, ref: it.ref, text: it.text, action: a.action });

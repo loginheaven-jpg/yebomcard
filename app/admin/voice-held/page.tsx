@@ -44,6 +44,11 @@ const isNoteResidue = (it: HeldItem) => /주석 잔재/.test(it.reason || "");
  * 새 방식 파일로 분류되고, 나중의 구방식 교체에서 빠져 잘린 끝이 영영 남는다 — 재생성만 허용한다.
  */
 const isOldMethod = (it: HeldItem) => it.method !== "ns1";
+/**
+ * 판단한 음원의 지문 — 서버가 판단 기록에 남기고, 그 절을 다시 만들어 지문이 바뀌면 판단을 버린다
+ * (held/route.ts · held/tasks). 옛 음원에 한 '이대로 사용'이 새 음원에 적용되는 일을 막는다.
+ */
+const decisionFp = (it: HeldItem) => `${it.audioSec}|${it.asr}`;
 
 const ACTION_LABEL: Record<string, string> = {
   use: "이대로 사용",
@@ -96,6 +101,7 @@ export default function VoiceHeldPage() {
           voiceKey: it.voiceKey,
           text: it.text,
           device: it.device,
+          fp: decisionFp(it),
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "처리 실패");

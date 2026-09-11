@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
-  let body: { id?: string; action?: string; voiceKey?: string; text?: string; device?: string };
+  let body: { id?: string; action?: string; voiceKey?: string; text?: string; device?: string; fp?: string };
   try {
     body = await req.json();
   } catch {
@@ -63,7 +63,14 @@ export async function POST(req: Request) {
     }
   }
 
-  const record = { id, action, by: gate.session.email || "관리자", at: new Date().toISOString() };
+  const record = {
+    id,
+    action,
+    by: gate.session.email || "관리자",
+    at: new Date().toISOString(),
+    // 판단한 음원의 지문 — 그 절을 다시 만들면 바뀌어 이 판단은 버려진다(held/route.ts · held/tasks)
+    ...(typeof body.fp === "string" && body.fp ? { fp: body.fp.slice(0, 600) } : {}),
+  };
   const ok = await studioPutJson(`${ACTIONS}${id}.json`, record);
   if (!ok) return NextResponse.json({ error: "R2 저장 실패" }, { status: 500 });
 
