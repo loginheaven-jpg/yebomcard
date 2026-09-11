@@ -84,13 +84,27 @@ export const DEFAULT_KOREAN_VOICE: KoreanVoice = "f4";
 const PREGENERATED_KOREAN_VOICES: readonly KoreanVoice[] = ["f4"];
 
 /**
- * 사전 생성 성우를 골랐는데 서버가 **대신 읽는 목소리**를 준 음원인가 — 그 절의 영희 음원이 아직 없었다는 뜻.
- * 기기 캐시 키에는 본문이 없어서(절 번호·성우만) 이런 음원을 저장하면, 나중에 영희 음원이 생겨도 그 기기는
- * 대신 읽은 음원을 계속 튼다(2026-09-11 롬 3:10·3:13). 저장하지 않고, 이미 저장된 것도 무시한다.
- * 영희 파일은 서버가 X-TTS-Voice "voice:f4" 로 준다.
+ * 대신 읽기에 쓰이는 성우의 음원 표지(서버 X-TTS-Voice) — route.ts KOREAN_STAND_INS 의 성우들.
+ * 영희는 사전 생성 음원("voice:f4"), 김단아는 ElevenLabs("el:" + route.ts KOREAN_VOICE_CONFIG.f1.elevenId).
  */
-function isPregeneratedFallback(kv: KoreanVoice | undefined, voiceUsed: string): boolean {
-  return !!kv && PREGENERATED_KOREAN_VOICES.includes(kv) && !voiceUsed.startsWith(`voice:${kv}`);
+const STAND_IN_TAGS: Partial<Record<KoreanVoice, string>> = {
+  f4: "voice:f4",
+  f1: "el:vDA1h0ZXkQiojUReMmR9",
+};
+
+/**
+ * 고른 성우가 아닌 목소리가 **대신 읽은** 음원인가. 서버는 고른 성우로 못 읽으면 영희 → 김단아 → GCP(Chirp…)
+ * 순으로 대신 읽는다. 기기 캐시 키에는 본문도 실제 목소리도 없어서(절 번호·고른 성우만) 이런 음원을 저장하면,
+ * 나중에 고른 성우의 음원이 생기거나 엔진이 돌아와도 그 기기는 대신 읽은 음원을 계속 튼다
+ * (2026-09-11 롬 3:10·3:13 — 영희를 골랐는데 김단아가 계속 나옴). 저장하지 않고, 이미 저장된 것도 무시한다.
+ */
+function isStandInAudio(kv: KoreanVoice | undefined, voiceUsed: string): boolean {
+  if (!kv) return false;
+  // 사전 생성 성우는 자기 파일("voice:f4")만 제 음원이다
+  if (PREGENERATED_KOREAN_VOICES.includes(kv)) return !voiceUsed.startsWith(`voice:${kv}`);
+  // GCP(ko-KR-Chirp3-HD-… 등) — Chirp 가 1순위인 옛 성우(생생·활력)가 아니면 대신 읽은 것
+  if (voiceUsed.startsWith("ko-KR-")) return KOREAN_VOICE_ENGINE[kv] !== "chirp";
+  return Object.entries(STAND_IN_TAGS).some(([v, tag]) => v !== kv && voiceUsed.startsWith(tag));
 }
 
 /** 받은 음원을 기억한다 — 대신 읽기 음원은 이 세션 메모리에만(절 사이 끊김 방지), 나머지는 기기 캐시에 */
@@ -101,7 +115,7 @@ function rememberAudio(
   blob: Blob,
   voiceUsed: string,
 ) {
-  if (isPregeneratedFallback(kv, voiceUsed)) {
+  if (isStandInAudio(kv, voiceUsed)) {
     volatile.set(key, { blob, voiceUsed });
     if (volatile.size > 30) volatile.delete(volatile.keys().next().value as string);
     return;
@@ -598,7 +612,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     if (volatileAudioRef.current.has(cacheKey)) return; // 이번 세션에 대신 읽기 음원을 이미 받아 둠
     try {
       const cached = await getCachedAudio(cacheKey);
-      if (cached && !isPregeneratedFallback(kvKey, cached.voiceUsed)) return; // 이미 캐시됨 → 프리페치 불필요
+      if (cached && !isStandInAudio(kvKey, cached.voiceUsed)) return; // 이미 캐시됨 → 프리페치 불필요
     } catch {
       /* 캐시 조회 실패 시 그냥 프리페치 진행 */
     }
@@ -732,12 +746,12 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       const kvKey = isEng ? undefined : kv;
       try {
         const cached = await getCachedAudio(cacheKey);
-        if (cached && !isPregeneratedFallback(kvKey, cached.voiceUsed)) {
+        if (cached && !isStandInAudio(kvKey, cached.voiceUsed)) {
           blob = cached.blob;
           resolvedVoice = cached.voiceUsed;
         } else {
-          // 영희 음원이 아직 없어 대신 읽기 음원을 받았던 절 — 기기에 저장된 것은 무시하고(그 사이 서버에
-          // 영희가 생겼을 수 있다), 이번 세션에 받아 둔 것만 쓴다
+          // 대신 읽은 음원을 받았던 절 — 기기에 저장된 것은 무시하고(그 사이 고른 성우의 음원이 생겼거나
+          // 엔진이 돌아왔을 수 있다), 이번 세션에 받아 둔 것만 쓴다
           const vol = volatileAudioRef.current.get(cacheKey);
           if (vol) {
             blob = vol.blob;

@@ -14,9 +14,11 @@
         └ WEB(Williams): Cloudflare R2 (pub-7f869002b64b...r2.dev)
         실패 시 ↓
 
-2순위: Cloud TTS (GCP)
-        └ Chirp3-HD (1차)
-        └ Neural2 (Chirp 실패 시 폴백)
+2순위: 절 단위 합성·캐시 (/api/tts)
+        └ 한국어: 고른 성우(공유 캐시 → 그 엔진으로 생성) → 영희 음원(새번역) → 김단아(캐시 → ElevenLabs 생성)
+                  → GCP Chirp3-HD(고른 성우의 성별) → Neural2 → WaveNet
+                  각 단계 한 번씩 — route.ts KOREAN_STAND_INS (2026-09-11). 대신 읽은 음원은 기기에 저장 안 함
+        └ 영문: Chirp3-HD (1차) → Neural2 (Chirp 실패 시 폴백)
         실패 시 ↓
 
 3순위: Web Speech API (브라우저 내장)
