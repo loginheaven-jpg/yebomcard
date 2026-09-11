@@ -57,6 +57,11 @@ export interface HeldItem {
   reportedAt: string;
   /** 들어보기용 음원이 함께 올라왔는지 */
   hasAudio: boolean;
+  /**
+   * 생성 방식 — "ns1"(본문 통째로 넣기, 2026-09-10~). 비었거나 없으면 구방식 음원이다.
+   * 구방식 음원을 '이대로 사용'하면 동결 시각 뒤에 올라가 새 방식 파일로 분류되고, 교체에서 빠진다.
+   */
+  method?: string;
 }
 
 export interface HeldAction {
@@ -92,6 +97,7 @@ export async function POST(req: Request) {
       audioSec?: number;
       tries?: number;
       mp3Base64?: string;
+      method?: string;
     }[];
   };
   try {
@@ -155,6 +161,7 @@ export async function POST(req: Request) {
       device,
       reportedAt: now,
       hasAudio,
+      method: typeof it.method === "string" ? it.method.slice(0, 16) : "",
     });
   }
 

@@ -168,6 +168,7 @@ def report_held(voice, voice_key, items, timeout=120):
                 "reason": it.get("reason", ""),
                 "audioSec": it.get("audio_sec") or 0,
                 "tries": it.get("tries") or 0,
+                "method": it.get("method") or "",
             }
             for it in items
         ],

@@ -199,6 +199,7 @@ def _report_held(job):
             "ratio": it.get("ratio"), "reason": it.get("reason", ""),
             "audio_sec": it.get("audio_sec"), "tries": it.get("tries"),
             "out": it.get("out"),        # 관리자가 들어보고 판단할 수 있게 — 서버에 없을 때만 올라간다
+            "method": it.get("method") or "",   # 구방식 음원은 '이대로 사용' 할 수 없다(관리자 화면)
         } for it in held]
         server.report_held(job["voice"], key, items)
         job.pop("held_report_error", None)
@@ -220,7 +221,9 @@ def _held_tasks():
 def _apply_admin_tasks(tasks, job):
     """관리자 판단을 작업 하나에 반영한다. 반환: (다시 만들 절 수, 이대로 쓰기로 한 절 수)
 
-    재생성 요청 — 다시 큐에 올린다. tries=1 로 두어 첫 재생성부터 강제 분할이 걸리게 한다.
+    재생성 요청 — 다시 큐에 올린다. tries=0 — 첫 시도는 절을 **통째로** 만든다. 예전엔 tries=1 로 두어
+      첫 재생성부터 강제 분할했는데, 구방식에서는 조각마다 끝이 잘려 절 중간 문장끝까지 잘렸다(욥 39:8).
+      새 방식은 통째로 만들어도 끝이 온전하고, 받아쓰기에 떨어지면 다음 시도부터 전처럼 나눈다.
       한 요청은 **한 번만** 처리한다. 재생성이 또 실패해 다시 보류가 되면 요청은 서버에
       그대로 남아 있는데, 그걸 매번 다시 집으면 같은 절을 무한히 반복 생성하게 된다.
     이대로 사용 — 서버가 보관 음원을 이미 올렸다. 여기서는 합격·업로드됨으로 표시만 한다.
@@ -235,7 +238,7 @@ def _apply_admin_tasks(tasks, job):
             continue
         if it["text"] in regen and it["key"] not in already:
             it["status"] = "pending"
-            it["tries"] = 1
+            it["tries"] = 0
             it["reason"] = "관리자 재생성 요청"
             it.pop("uploaded", None)
             already.add(it["key"])

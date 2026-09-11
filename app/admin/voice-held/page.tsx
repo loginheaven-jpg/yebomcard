@@ -27,6 +27,8 @@ interface HeldItem {
   device: string;
   reportedAt: string;
   hasAudio: boolean;
+  /** "ns1" 이면 새 방식. 비었거나 없으면 구방식 음원(옛 PC 코드의 보고도 여기에 든다) */
+  method?: string;
 }
 interface HeldAction {
   id: string;
@@ -37,6 +39,11 @@ interface HeldAction {
 
 /** 본문에 주석 조각(짝 없는 괄호)이 남아 **만들지 않은** 보류인가 — 이것만 '본문을 고쳐야' 한다 */
 const isNoteResidue = (it: HeldItem) => /주석 잔재/.test(it.reason || "");
+/**
+ * 구방식(2026-09-10 이전, 절 끝이 잘림) 음원인가. 이런 음원을 '이대로 사용'하면 지금 시각으로 서버에 올라가
+ * 새 방식 파일로 분류되고, 나중의 구방식 교체에서 빠져 잘린 끝이 영영 남는다 — 재생성만 허용한다.
+ */
+const isOldMethod = (it: HeldItem) => it.method !== "ns1";
 
 const ACTION_LABEL: Record<string, string> = {
   use: "이대로 사용",
@@ -193,6 +200,11 @@ export default function VoiceHeldPage() {
                   <span className={cps > 14 ? "text-red-600 font-semibold" : ""}>
                     · {cps.toFixed(1)}자/초
                   </span>
+                  {it.hasAudio && isOldMethod(it) && (
+                    <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-semibold">
+                      구방식 음원
+                    </span>
+                  )}
                   <span className="ml-auto font-semibold text-amber-600 dark:text-amber-400">
                     {(it.ratio * 100).toFixed(0)}%
                   </span>
@@ -233,6 +245,15 @@ export default function VoiceHeldPage() {
                   </div>
                 )}
 
+                {it.hasAudio && isOldMethod(it) && (
+                  <div className="mb-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                      <b>옛 방식으로 만든 음원입니다</b> — 절 끝(나눠 만든 경우 문장 끝마다)이 짧게 잘립니다.
+                      내용이 맞아도 <b>재생성 요청</b>으로 새 방식으로 다시 만들어 주세요. 이대로 쓰면 나중에 교체되지 않습니다.
+                    </p>
+                  </div>
+                )}
+
                 {it.hasAudio && (
                   <audio
                     controls
@@ -261,9 +282,15 @@ export default function VoiceHeldPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     <button
-                      disabled={busy === it.id || !it.hasAudio}
+                      disabled={busy === it.id || !it.hasAudio || isOldMethod(it)}
                       onClick={() => act(it, "use")}
-                      title={it.hasAudio ? "" : "들어볼 음원이 아직 없습니다"}
+                      title={
+                        !it.hasAudio
+                          ? "들어볼 음원이 아직 없습니다"
+                          : isOldMethod(it)
+                            ? "옛 방식 음원은 이대로 쓸 수 없습니다 — 재생성 요청"
+                            : ""
+                      }
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
                     >
                       이대로 사용
@@ -293,7 +320,7 @@ export default function VoiceHeldPage() {
 
       <section className="mt-6 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200 dark:border-gray-700 pt-3">
         <p className="mb-1">
-          <b>이대로 사용</b> — 들어보니 멀쩡한 경우. 서버가 보관 중인 음원을 바로 올립니다.
+          <b>이대로 사용</b> — 들어보니 멀쩡한 경우(새 방식 음원만). 서버가 보관 중인 음원을 바로 올립니다.
           생성 PC 가 꺼져 있어도 즉시 반영됩니다.
         </p>
         <p className="mb-1">
