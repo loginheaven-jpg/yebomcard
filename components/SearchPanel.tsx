@@ -966,15 +966,39 @@ export default function SearchPanel({
   }, [buildTtsTracks]);
 
   /**
+   * '고른 절부터 읽기' 직후 2초 동안 뜨는 알림 — `N절부터 읽습니다` 아래 `처음부터 │ 확인`.
+   * 아무것도 안 누르거나 '확인'이면 고른 절부터 그대로, '처음부터'면 장 처음(진도표 순서의 첫 절)부터.
+   */
+  const [fromSelPrompt, setFromSelPrompt] = useState<{ verse: number; tracks: TtsTrack[] } | null>(null);
+  const fromSelTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function showFromSelPrompt(verse: number, tracks: TtsTrack[]) {
+    setFromSelPrompt({ verse, tracks });
+    if (fromSelTimerRef.current) clearTimeout(fromSelTimerRef.current);
+    fromSelTimerRef.current = setTimeout(() => setFromSelPrompt(null), 2000);
+  }
+  function closeFromSelPrompt() {
+    if (fromSelTimerRef.current) clearTimeout(fromSelTimerRef.current);
+    setFromSelPrompt(null);
+  }
+  function readFromStart() {
+    const p = fromSelPrompt;
+    closeFromSelPrompt();
+    // 그사이 다른 장으로 옮겼으면 그 장을 이미 따라 읽고 있다 — 옛 장을 다시 틀지 않는다
+    if (!p || p.tracks[0].bookCode !== bookCode || p.tracks[0].chapter !== chapter) return;
+    void tts.start({ tracks: p.tracks, loadNextChapter: loadNextChapterForTts });
+  }
+
+  /**
    * 읽기 버튼. 이 장에서 고른 절이 있으면 **그 절부터** 읽는다 — 여럿이면 읽는 순서로 맨 앞 절
    * (진도표가 장을 나눠 읽으면 그 순서). 역본은 보지 않는다 — 병기 화면에서 아래 줄을 골라도 같은 절.
    * 장 통째 녹음 음원은 mp3 안에서 절로 갈 수 없어 장 처음부터 — 그때는 선택도 그대로 둔다.
    * 절 단위로 시작했으면 선택을 푼다(복사처럼 — 읽는 절 표시가 위치를 대신한다). 다만 다른 장의
-   * 절까지 모아 두는 중이면 건드리지 않는다.
+   * 절까지 모아 두는 중이면 건드리지 않는다. 시작한 뒤 2초 동안 '처음부터'로 바꿀 수 있다.
    */
   async function handleTtsToggle() {
     if (ttsActiveOnThisChapter) {
       tts.stop();
+      closeFromSelPrompt();
       return;
     }
     const tracks = buildTtsTracks(browseVerses, planNav?.segments);
@@ -995,7 +1019,7 @@ export default function SearchPanel({
     if (selectedVerses.every((s) => s.book_code === first.bookCode && s.chapter === first.chapter)) {
       onClearSelection?.();
     }
-    flashToast(`${first.verse}절부터 읽습니다`);
+    showFromSelPrompt(first.verse, tracks);
   }
 
   // TTS 재생 중 현재 절을 화면 중앙으로 스크롤
@@ -3141,6 +3165,37 @@ export default function SearchPanel({
             setShowSearchRow(false);
           }}
         />
+      )}
+
+      {/* 고른 절부터 읽기 — 2초 동안 '처음부터 │ 확인'(그냥 두면 고른 절부터 그대로) */}
+      {fromSelPrompt && (
+        <div
+          role="status"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] min-w-[200px] bg-amber-600 text-white rounded-xl shadow-lg overflow-hidden animate-[fadeInUp_0.2s_ease-out]"
+        >
+          <p className="px-4 pt-2.5 pb-2 text-[13px] font-semibold text-center whitespace-nowrap">
+            {fromSelPrompt.verse}절부터 읽습니다
+          </p>
+          <div className="flex border-t border-white/25 text-[13px] font-bold">
+            <button
+              type="button"
+              onClick={readFromStart}
+              aria-label="장 처음부터 다시 읽기"
+              className="flex-1 px-3 py-2.5 hover:bg-amber-700 active:brightness-95 transition-colors whitespace-nowrap"
+            >
+              처음부터
+            </button>
+            <span aria-hidden className="w-px my-2 bg-white/35" />
+            <button
+              type="button"
+              onClick={closeFromSelPrompt}
+              aria-label="고른 절부터 계속 읽기"
+              className="flex-1 px-3 py-2.5 bg-white/15 hover:bg-white/25 active:brightness-95 transition-colors whitespace-nowrap"
+            >
+              확인
+            </button>
+          </div>
+        </div>
       )}
 
       {/* '해제' 되돌리기 — 5초 */}
