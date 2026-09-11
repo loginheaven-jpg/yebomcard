@@ -400,7 +400,7 @@ def ui_set_batch(jid, batch):
         return "작업을 고르세요 — 지금 도는 작업이 없습니다"
     n = jobs.set_batch(jid, batch)
     return (f"{jid} 배치 → {n} · 다음 묶음부터 적용됩니다. "
-            "그래픽 메모리가 모자라면 워커가 알아서 반으로 줄입니다")
+            "그래픽 메모리가 모자라면 그 묶음만 반으로 줄여 만듭니다(세 번 모자라면 아예 줄임)")
 
 
 def ui_resume(jid):

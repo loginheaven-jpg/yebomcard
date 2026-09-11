@@ -685,9 +685,16 @@ def _process(job):
         _cur["note"] = f"이미 있는 절 {skipped}개 건너뜀"
         save(job)
 
+    # 그래픽 메모리 부족 — 그 묶음만 반으로 줄여 다시 만들고 다음 묶음은 원래 배치로. 세 번째부터는 아예 줄인다.
+    # 긴 절이 몰린 묶음에서만 모자라는 일이 많아, 한 번 모자랐다고 끝까지 줄이면 큰 배치의 이득을 잃는다
+    # (새 PC 3080 Ti 실측: 배치 4 → 8 이 시간당 305 → 498절).
+    oom_cap, oom_hits = None, 0
     while not _stop.is_set():
-        _apply_batch_request(job)           # 화면·명령줄에서 배치를 바꿨으면 이 묶음부터
+        if _apply_batch_request(job):       # 화면·명령줄에서 배치를 바꿨으면 이 묶음부터
+            oom_cap, oom_hits = None, 0
         batch = max(1, int(job["batch"]))
+        if oom_cap:
+            batch = min(batch, oom_cap)
         pend = [i for i in job["items"] if i["status"] == "pending"]
         if not pend:
             break
@@ -708,11 +715,16 @@ def _process(job):
                                           job["temp"], job["punct"], max_len=max_len,
                                           force=force)
         except Exception as e:
-            # 그래픽 메모리 부족이면 배치를 반으로 줄여 같은 절을 다시 만든다 — 작업을 멈추지 않는다.
+            # 그래픽 메모리 부족이면 같은 절을 배치를 반으로 줄여 다시 만든다 — 작업을 멈추지 않는다.
             # (예전엔 여기서 작업이 '오류'로 멈춰 누군가 이어하기를 누를 때까지 서 있었다)
             if "out of memory" in str(e).lower() and batch > 1:
-                job["batch"] = max(1, batch // 2)
-                job["batch_note"] = f"그래픽 메모리 부족 — 배치 {batch} → {job['batch']}"
+                oom_hits += 1
+                oom_cap = max(1, batch // 2)
+                if oom_hits >= 3:
+                    job["batch"] = oom_cap
+                    job["batch_note"] = f"그래픽 메모리 부족 {oom_hits}번 — 배치를 {oom_cap}(으)로 줄임"
+                else:
+                    job["batch_note"] = f"그래픽 메모리 부족 — 이번 묶음만 {oom_cap}"
                 print(f"[배치] {job['title']}: {job['batch_note']}", flush=True)
                 try:
                     import torch
@@ -725,6 +737,9 @@ def _process(job):
             job["error"] = str(e)[:500]
             save(job)
             return
+        if oom_cap and oom_hits < 3:
+            oom_cap = None                  # 줄인 묶음이 됐다 — 다음 묶음은 원래 배치로
+            job.pop("batch_note", None)
 
         for it, w in zip(group, wavs):
             it["tries"] += 1
@@ -870,14 +885,14 @@ def set_batch(jid, n):
 
 
 def _apply_batch_request(job):
-    """배치 바꾸기 요청이 있으면 반영하고 요청은 지운다(작업 파일에도 남긴다)"""
+    """배치 바꾸기 요청이 있으면 반영하고 요청은 지운다(작업 파일에도 남긴다). 반영했으면 True"""
     try:
         req = json.loads(BATCH_REQ.read_text(encoding="utf-8"))
     except Exception:
-        return
+        return False
     n = req.pop(job["id"], None)
     if n is None:
-        return
+        return False
     job["batch"] = max(1, min(8, int(n)))
     job.pop("batch_note", None)
     try:
@@ -886,6 +901,7 @@ def _apply_batch_request(job):
         pass
     save(job)
     print(f"[배치] {job['title']} → {job['batch']}", flush=True)
+    return True
 
 
 def worker_alive():
