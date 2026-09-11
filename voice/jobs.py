@@ -531,6 +531,15 @@ def _process(job):
     save(job)
     voice, batch = job["voice"], max(1, int(job["batch"]))
 
+    # 시작할 때마다 본문을 최신 DB 로 맞춘다. 예전엔 '이어갈 때'(requeue·resume_all)만 맞춰서,
+    # 끝난 책을 관리자 재생성 요청으로 다시 돌리면 정정 이전 본문으로 만들었다(요 1:42 — 편집자
+    # 주석까지 읽음). 주석 잔재 판정보다 먼저 해야 고쳐진 본문이 다시 보류되지 않는다.
+    try:
+        if refresh_job_text(job):
+            save(job)
+    except Exception as e:
+        print(f"[본문 최신화] 실패 — 옛 본문 그대로 진행: {e}", flush=True)
+
     flagged = _flag_note_residue(job)
     if flagged:
         _cur["note"] = f"주석 잔재 의심 {flagged}개 보류"
@@ -643,6 +652,28 @@ def unfinished():
     return out
 
 
+def refresh_all_jobs():
+    """모든 작업(끝난 것까지)의 본문을 최신 DB 로 맞춘다. 끝난 작업에 만들 절이 생기면 다시 큐에 올린다.
+
+    보류가 풀리거나 낭독 내용이 달라진 절이 생기는데, unfinished() 는 pending 이 있어야 골라내므로
+    끝난 작업은 영영 대상에서 빠진다 — 그러면 고쳐진 절의 음원이 끝내 안 생긴다.
+    스튜디오(resume_all)와 run_plan 이 시작할 때 부른다. 반환: 다시 큐에 올린 작업 수"""
+    n = 0
+    for j in list_jobs():
+        try:
+            if not refresh_job_text(j):
+                continue
+        except Exception as e:
+            print(f"[본문 최신화] '{j.get('title')}' 실패 — 건너뜀: {e}", flush=True)
+            continue
+        if j.get("status") == "done" and any(i.get("status") == "pending" for i in j.get("items", [])):
+            j["status"] = "queued"
+            n += 1
+            print(f"[본문 최신화] '{j.get('title')}' 에 만들 절이 생겨 다시 큐에 올립니다", flush=True)
+        save(j)
+    return n
+
+
 def resume_all():
     """중단된 작업을 모두 다시 큐에 올리고 워커를 켠다.
 
@@ -651,16 +682,7 @@ def resume_all():
     누르기 전까지 아무 일도 일어나지 않았다. 며칠짜리 작업에서는 치명적이다.
 
     반환: 이어갈 작업 수"""
-    # 본문 최신화는 **끝난 작업까지** 훑는다.
-    # 보류가 풀리면 만들 것이 다시 생기는데, unfinished() 는 pending 이 있어야 골라내므로
-    # 보류만 남은 작업은 영영 대상에서 빠진다 — 그러면 고쳐진 절의 음원이 끝내 안 생긴다.
-    for j in list_jobs():
-        if not refresh_job_text(j):
-            continue
-        if j.get("status") == "done" and any(i.get("status") == "pending" for i in j.get("items", [])):
-            j["status"] = "queued"
-            print(f"[본문 최신화] '{j.get('title')}' 에 만들 절이 생겨 다시 큐에 올립니다", flush=True)
-        save(j)
+    refresh_all_jobs()
 
     jobs_ = unfinished()
     for j in jobs_:

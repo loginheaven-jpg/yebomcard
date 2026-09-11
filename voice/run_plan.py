@@ -123,6 +123,13 @@ def main():
     print(f"[진도표] {a.version} · {len(todo)}권 "
           f"({todo[0][2]} → {todo[-1][2]})", flush=True)
 
+    # 끝난 책까지 본문을 최신 DB 로 맞춘다 — 정정된 본문의 절이 옛 본문으로 남아 음원이 끝내
+    # 안 생기던 것을 막는다(요 1:42). 다시 만들 절이 생긴 책은 큐에 올라가 진도표 순서로 처리된다.
+    requeued = jobs.refresh_all_jobs()
+    if requeued:
+        print(f"[본문 최신화] 끝난 책 {requeued}권에 다시 만들 절이 생겨 먼저 처리합니다", flush=True)
+        jobs.start_worker()
+
     t_all = time.time()
     if not a.replace_legacy:
         for seq, code, name, day in todo:
