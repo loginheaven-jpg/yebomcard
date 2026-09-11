@@ -172,12 +172,6 @@ export default function VoiceHeldPage() {
           판단 대기 {pending.length}
         </button>
         <button
-          onClick={load}
-          className="px-3 py-1.5 text-xs font-semibold rounded-lg border bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700"
-        >
-          새로고침
-        </button>
-        <button
           onClick={() => setShowDone(true)}
           className={`px-3 py-1.5 text-xs font-semibold rounded-lg border ${
             showDone
@@ -347,12 +341,15 @@ export default function VoiceHeldPage() {
 
       {regenReqs.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">음원 다시 만들기 요청</h2>
+          {/* 할 일 목록이 아니라 요청 기록이다 — 완료는 흐리게(이미 새 음원으로 바뀜) */}
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">음원 다시 만들기 기록</h2>
           <ul className="space-y-1.5">
             {regenReqs.slice(0, 30).map((r) => (
               <li
                 key={r.id}
-                className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${
+                  r.status === "done" ? "opacity-60" : ""
+                }`}
               >
                 <span className="font-semibold text-gray-800 dark:text-gray-200">{r.ref}</span>
                 <span className="text-gray-400">{r.reason}</span>
@@ -373,6 +370,7 @@ export default function VoiceHeldPage() {
           <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
             본문에서 절을 골라 ‘음원 다시 만들기’를 누르거나 새번역 본문을 고치면 생깁니다. 생성 PC 가 10분 안에
             가져가 새로 만들어 기존 음원을 바꾸고, 받아쓰기에 떨어지면 위 보류 목록으로 옵니다.
+            ‘완료’는 이미 새 음원으로 바뀐 기록이라 따로 할 일이 없습니다.
           </p>
         </section>
       )}
