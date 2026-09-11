@@ -35,6 +35,9 @@ interface HeldAction {
   at: string;
 }
 
+/** 본문에 주석 조각(짝 없는 괄호)이 남아 **만들지 않은** 보류인가 — 이것만 '본문을 고쳐야' 한다 */
+const isNoteResidue = (it: HeldItem) => /주석 잔재/.test(it.reason || "");
+
 const ACTION_LABEL: Record<string, string> = {
   use: "이대로 사용",
   regen: "재생성 요청",
@@ -203,7 +206,19 @@ export default function VoiceHeldPage() {
                 </p>
                 <div className="text-[11px] text-gray-400 mb-2">사유: {it.reason}</div>
 
-                {!it.hasAudio && (
+                {/* 음원이 없는 이유는 둘이다. 주석 잔재라 만들지 않았거나, 만들었는데 아직 서버에 안 올라왔거나.
+                    예전엔 둘 다 '괄호' 안내를 띄워서, 받아쓰기 불일치 보류까지 본문 문제로 보였다(욥 39:8). */}
+                {!it.hasAudio && !isNoteResidue(it) && (
+                  <div className="mb-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                      <b>음원이 아직 서버에 없어 들어볼 수 없습니다.</b> 만든 PC 가 다음 보고 때 올립니다(30분 안).
+                      <br />
+                      기다리지 않으려면 <b>재생성 요청</b> — 그 PC 가 새로 만들어 검수를 다시 거칩니다.
+                    </p>
+                  </div>
+                )}
+
+                {!it.hasAudio && isNoteResidue(it) && (
                   <div className="mb-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900">
                     <p className="text-xs text-amber-900 dark:text-amber-200 leading-relaxed">
                       <b>음원이 없습니다 — 본문을 고쳐야 합니다.</b>
@@ -248,15 +263,15 @@ export default function VoiceHeldPage() {
                     <button
                       disabled={busy === it.id || !it.hasAudio}
                       onClick={() => act(it, "use")}
-                      title={it.hasAudio ? "" : "음원이 없습니다 — 본문을 고쳐야 합니다"}
+                      title={it.hasAudio ? "" : "들어볼 음원이 아직 없습니다"}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
                     >
                       이대로 사용
                     </button>
                     <button
-                      disabled={busy === it.id || !it.hasAudio}
+                      disabled={busy === it.id || isNoteResidue(it)}
                       onClick={() => act(it, "regen")}
-                      title={it.hasAudio ? "" : "본문을 고치면 자동으로 다시 만들어집니다"}
+                      title={isNoteResidue(it) ? "본문을 고치면 자동으로 다시 만들어집니다" : ""}
                       className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--amber)] text-white hover:brightness-95 disabled:opacity-40"
                     >
                       재생성 요청

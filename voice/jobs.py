@@ -147,17 +147,22 @@ def _upload_ready(job):
 # 보류를 언제 보고하는가 — 작업이 끝날 때만 보고하면 늦다.
 # 전권 작업(20,530절)은 며칠이 걸리는데, 그동안 쌓인 보류 절을 아무도 못 본다.
 # 새 보류가 생기고 마지막 보고로부터 이만큼 지났으면 중간에도 보고한다.
-HELD_REPORT_INTERVAL = 600     # 초
+HELD_REPORT_INTERVAL = 600     # 초 — 보류 수가 바뀌었을 때 보고하는 최소 간격
+HELD_REFRESH_INTERVAL = 1800   # 초 — 바뀐 것이 없어도 이 간격으로는 다시 보고한다
 _last_held_report = {}         # job id → (시각, 보고한 보류 수)
 
 
 def _report_held_if_due(job):
-    """진행 중에도 주기적으로 보고. 보고할 것이 늘지 않았으면 건너뛴다."""
+    """진행 중에도 주기적으로 보고한다.
+
+    보류 수가 바뀌면 10분 간격으로, 그대로여도 30분마다 한 번은 보고한다 — 음원 올리기가
+    실패했거나 다른 작업의 보류가 바뀐 경우가 다음 보고에서 스스로 메워진다."""
     if not job.get("upload_key"):
         return
     held = sum(1 for i in job["items"] if i["status"] == "held")
     at, n = _last_held_report.get(job["id"], (0.0, -1))
-    if held == n or time.time() - at < HELD_REPORT_INTERVAL:
+    age = time.time() - at
+    if age < HELD_REPORT_INTERVAL or (held == n and age < HELD_REFRESH_INTERVAL):
         return
     _report_held(job)
     _last_held_report[job["id"]] = (time.time(), held)

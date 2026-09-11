@@ -136,8 +136,10 @@ def upload_verses(voice_key, items, replace=False, timeout=180):
 
 
 def _held_id(voice_key, text):
-    """서버 heldId(held/route.ts) 와 같은 규칙 — 성우 슬롯 + 본문."""
-    return hashlib.sha1(f"{voice_key} {text}".encode("utf-8")).hexdigest()
+    """서버 heldId(held/route.ts) 와 같은 규칙 — 성우 슬롯 + NUL + 본문.
+
+    예비 경로다. 음원 짝맞추기는 서버가 알려 주는 위치(missingAudioIndex)로 한다."""
+    return hashlib.sha1(f"{voice_key}\0{text}".encode("utf-8")).hexdigest()
 
 
 def report_held(voice, voice_key, items, timeout=120):
@@ -177,13 +179,20 @@ def report_held(voice, voice_key, items, timeout=120):
     )
     if not r.ok:
         _raise(r)
-    missing = set(r.json().get("missingAudio") or [])
+    d = r.json()
+    # 서버가 '음원이 없는 항목'을 **보낸 목록의 위치**로 알려 준다. 여기서 id 를 따로 계산해
+    # 짝을 맞추면 서버 규칙과 어긋날 수 있다 — 2026-09-11 실제로 어긋나 음원이 하나도 안 올라갔다.
+    if d.get("missingAudioIndex") is not None:
+        todo = [items[i] for i in d["missingAudioIndex"] if isinstance(i, int) and 0 <= i < len(items)]
+    else:
+        missing = set(d.get("missingAudio") or [])
+        todo = [it for it in items if _held_id(voice_key, it["text"]) in missing]
     sent = 0
-    if missing:
+    if todo:
         import engine    # mp3 인코딩(ffmpeg) — 필요할 때만 불러온다
-        for it in items:
+        for it in todo:
             out = it.get("out")
-            if _held_id(voice_key, it["text"]) not in missing or not out or not Path(out).exists():
+            if not out or not Path(out).exists():
                 continue
             a = requests.post(
                 f"{config()['base']}/api/voice-studio/held/audio",
