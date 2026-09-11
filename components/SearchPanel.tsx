@@ -965,15 +965,38 @@ export default function SearchPanel({
     return buildTtsTracks(data as BibleVerse[], pos.planNav?.next?.segments);
   }, [buildTtsTracks]);
 
-  const handleTtsToggle = useCallback(() => {
+  /**
+   * 읽기 버튼. 이 장에서 고른 절이 있으면 **그 절부터** 읽는다 — 여럿이면 읽는 순서로 맨 앞 절
+   * (진도표가 장을 나눠 읽으면 그 순서). 역본은 보지 않는다 — 병기 화면에서 아래 줄을 골라도 같은 절.
+   * 장 통째 녹음 음원은 mp3 안에서 절로 갈 수 없어 장 처음부터 — 그때는 선택도 그대로 둔다.
+   * 절 단위로 시작했으면 선택을 푼다(복사처럼 — 읽는 절 표시가 위치를 대신한다). 다만 다른 장의
+   * 절까지 모아 두는 중이면 건드리지 않는다.
+   */
+  async function handleTtsToggle() {
     if (ttsActiveOnThisChapter) {
       tts.stop();
       return;
     }
     const tracks = buildTtsTracks(browseVerses, planNav?.segments);
     if (tracks.length === 0) return;
-    tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
-  }, [ttsActiveOnThisChapter, tts, browseVerses, buildTtsTracks, loadNextChapterForTts, planNav]);
+    const from = tracks.findIndex((t) =>
+      selectedVerses.some((s) => s.book_code === t.bookCode && s.chapter === t.chapter && s.verse === t.verse),
+    );
+    if (from < 0) {
+      void tts.start({ tracks, loadNextChapter: loadNextChapterForTts });
+      return;
+    }
+    const perVerse = await tts.start({ tracks, startIndex: from, loadNextChapter: loadNextChapterForTts });
+    if (!perVerse) {
+      flashToast("녹음 음원은 장 처음부터 재생됩니다");
+      return;
+    }
+    const first = tracks[from];
+    if (selectedVerses.every((s) => s.book_code === first.bookCode && s.chapter === first.chapter)) {
+      onClearSelection?.();
+    }
+    flashToast(`${first.verse}절부터 읽습니다`);
+  }
 
   // TTS 재생 중 현재 절을 화면 중앙으로 스크롤
   useEffect(() => {

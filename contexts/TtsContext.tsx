@@ -276,7 +276,11 @@ interface TtsContextValue {
   engineVoice: string;
   /** 엔진 헬스(크레딧 소진/장애) — 성우 disable·뱃지용. koreanVoiceStatusFrom 과 함께 사용 */
   ttsHealth: TtsHealth;
-  start: (p: StartParams) => void;
+  /**
+   * 재생 시작. 절 단위로 재생하면 true — `startIndex` 가 적용된다.
+   * 장 통째 녹음 음원이면 false — mp3 안에서 절 위치로 갈 수 없어 장 처음부터 재생한다.
+   */
+  start: (p: StartParams) => Promise<boolean>;
   stop: () => void;
   pause: () => void;
   resume: () => void;
@@ -843,8 +847,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   }, [playIndex]);
 
   const start = useCallback(
-    async (p: StartParams) => {
-      if (!p.tracks || p.tracks.length === 0) return;
+    async (p: StartParams): Promise<boolean> => {
+      if (!p.tracks || p.tracks.length === 0) return false;
       loadNextChapterRef.current = p.loadNextChapter ?? null;
       void refreshHealth(); // 재생 시작 시 엔진 상태 갱신(소진 성우 즉시 반영)
       setIsWebSpeechFallback(false);
@@ -889,6 +893,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         startIdx = found >= 0 ? found : 0;
       }
       playIndex(startIdx);
+      return !isChapterAudioMode;
     },
     [playIndex, refreshHealth],
   );

@@ -57,6 +57,7 @@
 - 클라 캐시 키: `version-book-ch-vs-voice-accent` (speed 제외 — playbackRate). 한국어는 voice 슬롯에 koreanVoice. 엔진 재매핑 시 `ttsCache.ts` `DB_VERSION` bump. 다음 절 프리페치(`prefetchIndex`)로 절 사이 무음 제거.
   - **사전 생성 성우(영희 f4)의 대신 읽기 음원은 기기에 저장하지 않는다**(`X-TTS-Voice` 가 `voice:f4` 가 아니면 세션 메모리만, 이미 저장된 것도 무시). 캐시 키에 본문이 없어, 저장하면 영희 음원이 생긴 뒤에도 김단아가 계속 나온다
 - **절 음원 다시 만들기(관리자)**: 절 선택 팝업 '음원 다시 만들기' 또는 새번역 본문 수정 저장 → `voice-studio/verse-regen` 요청 → 생성 PC 가 10분 안에 가져가 먼저 만들고 기존 음원을 덮어씀(`lib/voiceStudio/verseRegen.ts`). 결과는 관리자 '보류 절 검수' 아래 목록
+- **고른 절부터 읽기**: 본문에서 절을 고른 채 읽기를 누르면 고른 절(여럿이면 읽는 순서로 맨 앞)부터 — 절 단위 음원일 때만(장 통째 녹음은 처음부터, `tts.start()` 가 절 단위 여부를 돌려줌). 시작하면 선택을 푼다(다른 장 절까지 모아 둔 중이면 유지)
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
 ### 데이터 (Supabase)
