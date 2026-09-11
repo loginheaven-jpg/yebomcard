@@ -35,6 +35,7 @@ const FILES = [
   "qc_sweep.py",
   "push_voice.py",
   "smoke_job.py",
+  "bench.py",
   "README.md",
 ];
 

@@ -26,6 +26,11 @@ _stop = threading.Event()
 _worker = None
 _cur = {"job": None, "note": ""}
 
+# 도는 작업의 배치(한 번에 만드는 절 수)를 바꾸는 요청. 화면(같은 프로세스)이든 명령줄(다른 프로세스)이든
+# 이 파일에 적으면 워커가 다음 묶음 전에 반영한다 — 작업 파일을 직접 고치면 도는 워커가 다음 저장 때 덮어쓴다.
+# jobs/ 안에 두면 작업 목록에 섞이므로 한 칸 위에 둔다.
+BATCH_REQ = JOBS.parent / "batch_requests.json"
+
 
 # ───────────────────────── 저장/조회 ─────────────────────────
 def _path(jid):
@@ -50,6 +55,40 @@ def list_jobs():
         except Exception:
             pass
     return out
+
+
+# 화면용 읽기 — 스튜디오 화면은 3초마다 작업 목록·책별 진행을 다시 그린다. 그때마다 모든 작업 파일을 새로
+# 읽으면, 큰 작업(구약을 한 작업으로 = 수만 절, 약 9MB)을 읽는 동안 같은 프로세스의 생성이 멈춘다(파이썬 잠금).
+# 바뀐 파일만 다시 읽는다. 돌려준 dict 는 캐시와 공유하므로 고치지 말 것 — 고쳐서 저장할 곳은 list_jobs/load.
+_view_cache = {}
+
+
+def _read_view(p):
+    st = p.stat()
+    sig = (st.st_mtime_ns, st.st_size)
+    hit = _view_cache.get(p)
+    if hit and hit[0] == sig:
+        return hit[1]
+    job = json.loads(p.read_text(encoding="utf-8"))
+    _view_cache[p] = (sig, job)
+    return job
+
+
+def list_jobs_view():
+    out = []
+    for p in sorted(JOBS.glob("*.json"), reverse=True):
+        try:
+            out.append(_read_view(p))
+        except Exception:
+            pass
+    return out
+
+
+def load_view(jid):
+    try:
+        return _read_view(_path(jid))
+    except Exception:
+        return None
 
 
 def counts(job):
@@ -647,6 +686,8 @@ def _process(job):
         save(job)
 
     while not _stop.is_set():
+        _apply_batch_request(job)           # 화면·명령줄에서 배치를 바꿨으면 이 묶음부터
+        batch = max(1, int(job["batch"]))
         pend = [i for i in job["items"] if i["status"] == "pending"]
         if not pend:
             break
@@ -667,6 +708,19 @@ def _process(job):
                                           job["temp"], job["punct"], max_len=max_len,
                                           force=force)
         except Exception as e:
+            # 그래픽 메모리 부족이면 배치를 반으로 줄여 같은 절을 다시 만든다 — 작업을 멈추지 않는다.
+            # (예전엔 여기서 작업이 '오류'로 멈춰 누군가 이어하기를 누를 때까지 서 있었다)
+            if "out of memory" in str(e).lower() and batch > 1:
+                job["batch"] = max(1, batch // 2)
+                job["batch_note"] = f"그래픽 메모리 부족 — 배치 {batch} → {job['batch']}"
+                print(f"[배치] {job['title']}: {job['batch_note']}", flush=True)
+                try:
+                    import torch
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                save(job)
+                continue
             job["status"] = "error"
             job["error"] = str(e)[:500]
             save(job)
@@ -801,6 +855,37 @@ def resume_all():
 
 def stop_worker():
     _stop.set()
+
+
+def set_batch(jid, n):
+    """작업의 배치를 바꾼다(1~8). 도는 중이면 다음 묶음부터, 아니면 그 작업을 시작할 때. 반환: 적용할 값"""
+    n = max(1, min(8, int(n)))
+    try:
+        req = json.loads(BATCH_REQ.read_text(encoding="utf-8"))
+    except Exception:
+        req = {}
+    req[jid] = n
+    BATCH_REQ.write_text(json.dumps(req), encoding="utf-8")
+    return n
+
+
+def _apply_batch_request(job):
+    """배치 바꾸기 요청이 있으면 반영하고 요청은 지운다(작업 파일에도 남긴다)"""
+    try:
+        req = json.loads(BATCH_REQ.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    n = req.pop(job["id"], None)
+    if n is None:
+        return
+    job["batch"] = max(1, min(8, int(n)))
+    job.pop("batch_note", None)
+    try:
+        BATCH_REQ.write_text(json.dumps(req), encoding="utf-8")
+    except Exception:
+        pass
+    save(job)
+    print(f"[배치] {job['title']} → {job['batch']}", flush=True)
 
 
 def worker_alive():

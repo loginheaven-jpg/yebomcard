@@ -337,7 +337,7 @@ def ui_add_job(voice, mode, ver_label, book_names, ch_from, ch_to, custom_text, 
 
 def ui_job_rows():
     rows = []
-    for j in jobs.list_jobs()[:30]:
+    for j in jobs.list_jobs_view()[:30]:
         ok, held, pend = jobs.counts(j)
         tot = len(j["items"])
         up_done, up_left = jobs.upload_counts(j)
@@ -360,9 +360,9 @@ def _boot_diag():
 def ui_book_rows():
     """지금 돌고 있는 작업의 책별 진행. 없으면 가장 최근 작업."""
     cur = jobs.current()
-    job = jobs.load(cur["job"]) if cur.get("job") else None
+    job = jobs.load_view(cur["job"]) if cur.get("job") else None
     if job is None:
-        js = jobs.list_jobs()
+        js = jobs.list_jobs_view()
         job = js[0] if js else None
     if job is None:
         return []
@@ -375,11 +375,13 @@ def ui_progress():
     note = f" · 처리중: {cur['note']}" if cur.get("note") else ""
     # 어디까지 왔는지 — 숫자만으로는 어느 성경인지 알 수 없다
     if cur.get("job"):
-        j = jobs.load(cur["job"])
+        j = jobs.load_view(cur["job"])
         if j:
-            note = f" · {jobs.where(j)}" + note
+            note = f" · {jobs.where(j)} · 배치 {j.get('batch', '?')}" + note
+            if j.get("batch_note"):
+                note += f" ({j['batch_note']})"
     # 업로드가 조용히 실패하면 며칠치 작업이 서빙되지 않은 채 쌓인다 — 눈에 보이게 한다
-    errs = [f"{j['title']}: {j['upload_error']}" for j in jobs.list_jobs()[:30]
+    errs = [f"{j['title']}: {j['upload_error']}" for j in jobs.list_jobs_view()[:30]
             if j.get("upload_error")]
     if errs:
         note += "  [업로드 오류] " + " / ".join(errs[:2])
@@ -389,6 +391,16 @@ def ui_progress():
 def ui_stop():
     jobs.stop_worker()
     return "워커 정지 요청 — 진행 중인 배치를 마치고 멈춥니다"
+
+
+def ui_set_batch(jid, batch):
+    """고른 작업(안 고르면 지금 도는 작업)의 배치를 슬라이더 값으로 — 도는 중이면 다음 묶음부터"""
+    jid = jid or jobs.current().get("job")
+    if not jid:
+        return "작업을 고르세요 — 지금 도는 작업이 없습니다"
+    n = jobs.set_batch(jid, batch)
+    return (f"{jid} 배치 → {n} · 다음 묶음부터 적용됩니다. "
+            "그래픽 메모리가 모자라면 워커가 알아서 반으로 줄입니다")
 
 
 def ui_resume(jid):
@@ -473,7 +485,7 @@ def ui_replace_legacy(voice, ver_label, which, batch, temp, punct, retry):
 
 # ═══════════════════ 3. 검수 ═══════════════════
 def ui_job_choices():
-    return gr.update(choices=[j["id"] for j in jobs.list_jobs()])
+    return gr.update(choices=[j["id"] for j in jobs.list_jobs_view()])
 
 
 def ui_review(jid, only_held):
@@ -631,8 +643,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             headers=["책", "상태", "진행", "보류", "업로드", "마지막 절"],
             label="책별 진행", interactive=False, wrap=True)
         with gr.Row():
-            b_jid = gr.Dropdown([], label="이어할 작업 ID", scale=2)
+            b_jid = gr.Dropdown([], label="이어할 작업 ID (배치 바꾸기는 비우면 지금 도는 작업)", scale=2)
             b_btn_resume = gr.Button("이어하기")
+            b_btn_batch = gr.Button("배치를 위 값으로")
         gr.Markdown("### 구방식 교체 — 남은 절을 다 만든 뒤에")
         gr.Markdown(
             "2026-09-10 이전 영희 음원은 절 끝 글자가 짧게 잘린 것이 많습니다. "
@@ -693,6 +706,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                      b_batch, b_temp, b_punct, b_retry, b_upload], [b_msg, b_jobs])
     b_btn_stop.click(ui_stop, None, b_msg)
     b_btn_resume.click(ui_resume, [b_jid], b_msg)
+    b_btn_batch.click(ui_set_batch, [b_jid, b_batch], b_msg)
     b_btn_rep.click(ui_replace_legacy,
                     [b_voice, b_ver, b_rep_which, b_batch, b_temp, b_punct, b_retry],
                     [b_msg, b_jobs])
