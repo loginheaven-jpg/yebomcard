@@ -49,15 +49,15 @@ export type TtsSpeed = 0.7 | 0.85 | 1.0 | 1.15 | 1.5 | 1.75 | 2.0;
 export const TTS_SPEEDS: TtsSpeed[] = [0.7, 0.85, 1.0, 1.15, 1.5, 1.75, 2.0];
 
 /**
- * 한국어 AI 성우 8종 — 성우별 엔진은 app/api/tts/route.ts 의 KOREAN_VOICE_CONFIG 참조.
- *   m1 천사장(ElevenLabs) · m2 Charon(GCP Chirp) · m3 Watson·m4 Garret·m5 Daddy(Supertone)
- *   f1 김단아(ElevenLabs) · f2 Aoede(GCP Chirp) · f3 Cindy(Supertone)
+ * 한국어 AI 성우 — 성우별 엔진은 app/api/tts/route.ts 의 KOREAN_VOICE_CONFIG 참조.
+ *   m1 천사장(ElevenLabs) · m2 쾌활(GCP Chirp) · m3 Watson·m4 Garret·m5 Daddy(Supertone)
+ *   f1 김단아(ElevenLabs) · f2 생생(GCP Chirp) · f3 Cindy(Supertone) · f4 영희(사전 생성)
  */
 export type KoreanVoice = "m1" | "m2" | "m3" | "m4" | "m5" | "f1" | "f2" | "f3" | "f4";
 export const KOREAN_VOICES: KoreanVoice[] = ["m1", "m2", "m3", "m4", "m5", "f1", "f2", "f3", "f4"];
 export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   m1: "천사장",
-  m2: "활력",
+  m2: "쾌활",   // 예전 '활력'(2026-09-11 이름 바꿈)
   m3: "감미",
   m4: "품격",
   m5: "할부지",
@@ -69,13 +69,38 @@ export const KOREAN_VOICE_LABELS: Record<KoreanVoice, string> = {
   f4: "영희",
 };
 /**
- * 선택 목록에서 뺀 성우 — 생생(f2)·활력(m2)은 GCP Chirp3-HD 인데, 새번역 낭독에서 띄어쓰기(끊어 읽기)가
- * 너무 부자연스러워 뺐다(2026-09-10). 엔진 자체는 유료 엔진이 실패할 때의 서버 폴백으로 계속 쓰인다.
- * 예전에 이 둘을 골라 저장한 사용자는 고른 적이 없는 것으로 보고 기본 성우로 돌린다.
+ * 선택 목록에서 뺀 성우 — Supertone 네 성우(지성 f3·감미 m3·품격 m4·할부지 m5). 2026-09-11 사용자 결정으로 새번역 목록을
+ * 영희·생생·김단아 │ 쾌활·천사장 으로 정리했다(Supertone 은 이날 오류라 대신 읽기로만 나오던 상태). 서버 엔진 설정은 남긴다.
+ * 저장값이 이 넷이면 고른 적이 없는 것으로 보고 기본 성우로 돌린다.
+ * 생생(f2)·쾌활(m2, 예전 '활력')은 2026-09-10 에 띄어쓰기가 어색해 뺐다가, 쉼표마다 쉬게 한 뒤(route.ts koChirpMarkup) 되살렸다.
  */
-export const RETIRED_KOREAN_VOICES: readonly KoreanVoice[] = ["f2", "m2"];
-/** 기본 성우 — 영희. 새번역은 사전 생성 음원, 음원이 없는 절과 다른 역본은 서버가 김단아(f1)로 대신 읽는다 */
+export const RETIRED_KOREAN_VOICES: readonly KoreanVoice[] = ["f3", "m3", "m4", "m5"];
+/** 기본 성우 — 영희. 새번역은 사전 생성 음원, 음원이 없는 절은 서버가 김단아(f1)로 대신 읽는다 */
 export const DEFAULT_KOREAN_VOICE: KoreanVoice = "f4";
+
+/**
+ * 녹음 음원이 있는 한국어 역본(개역·통독) — 성우 목록이 따로다: 생생 · 쾌활 · 성우(사람 녹음, 장 통째).
+ * 새번역 목록(KOREAN_VOICE_ORDER)과 따로 기억한다. 기본은 지금까지처럼 성우(녹음).
+ * '성우'를 골랐어도 녹음이 없는 장과 전체화면(절마다 화면을 맞춰야 해 장 통째 녹음을 못 씀)은 생생이 읽는다.
+ */
+export const RECORDED_KOREAN_VERSIONS: readonly string[] = ["nkrv", "easy"];
+export type RecordedVoice = "f2" | "m2" | "rec";
+export const RECORDED_VOICE_ORDER: RecordedVoice[] = ["f2", "m2", "rec"];
+export const RECORDED_VOICE_LABELS: Record<RecordedVoice, string> = { f2: "생생", m2: "쾌활", rec: "성우" };
+export const DEFAULT_RECORDED_VOICE: RecordedVoice = "rec";
+export function isRecordedKoreanVersion(version: string): boolean {
+  return RECORDED_KOREAN_VERSIONS.includes(version);
+}
+/** 이 역본을 절 단위로 읽을 한국어 AI 성우 — 녹음 역본은 그쪽 선택('성우'면 생생), 나머지는 새번역 선택 */
+function aiVoiceFor(version: string, koreanVoice: KoreanVoice, recordedVoice: RecordedVoice): KoreanVoice {
+  if (!isRecordedKoreanVersion(version)) return koreanVoice;
+  return recordedVoice === "rec" ? "f2" : recordedVoice;
+}
+/** 장 통째 녹음으로 읽을까 — 영문(WEB 녹음)은 늘 찾아보고, 한국어는 녹음 역본에서 '성우'를 골랐을 때만 */
+function wantsRecording(version: string, recordedVoice: RecordedVoice): boolean {
+  if (isEnglishVersion(version)) return true;
+  return isRecordedKoreanVersion(version) && recordedVoice === "rec";
+}
 
 /**
  * 사전 생성 전용 성우 — 서버 lib/tts/verseText.ts 의 PREGENERATED_VOICE_KEYS 와 같게 둔다
@@ -102,8 +127,8 @@ function isStandInAudio(kv: KoreanVoice | undefined, voiceUsed: string): boolean
   if (!kv) return false;
   // 사전 생성 성우는 자기 파일("voice:f4")만 제 음원이다
   if (PREGENERATED_KOREAN_VOICES.includes(kv)) return !voiceUsed.startsWith(`voice:${kv}`);
-  // GCP(ko-KR-Chirp3-HD-… 등) — Chirp 가 1순위인 옛 성우(생생·활력)가 아니면 대신 읽은 것
-  if (voiceUsed.startsWith("ko-KR-")) return KOREAN_VOICE_ENGINE[kv] !== "chirp";
+  // GCP — 생생·쾌활(Chirp 가 자기 엔진)의 Chirp 음원만 제 음원. 다른 성우의 Chirp·Neural2·WaveNet 은 대신 읽은 것
+  if (voiceUsed.startsWith("ko-KR-")) return !(KOREAN_VOICE_ENGINE[kv] === "chirp" && voiceUsed.includes("Chirp3"));
   return Object.entries(STAND_IN_TAGS).some(([v, tag]) => v !== kv && voiceUsed.startsWith(tag));
 }
 
@@ -122,8 +147,15 @@ function rememberAudio(
   }
   void putCachedAudio(key, blob, voiceUsed);
 }
-/** 선택 목록 표시 순서 — 여성(영희·지성·김단아) 먼저, 남성(감미·품격·천사장·할부지) */
-export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f4", "f3", "f1", "m3", "m4", "m1", "m5"];
+/** 새번역 성우 목록 표시 순서 — 여성(영희·생생·김단아) │ 남성(쾌활·천사장) */
+export const KOREAN_VOICE_ORDER: KoreanVoice[] = ["f4", "f2", "f1", "m2", "m1"];
+/**
+ * 기기 캐시 키의 성우 칸 — 생생·쾌활(Chirp)은 쉼표 쉼(2026-09-11) 전 음원이 기기에 남아 있을 수 있어 칸 이름을 바꿨다
+ * (서버 공유 캐시도 같은 이유로 "-p" 칸 — route.ts koVoiceCacheSlot)
+ */
+function cacheVoiceSlot(kv: KoreanVoice): string {
+  return KOREAN_VOICE_ENGINE[kv] === "chirp" ? `${kv}-p` : kv;
+}
 /** 성우별 1순위 엔진 — route.ts KOREAN_VOICE_CONFIG 와 일치. chirp 는 GCP 라 항상 가용 */
 export const KOREAN_VOICE_ENGINE: Record<KoreanVoice, "eleven" | "chirp" | "supertone"> = {
   m1: "eleven",
@@ -274,8 +306,10 @@ interface TtsContextValue {
   currentTrack: TtsTrack | null;
   queueLength: number;
   voice: TTSVoice;
-  /** 한국어 AI 성우 (m1/m2/f1/f2) */
+  /** 새번역(녹음 없는 한국어 역본) 성우 */
   koreanVoice: KoreanVoice;
+  /** 개역·통독(녹음 있는 한국어 역본) 성우 — 생생·쾌활·성우(녹음) */
+  recordedVoice: RecordedVoice;
   speed: TtsSpeed;
   autoNext: boolean;
   readVerseNumber: boolean;
@@ -301,6 +335,8 @@ interface TtsContextValue {
   jumpTo: (index: number) => void;
   setVoice: (v: TTSVoice) => void;
   setKoreanVoice: (v: KoreanVoice) => void;
+  /** 개역·통독 성우. 녹음 ↔ AI 가 바뀌면 지금 장을 새 방식으로 처음부터 다시 읽는다 */
+  setRecordedVoice: (v: RecordedVoice) => void;
   /**
    * 역본이 바뀌었을 때 기본 성우를 맞춘다. **사용자가 직접 고른 적이 있으면 아무것도 안 한다.**
    * 새번역은 영희(f4) 사전 생성 음원이 쌓이고 있어 그것을 기본으로 쓴다.
@@ -328,6 +364,9 @@ const Ctx = createContext<TtsContextValue | null>(null);
 const LS = {
   voice: "yebom_tts_voice",
   koreanVoice: "yebom_tts_korean_voice",
+  recordedVoice: "yebom_tts_recorded_voice",
+  /** 성우 목록 개편 표시 — 값이 VOICE_LINEUP 과 다르면 한 번 옛 저장값을 정리한다 */
+  voiceLineup: "yebom_tts_voice_lineup",
   speedAi: "yebom_tts_speed_ai",
   speedRecKo: "yebom_tts_speed_recko",
   speedRecEn: "yebom_tts_speed_recen",
@@ -365,6 +404,16 @@ function writeStorage(key: string, value: string) {
   } catch {}
 }
 
+function removeStorage(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+/** 성우 목록 개편 차수 — 2026-09-11: 생생·쾌활 되살림, Supertone 성우 뺌 */
+const VOICE_LINEUP = "2026-09-11";
+
 /** 유형별 저장 속도 읽기 (없으면 유형 기본값). 사용자가 바꾼 값이 유지됨(유형별 기억) */
 function readSpeedForType(t: SpeedType): TtsSpeed {
   return readStorage<TtsSpeed>(SPEED_LS[t], SPEED_DEFAULT[t], (s) => {
@@ -379,6 +428,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const [queueLength, setQueueLength] = useState(0);
   const [voice, setVoiceState] = useState<TTSVoice>("male");
   const [koreanVoice, setKoreanVoiceState] = useState<KoreanVoice>("m1");
+  const [recordedVoice, setRecordedVoiceState] = useState<RecordedVoice>(DEFAULT_RECORDED_VOICE);
   const [speed, setSpeedState] = useState<TtsSpeed>(1.0);
   const [autoNext, setAutoNextState] = useState(true);
   const [readVerseNumber, setReadVerseNumberState] = useState(false);
@@ -397,6 +447,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const koreanVoiceRef = useRef<KoreanVoice>("m1");
   /** 사용자가 성우를 직접 고른 적이 있는가 — 있으면 역본 기본값이 덮지 않는다 */
   const voicePickedRef = useRef(false);
+  const recordedVoiceRef = useRef<RecordedVoice>(DEFAULT_RECORDED_VOICE);
+  /** 지금 큐의 절 단위 트랙(장 통째 녹음으로 줄이기 전) — 녹음 ↔ AI 를 바꿀 때 지금 장을 다시 시작하려고 */
+  const sourceTracksRef = useRef<TtsTrack[]>([]);
+  /** 지금 재생이 전체화면(절 단위 고정)인가 */
+  const perVerseRef = useRef(false);
   const speedRef = useRef<TtsSpeed>(1.0);
   const speedTypeRef = useRef<SpeedType>("ai");
   const autoNextRef = useRef(true);
@@ -416,6 +471,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const webSpeechRef = useRef<WebSpeechController | null>(null);
   const playGenRef = useRef(0);
   const playIndexRef = useRef<(i: number) => void>(() => {});
+  const startRef = useRef<(p: StartParams) => Promise<boolean>>(async () => false);
 
   useEffect(() => {
     // localStorage 초기 복원 — SSR 시 default → mount 후 보정 (hydration mismatch 회피)
@@ -424,8 +480,22 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         s === "female" ? "female" : "male",
       ),
     );
+    // 성우 목록 개편(2026-09-11) — 한 번만: 생생·활력(9/10 에 뺐다가 되살림)이나 Supertone 성우를 골라 둔 옛 저장값은
+    // 지운다. 9/10 부터 영희로 듣던 분이 갑자기 옛 선택으로 돌아가지 않게 한다. 이후에 고르는 값은 그대로 기억한다.
+    if (readStorage<string>(LS.voiceLineup, "", (x) => x) !== VOICE_LINEUP) {
+      const old = readStorage<string | null>(LS.koreanVoice, null, (x) => x);
+      if (old !== null && (["f2", "m2", ...RETIRED_KOREAN_VOICES] as string[]).includes(old)) {
+        removeStorage(LS.koreanVoice);
+      }
+      writeStorage(LS.voiceLineup, VOICE_LINEUP);
+    }
+    const rv = readStorage<RecordedVoice>(LS.recordedVoice, DEFAULT_RECORDED_VOICE, (x) =>
+      (RECORDED_VOICE_ORDER as string[]).includes(x) ? (x as RecordedVoice) : DEFAULT_RECORDED_VOICE,
+    );
+    setRecordedVoiceState(rv);
+    recordedVoiceRef.current = rv;
     // 저장값이 있다 = 사용자가 직접 골랐다. 역본 기본값이 이를 덮지 않는다.
-    // 단 목록에서 뺀 성우(생생·활력)나 모르는 값이면 고른 적이 없는 것으로 보고 기본 성우(영희)로 간다.
+    // 단 목록에서 뺀 성우(Supertone 넷)나 모르는 값이면 고른 적이 없는 것으로 보고 기본 성우(영희)로 간다.
     const stored = readStorage<string | null>(LS.koreanVoice, null, (x) => x);
     const usable =
       stored !== null &&
@@ -549,6 +619,19 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     writeStorage(LS.koreanVoice, v);
     voicePickedRef.current = true;   // 이후로는 역본 기본값이 덮지 않는다
   }, []);
+  const setRecordedVoice = useCallback((v: RecordedVoice) => {
+    const before = recordedVoiceRef.current;
+    setRecordedVoiceState(v);
+    recordedVoiceRef.current = v;
+    writeStorage(LS.recordedVoice, v);
+    // 녹음 ↔ AI 가 바뀌면 지금 장을 새 방식으로 다시 시작한다 — 장 통째 녹음은 절 위치로 갈 수 없어 장 처음부터.
+    // AI 끼리(생생 ↔ 쾌활)는 새번역처럼 다음 절부터 바뀐다. 전체화면은 늘 절 단위라 다시 시작할 일이 없다.
+    const head = queueRef.current[0];
+    if (statusRef.current === "idle" || perVerseRef.current || !head || !isRecordedKoreanVersion(head.version)) return;
+    if ((before === "rec") === (v === "rec")) return;
+    const src = sourceTracksRef.current;
+    if (src.length > 0) void startRef.current({ tracks: src, loadNextChapter: loadNextChapterRef.current ?? undefined });
+  }, []);
 
   // 역본별 기본 성우 — 지금은 모든 역본이 영희(f4)다. 새번역은 사전 생성 음원이 쌓여 있고,
   // 아직 없는 절과 다른 역본은 서버가 김단아(f1)로 대신 읽는다.
@@ -594,7 +677,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     const track = tracks[idx];
     if (track.mp3Url) return; // 녹음 음원(장 통째)은 프리페치 대상 아님
     const isEng = isEnglishVersion(track.version);
-    const kv = koreanVoiceRef.current;
+    const kv = aiVoiceFor(track.version, koreanVoiceRef.current, recordedVoiceRef.current);
     const v: TTSVoice = isEng ? voiceRef.current : kv.startsWith("m") ? "male" : "female";
     const sp = speedRef.current;
     const isAnnouncement = track.verse === 0;
@@ -606,7 +689,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       voice: v,
       speed: sp,
       accent: isEng ? englishAccentRef.current : "ko",
-      koreanVoice: isEng ? undefined : kv,
+      koreanVoice: isEng ? undefined : cacheVoiceSlot(kv),
     });
     const kvKey = isEng ? undefined : kv;
     if (volatileAudioRef.current.has(cacheKey)) return; // 이번 세션에 대신 읽기 음원을 이미 받아 둠
@@ -654,8 +737,11 @@ export function TtsProvider({ children }: { children: ReactNode }) {
             const nextTracks = await nextLoader();
             if (playGenRef.current !== gen) return;
             if (nextTracks && nextTracks.length > 0) {
-              const augmented = await transformWithChapterAudio(nextTracks);
+              const augmented = wantsRecording(nextTracks[0].version, recordedVoiceRef.current)
+                ? await transformWithChapterAudio(nextTracks)
+                : injectChapterAnnouncements(nextTracks);
               if (playGenRef.current !== gen) return;
+              sourceTracksRef.current = nextTracks;
               queueRef.current = augmented;
               setQueueLength(augmented.length);
               indexRef.current = -1;
@@ -718,7 +804,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       }
 
       const isEng = isEnglishVersion(track.version);
-      const kv = koreanVoiceRef.current;
+      const kv = aiVoiceFor(track.version, koreanVoiceRef.current, recordedVoiceRef.current);
       // 영문은 voice(male/female), 한국어는 koreanVoice 의 성별로 voice 슬롯 결정(GCP 폴백 성별용)
       const v: TTSVoice = isEng ? voiceRef.current : (kv.startsWith("m") ? "male" : "female");
       const sp = speedRef.current;
@@ -731,7 +817,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         voice: v,
         speed: sp,
         accent: isEng ? englishAccentRef.current : "ko",
-        koreanVoice: isEng ? undefined : kv,
+        koreanVoice: isEng ? undefined : cacheVoiceSlot(kv),
       });
 
       const playableText =
@@ -864,6 +950,8 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     async (p: StartParams): Promise<boolean> => {
       if (!p.tracks || p.tracks.length === 0) return false;
       loadNextChapterRef.current = p.loadNextChapter ?? null;
+      sourceTracksRef.current = p.tracks;
+      perVerseRef.current = !!p.perVerse;
       void refreshHealth(); // 재생 시작 시 엔진 상태 갱신(소진 성우 즉시 반영)
       setIsWebSpeechFallback(false);
       // 새 재생 세션: 직전 재생(녹음 등) 엔진 배지 잔상 제거 — 트랙 해석 후 다시 채움.
@@ -876,7 +964,12 @@ export function TtsProvider({ children }: { children: ReactNode }) {
 
       // 장 단위 음원이 있으면 [announcement, mp3 통째] 큐로 압축, 없으면 절 단위 + announcement.
       // perVerse(전체화면 1절 모드)면 압축 없이 절 단위 그대로 — 절마다 currentTrack 갱신돼 화면이 따라감.
-      const augmented = p.perVerse ? p.tracks : await transformWithChapterAudio(p.tracks);
+      // 개역·통독은 '성우(녹음)'를 골랐을 때만 녹음을 찾는다 — 생생·쾌활이면 절 단위 + 장 안내
+      const augmented = p.perVerse
+        ? p.tracks
+        : wantsRecording(p.tracks[0].version, recordedVoiceRef.current)
+          ? await transformWithChapterAudio(p.tracks)
+          : injectChapterAnnouncements(p.tracks);
       queueRef.current = augmented;
       setQueueLength(augmented.length);
 
@@ -911,6 +1004,10 @@ export function TtsProvider({ children }: { children: ReactNode }) {
     },
     [playIndex, refreshHealth],
   );
+
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
 
   const stop = useCallback(() => {
     playGenRef.current++;
@@ -975,6 +1072,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       queueLength,
       voice,
       koreanVoice,
+      recordedVoice,
       speed,
       autoNext,
       readVerseNumber,
@@ -991,6 +1089,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       jumpTo,
       setVoice,
       setKoreanVoice,
+      setRecordedVoice,
       applyVersionDefault,
       setSpeed,
       setAutoNext,
@@ -1005,6 +1104,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       queueLength,
       voice,
       koreanVoice,
+      recordedVoice,
       speed,
       autoNext,
       readVerseNumber,
@@ -1021,6 +1121,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       jumpTo,
       setVoice,
       setKoreanVoice,
+      setRecordedVoice,
       applyVersionDefault,
       setSpeed,
       setAutoNext,

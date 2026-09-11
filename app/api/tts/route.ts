@@ -92,8 +92,8 @@ async function getAccessToken(): Promise<string> {
 }
 
 // ── 한국어 AI 성우 — 성우별 엔진 라우팅 ──────────────────────────────
-// m1 천사장/f1 김단아 = ElevenLabs, m2 Charon/f2 Aoede = GCP Chirp3-HD(선택 목록에선 뺌),
-// m3 Watson/m4 Garret/m5 Daddy(클론)/f3 Cindy = Supertone, f4 영희 = 사전 생성 음원만.
+// m1 천사장/f1 김단아 = ElevenLabs, m2 쾌활/f2 생생 = GCP Chirp3-HD(새번역·개역·통독),
+// m3 Watson/m4 Garret/m5 Daddy(클론)/f3 Cindy = Supertone(2026-09-11 선택 목록에선 뺌), f4 영희 = 사전 생성 음원만.
 // 고른 성우로 못 읽으면 영희 → 김단아 → GCP(Chirp→Neural2→WaveNet) 순으로 대신 읽는다(KOREAN_STAND_INS).
 // Vercel 배포 시 ELEVENLABS_API_KEY / SUPERTONE_API_KEY 환경변수 필요(로컬은 .env.local).
 const EL_API_KEY = process.env.ELEVENLABS_API_KEY || process.env["11LABS"] || "";
@@ -279,6 +279,14 @@ function koChirpMarkup(text: string): string {
   return text.replace(/[[\]]/g, "").replace(/[,，]\s*(?=\S)/g, `, ${KO_CHIRP_COMMA_PAUSE} `);
 }
 
+/**
+ * 공유 캐시(R2)의 성우 칸. 생생·쾌활(Chirp 가 자기 엔진)은 쉼표 쉼(koChirpMarkup) 전 음원이 옛 칸(f2/m2)에 남아 있어
+ * 새 칸("f2-p"·"m2-p")에 새로 만든다 — 기기 캐시도 같은 이유로 칸 이름이 다르다(TtsContext cacheVoiceSlot).
+ */
+function koVoiceCacheSlot(kv: string): string {
+  return KOREAN_VOICE_CONFIG[kv]?.engine === "chirp" ? `${kv}-p` : kv;
+}
+
 export async function POST(req: NextRequest) {
   try {
     // speed 는 더 이상 서버에서 사용 안 함 — 합성은 항상 1.0x, 재생 속도는 클라이언트 playbackRate.
@@ -302,7 +310,7 @@ export async function POST(req: NextRequest) {
     // ── 공유 캐시(R2) 조회 — hit 시 합성 없이 서빙. 콘텐츠 주소화(본문 sha1)로 절·성우당 전역 1회만 합성 ──
     const voiceKey = isEng
       ? `${accent === "gb" ? "gb" : "us"}-${isMale ? "male" : "female"}`
-      : koreanVoice || "m1";
+      : koVoiceCacheSlot(koreanVoice || "m1");
     const r2Key = ttsCacheKey(ttsText, voiceKey, isEng ? "en" : "ko");
     const cachedR2 = await getR2Audio(r2Key);
     if (cachedR2) {

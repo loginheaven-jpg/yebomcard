@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
-import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice } from "@/contexts/TtsContext";
+import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, RECORDED_VOICE_LABELS, RECORDED_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice, type RecordedVoice } from "@/contexts/TtsContext";
 import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
 import { VERSE_GAP_LABELS, type VerseGap } from "@/lib/tts/verseGap";
 
@@ -97,6 +97,26 @@ export default function SettingsSheet({
         {st.down && (
           <span className="ml-1 text-[9px] font-semibold text-red-500 dark:text-red-400">{st.reasonLabel}</span>
         )}
+      </button>
+    );
+  };
+
+  // 개역·통독 성우 — 생생·쾌활(Chirp, 늘 가용) · 성우(사람 녹음, 장 통째)
+  const renderRecordedVoiceBtn = (rv: RecordedVoice) => {
+    const selected = tts.recordedVoice === rv;
+    return (
+      <button
+        key={rv}
+        onClick={() => tts.setRecordedVoice(rv)}
+        aria-pressed={selected}
+        className={`py-2 px-1 text-xs rounded-lg border transition-all text-center truncate ${
+          selected
+            ? "bg-[var(--amber)] border-[var(--amber)] text-white shadow-sm"
+            : "bg-[var(--paper)] dark:bg-gray-700 border-[var(--line)] dark:border-gray-600 text-[var(--ink)] dark:text-gray-200 hover:brightness-95"
+        }`}
+      >
+        {RECORDED_VOICE_LABELS[rv]}
+        {rv === "rec" && <span className="ml-1 text-[9px] font-semibold opacity-70">녹음</span>}
       </button>
     );
   };
@@ -490,9 +510,9 @@ export default function SettingsSheet({
           <section>
             <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">음성</div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-[var(--line)] dark:border-gray-700 space-y-4">
-              {/* 한국어 낭독 성우 (8종) — 소진/장애 성우는 disable + 뱃지 */}
+              {/* 새번역 성우 — 소진/장애 성우는 disable + 뱃지 */}
               <div>
-                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">한국어 낭독 성우</div>
+                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">새번역 성우</div>
                 <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">여성</div>
                 <div className="grid grid-cols-3 gap-1.5 mb-2.5">
                   {KOREAN_VOICE_ORDER.filter((kv) => koreanVoiceGender(kv) === "female").map(renderKoreanVoiceBtn)}
@@ -500,6 +520,14 @@ export default function SettingsSheet({
                 <div className="text-[10px] text-[var(--ink-faint)] dark:text-gray-500 mb-1">남성</div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {KOREAN_VOICE_ORDER.filter((kv) => koreanVoiceGender(kv) === "male").map(renderKoreanVoiceBtn)}
+                </div>
+              </div>
+
+              {/* 개역·통독 성우 — 성우 = 사람 녹음(장 통째), 생생·쾌활 = AI(절 단위) */}
+              <div>
+                <div className="text-xs text-[var(--ink-soft)] dark:text-gray-400 mb-2">개역·통독 성우</div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {RECORDED_VOICE_ORDER.map(renderRecordedVoiceBtn)}
                 </div>
               </div>
 

@@ -10,7 +10,7 @@
 
 ```
 1순위: bible_audio 매핑 mp3 (사람 녹음)
-        └ 통독성경(easy)·개역개정(nkrv) 한글: Supabase Storage
+        └ 통독성경(easy)·개역개정(nkrv) 한글: Supabase Storage — '성우'를 골랐을 때만(생생·쾌활이면 2순위 절 단위, 2026-09-11)
         └ WEB(Williams): Cloudflare R2 (pub-7f869002b64b...r2.dev)
         실패 시 ↓
 
