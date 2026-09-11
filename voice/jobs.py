@@ -109,10 +109,11 @@ def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, se
     jid = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
     prepared = []
     for it in items:
-        exists = Path(it["out"]).exists()
+        # 이미 만들어 둔 파일은 건너뛴다(재개). 교체 작업은 예외 — 로컬 파일이 바로 바꿀 구방식 음원이라,
+        # 합격으로 두면 옛 음원을 '교체본'으로 올린다(2026-09-12 욥기 139개 키 사고)
+        exists = not replace and Path(it["out"]).exists()
         prepared.append({
             "key": it["key"], "ref": it["ref"], "text": it["text"], "out": it["out"],
-            # 이미 만들어 둔 파일은 건너뛴다(재개)
             "status": "ok" if exists else "pending",
             "tries": 0, "ratio": None, "reason": "기존 파일" if exists else "",
             "audio_sec": None,
@@ -550,6 +551,14 @@ def _skip_already_replaced(job, key):
 
     서버가 안 되면 아무것도 건너뛰지 않는다 — 다 만들어도 서버가 새 방식 파일은 덮어쓰지 않으므로
     낭비일 뿐 사고는 아니다."""
+    # 로컬 파일을 '기존 파일'로 합격 처리한 절은 되돌린다 — 그 파일이 바로 바꿀 구방식 음원이다.
+    # new_job 이 교체 작업에도 로컬 파일을 건너뛰던 때 건 작업을 여기서 바로잡는다(2026-09-12 욥기 사고).
+    # 서버 목록을 못 받아도 먼저 한다 — 다 만드는 건 낭비일 뿐이지만 옛 음원을 올리는 건 사고다.
+    for it in job["items"]:
+        if it["status"] == "ok" and it.get("reason") == "기존 파일":
+            it["status"] = "pending"
+            it["reason"] = ""
+            it.pop("uploaded", None)
     try:
         import server
         legacy = server.cache_index(key, legacy=True)

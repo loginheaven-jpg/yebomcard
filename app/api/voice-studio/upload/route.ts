@@ -12,7 +12,8 @@
  *
  * 교체(replace: true)
  *   평소에는 같은 키가 이미 있으면 건너뛴다(exists). 구방식 교체 작업은 replace 를 실어 보내는데,
- *   그때도 **기존 파일이 LEGACY_BEFORE 이전에 올라온 것일 때만** 덮어쓴다(replaced).
+ *   그때도 **기존 파일이 구방식일 때만** 덮어쓴다(replaced) — LEGACY_BEFORE 이전에 올라왔거나, 구방식이
+ *   그대로 다시 올라간 것으로 기록된 파일(`lib/voiceStudio/legacy.ts` `isLegacyFile`, cache-index 와 같은 판정).
  *   두 PC 가 같은 절을 교체하더라도 새 방식 파일을 구방식으로 되돌리는 일이 생기지 않는다.
  *   있는지 확인은 HEAD 로 한다 — 예전에는 확인하려고 음원을 통째로 내려받았다.
  *
@@ -24,7 +25,8 @@
 import { NextResponse } from "next/server";
 import { requireDevice } from "@/lib/voiceStudio/auth";
 import { putR2Audio, headR2Audio, r2CacheEnabled } from "@/lib/tts/r2Cache";
-import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS, LEGACY_BEFORE } from "@/lib/tts/verseText";
+import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS } from "@/lib/tts/verseText";
+import { isLegacyFile, keyHash } from "@/lib/voiceStudio/legacy";
 import { getRegenRequest } from "@/lib/voiceStudio/verseRegen";
 
 export const runtime = "nodejs";
@@ -84,7 +86,6 @@ export async function POST(req: Request) {
   }
 
   const replace = body.replace === true;
-  const legacyBefore = Date.parse(LEGACY_BEFORE[voiceKey] || "");
 
   const items = body.items || [];
   if (!items.length) return NextResponse.json({ error: "items 가 비어 있습니다" }, { status: 400 });
@@ -121,8 +122,7 @@ export async function POST(req: Request) {
 
       const existing = await headR2Audio(key);
       if (existing) {
-        const isLegacy =
-          replace && Number.isFinite(legacyBefore) && existing.lastModified.getTime() < legacyBefore;
+        const isLegacy = replace && isLegacyFile(voiceKey, keyHash(key), existing.lastModified);
         // 관리자 '음원 다시 만들기' 요청으로 이 기기가 맡은 절은 새 방식 파일이라도 덮어쓴다
         const requested = !isLegacy && !!it.requestId && (await isClaimedBy(it.requestId, gate.claims.id));
         if (!isLegacy && !requested) {

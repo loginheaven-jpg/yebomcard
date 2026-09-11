@@ -13,12 +13,14 @@
  * ?legacy=1 — **아직 구방식인 파일만** 준다(올라온 시각이 LEGACY_BEFORE 이전).
  *   교체 작업이 이것으로 다시 만들 절을 고른다. 판정 기준 시각을 서버가 쥐고 있으므로 PC 시계와
  *   무관하고, 교체가 진행될수록 목록에서 저절로 빠진다(덮어쓰면 올라온 시각이 새로워진다).
+ *   구방식 음원이 그대로 다시 올라간 파일도 구방식으로 준다 — 판정은 교체 업로드와 같은 `isLegacyFile`.
  */
 
 import { NextResponse } from "next/server";
 import { requireDevice } from "@/lib/voiceStudio/auth";
 import { studioList } from "@/lib/voiceStudio/r2";
 import { TTS_CACHE_VERSION, PREGENERATED_VOICE_KEYS, LEGACY_BEFORE } from "@/lib/tts/verseText";
+import { hasLegacyCutoff, isLegacyFile, keyHash } from "@/lib/voiceStudio/legacy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,8 +39,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const cutoff = legacyOnly ? Date.parse(LEGACY_BEFORE[voiceKey] || "") : NaN;
-  if (legacyOnly && !Number.isFinite(cutoff)) {
+  if (legacyOnly && !hasLegacyCutoff(voiceKey)) {
     return NextResponse.json(
       { error: `구방식 기준 시각이 없는 성우 슬롯입니다: '${voiceKey}'` },
       { status: 400 },
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
   const prefix = `tts/${TTS_CACHE_VERSION}/ko/${voiceKey}/`;
   const all = await studioList(prefix);
   const keys = legacyOnly
-    ? all.filter((k) => k.lastModified && k.lastModified.getTime() < cutoff)
+    ? all.filter((k) => isLegacyFile(voiceKey, keyHash(k.key), k.lastModified))
     : all;
   const hashes = keys
     .map((k) => k.key.slice(prefix.length).replace(/\.mp3$/, ""))
