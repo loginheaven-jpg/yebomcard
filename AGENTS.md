@@ -34,6 +34,7 @@
 - `BottomTabBar` (목차/검색/본문/**말씀의삶**/책갈피/설정) — `view==="search" || view==="plan"` 일 때 렌더
 - **말씀의삶** — 성경읽기진도표 91회차. 플랜 정의는 정적 파일 `lib/plans/yebom91.ts`,
   회차 완료는 `reading_progress` 에서 **파생 계산**(저장하지 않음). 수동 체크만 `reading_unit_checks`.
+  비로그인 = 보기만 / 로그인 = 진도 기록 / 그룹 = 서로의 진도. 진입 때 한 번 그룹 초대코드 창(`GroupCodePrompt` — 참여·건너뛰기 후엔 그 기기에서 다시 안 물음, 비로그인은 로그인 후 자동 참여).
   `handleTabChange` 에서 navRequest 앞에 끊고, 탭바 자동 숨김에서 제외하고,
   `useHardwareBack` 을 등록해 키보드 격리까지 해야 한다 — 셋 다 [docs/IA_5TAB.md](docs/IA_5TAB.md) §1 참조
 - `SettingsSheet` — 계정/찬송가/예배성경/카드빌더/풀스크린/관리자/종료 통합

@@ -20,8 +20,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/hooks/useSession";
 import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
-import { fetchUnitChecks, setUnitCheck, fetchGroupSummary } from "@/lib/reading-plan";
+import {
+  fetchUnitChecks,
+  setUnitCheck,
+  fetchGroupSummary,
+  fetchMyGroups,
+  joinGroup,
+} from "@/lib/reading-plan";
 import ReadingGroupsView from "@/components/ReadingGroupsView";
+import GroupCodePrompt, { PromptToast } from "@/components/GroupCodePrompt";
 import {
   YEBOM91,
   computeUnitProgress,
@@ -38,6 +45,32 @@ interface Props {
 
 const LONG_PRESS_MS = 500;
 const TOTAL = YEBOM91.units.length;
+
+/**
+ * 진입 때 그룹 초대코드 창(GroupCodePrompt)의 기기 기억.
+ *  - GROUP_PROMPT: 참여했거나("joined") 한 번 건너뛰었으면("skipped") 이 기기에서는 다시 묻지 않는다
+ *  - PENDING_GROUP_CODE: 로그인하지 않은 채 코드를 넣었을 때 — 로그인하고 돌아와 말씀의삶에 들어오면 그 코드로 참여한다
+ */
+const LS_GROUP_PROMPT = "yebom_plan_group_prompt";
+const LS_PENDING_GROUP_CODE = "yebom_plan_pending_group_code";
+
+function lsGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function lsSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+function lsRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
 
 /** 행이 어떻게 보일지 — now 는 status 가 아니라 currentSeq 파생값이라 따로 판단한다 */
 type RowState = "now" | "done" | "partial" | "todo";
@@ -63,6 +96,9 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
     myRank: number;
   } | null>(null);
   const [groupNonce, setGroupNonce] = useState(0);
+  const [groupPromptOpen, setGroupPromptOpen] = useState(false);
+  const [groupPromptError, setGroupPromptError] = useState<string | null>(null);
+  const [planToast, setPlanToast] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
   const nowRowRef = useRef<HTMLLIElement | null>(null);
@@ -97,6 +133,71 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
       alive = false;
     };
   }, [isLoggedIn, groupNonce]);
+
+  // ── 진입 때 그룹 초대코드 창 (GroupCodePrompt) ──
+  // 한 번 참여했거나 건너뛰면 이 기기에서는 다시 묻지 않는다. 로그인했고 이미 그룹이 있으면(다른 기기에서
+  // 참여) 묻지 않고 기억만 해 둔다. 로그인하지 않은 채 코드를 넣었다면, 로그인하고 돌아온 지금 참여한다.
+  useEffect(() => {
+    if (sessionLoading) return;
+    let alive = true;
+    (async () => {
+      const pending = lsGet(LS_PENDING_GROUP_CODE);
+      if (pending) {
+        if (!isLoggedIn) return; // 로그인하러 간 사이 — 다시 묻지 않는다
+        lsRemove(LS_PENDING_GROUP_CODE);
+        const res = await joinGroup(pending);
+        if (!alive) return;
+        if ("error" in res) {
+          // 코드가 틀렸거나 참여에 실패 — 이유를 보여 주고 다시 넣게 한다
+          setGroupPromptError(res.error);
+          setGroupPromptOpen(true);
+          return;
+        }
+        lsSet(LS_GROUP_PROMPT, "joined");
+        setPlanToast(`${res.group.name} 에 참여했습니다`);
+        setGroupNonce((n) => n + 1);
+        return;
+      }
+      if (lsGet(LS_GROUP_PROMPT)) return;
+      if (isLoggedIn && (await fetchMyGroups()).length > 0) {
+        if (alive) lsSet(LS_GROUP_PROMPT, "joined");
+        return;
+      }
+      if (alive) setGroupPromptOpen(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sessionLoading, isLoggedIn]);
+
+  const submitGroupCode = useCallback(
+    async (code: string): Promise<string | null> => {
+      if (!isLoggedIn) {
+        // 참여는 로그인이 필요하다 — 코드를 적어 두고 로그인으로. 돌아와 말씀의삶에 들어오면 위 effect 가 참여한다
+        lsSet(LS_PENDING_GROUP_CODE, code);
+        setGroupPromptOpen(false);
+        onLogin?.();
+        return null;
+      }
+      const res = await joinGroup(code);
+      if ("error" in res) return res.error;
+      lsSet(LS_GROUP_PROMPT, "joined");
+      setGroupPromptOpen(false);
+      setGroupPromptError(null);
+      setPlanToast(`${res.group.name} 에 참여했습니다`);
+      setGroupNonce((n) => n + 1);
+      return null;
+    },
+    [isLoggedIn, onLogin],
+  );
+
+  const skipGroupPrompt = useCallback(() => {
+    lsSet(LS_GROUP_PROMPT, "skipped");
+    setGroupPromptOpen(false);
+    setGroupPromptError(null);
+  }, []);
+
+  const clearPlanToast = useCallback(() => setPlanToast(null), []);
 
   const progress: PlanProgress = useMemo(
     () => computeUnitProgress(YEBOM91, readByBook, manualSeqs),
@@ -388,6 +489,17 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
           })}
         </ul>
       </div>
+
+      {/* ── 진입 때 그룹 초대코드 창 ── */}
+      {groupPromptOpen && (
+        <GroupCodePrompt
+          isLoggedIn={isLoggedIn}
+          initialError={groupPromptError}
+          onSubmit={submitGroupCode}
+          onSkip={skipGroupPrompt}
+        />
+      )}
+      {planToast && <PromptToast text={planToast} onDone={clearPlanToast} />}
     </div>
   );
 }
