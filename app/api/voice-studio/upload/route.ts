@@ -15,12 +15,17 @@
  *   그때도 **기존 파일이 LEGACY_BEFORE 이전에 올라온 것일 때만** 덮어쓴다(replaced).
  *   두 PC 가 같은 절을 교체하더라도 새 방식 파일을 구방식으로 되돌리는 일이 생기지 않는다.
  *   있는지 확인은 HEAD 로 한다 — 예전에는 확인하려고 음원을 통째로 내려받았다.
+ *
+ * 음원 다시 만들기 요청(requestId)
+ *   관리자가 앱에서 '음원 다시 만들기'를 누른 절은 이 기기가 맡은 요청이면(verse-regen/claim) 새 방식 파일이라도
+ *   덮어쓴다(replaced). 요청을 맡지 않은 기기는 덮어쓸 수 없다.
  */
 
 import { NextResponse } from "next/server";
 import { requireDevice } from "@/lib/voiceStudio/auth";
 import { putR2Audio, headR2Audio, r2CacheEnabled } from "@/lib/tts/r2Cache";
 import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS, LEGACY_BEFORE } from "@/lib/tts/verseText";
+import { getRegenRequest } from "@/lib/voiceStudio/verseRegen";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +38,14 @@ interface Item {
   text?: string;
   mp3Base64?: string;
   ref?: string;
+  /** 음원 다시 만들기 요청 id — 이 기기가 맡은 요청이면 기존 파일을 덮어쓴다 */
+  requestId?: string;
+}
+
+/** 이 기기가 맡아 처리 중인 음원 다시 만들기 요청인가 */
+async function isClaimedBy(requestId: string, device: string): Promise<boolean> {
+  const r = await getRegenRequest(requestId);
+  return !!r && r.status === "claimed" && r.claimedBy === device;
 }
 
 function isMp3(buf: Buffer): boolean {
@@ -110,7 +123,9 @@ export async function POST(req: Request) {
       if (existing) {
         const isLegacy =
           replace && Number.isFinite(legacyBefore) && existing.lastModified.getTime() < legacyBefore;
-        if (!isLegacy) {
+        // 관리자 '음원 다시 만들기' 요청으로 이 기기가 맡은 절은 새 방식 파일이라도 덮어쓴다
+        const requested = !isLegacy && !!it.requestId && (await isClaimedBy(it.requestId, gate.claims.id));
+        if (!isLegacy && !requested) {
           results.push({ ref, status: "exists", key });
           continue;
         }

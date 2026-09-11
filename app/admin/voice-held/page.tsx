@@ -50,6 +50,24 @@ const isOldMethod = (it: HeldItem) => it.method !== "ns1";
  */
 const decisionFp = (it: HeldItem) => `${it.audioSec}|${it.asr}`;
 
+/** 앱에서 들어온 음원 다시 만들기 요청 (lib/voiceStudio/verseRegen.ts) */
+interface RegenReq {
+  id: string;
+  ref: string;
+  reason: string;
+  by: string;
+  at: string;
+  status: "pending" | "claimed" | "done" | "held";
+  doneAt?: string;
+  detail?: string;
+}
+const REGEN_BADGE: Record<string, { label: string; cls: string }> = {
+  pending: { label: "대기", cls: "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300" },
+  claimed: { label: "만드는 중", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  done: { label: "완료", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  held: { label: "보류", cls: "bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400" },
+};
+
 const ACTION_LABEL: Record<string, string> = {
   use: "이대로 사용",
   regen: "재생성 요청",
@@ -67,6 +85,7 @@ export default function VoiceHeldPage() {
   const [showDone, setShowDone] = useState(false);
   /** 본문이 정정되어 볼 필요가 없어진 보류 수 — 목록이 왜 줄었는지 알려준다 */
   const [stale, setStale] = useState(0);
+  const [regenReqs, setRegenReqs] = useState<RegenReq[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +95,8 @@ export default function VoiceHeldPage() {
       setItems(d.items || []);
       setActions(d.actions || {});
       setStale(d.stale || 0);
+      const r2 = await fetch("/api/voice-studio/verse-regen").catch(() => null);
+      if (r2?.ok) setRegenReqs(((await r2.json()).items || []) as RegenReq[]);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "불러오기 실패");
@@ -322,6 +343,38 @@ export default function VoiceHeldPage() {
             );
           })}
         </ul>
+      )}
+
+      {regenReqs.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">음원 다시 만들기 요청</h2>
+          <ul className="space-y-1.5">
+            {regenReqs.slice(0, 30).map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+              >
+                <span className="font-semibold text-gray-800 dark:text-gray-200">{r.ref}</span>
+                <span className="text-gray-400">{r.reason}</span>
+                <span className="ml-auto text-[11px] text-gray-400">
+                  {new Date(r.doneAt || r.at).toLocaleString("ko-KR", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${REGEN_BADGE[r.status]?.cls || ""}`}>
+                  {REGEN_BADGE[r.status]?.label || r.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-gray-400 leading-relaxed">
+            본문에서 절을 골라 ‘음원 다시 만들기’를 누르거나 새번역 본문을 고치면 생깁니다. 생성 PC 가 10분 안에
+            가져가 새로 만들어 기존 음원을 바꾸고, 받아쓰기에 떨어지면 위 보류 목록으로 옵니다.
+          </p>
+        </section>
       )}
 
       <section className="mt-6 text-[11px] text-gray-400 leading-relaxed border-t border-gray-200 dark:border-gray-700 pt-3">

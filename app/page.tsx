@@ -463,6 +463,15 @@ export default function Home() {
     });
   }, []);
 
+  // 선택 모두 해제 / 되돌리기 — 절 선택 팝업의 '해제', 복사·메모/수정 저장·음원 다시 만들기 요청 뒤 자동 해제
+  const handleClearSelection = useCallback(() => {
+    setSelectedVerses([]);
+    setIsAddingMore(false);
+  }, []);
+  const handleRestoreSelection = useCallback((verses: BibleVerse[]) => {
+    setSelectedVerses(verses);
+  }, []);
+
   const handleConfirm = useCallback(() => {
     setView("display");
     setIsAddingMore(false);
@@ -578,6 +587,8 @@ export default function Home() {
           onSubVersionChange={setSubVersion}
           onToggleVerse={handleToggleVerse}
           onConfirm={handleConfirm}
+          onClearSelection={handleClearSelection}
+          onRestoreSelection={handleRestoreSelection}
           isAddingMore={isAddingMore}
           bulkEditMode={bulkEditMode}
           onVerseUpdated={handleVerseUpdated}

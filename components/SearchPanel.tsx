@@ -73,6 +73,10 @@ interface SearchPanelProps {
   onSubVersionChange: (v: BibleVersion | "none") => void;
   onToggleVerse: (verse: BibleVerse) => void;
   onConfirm: () => void;
+  /** 선택 모두 해제 — 팝업 '해제', 복사·메모/수정 저장·음원 다시 만들기 요청 뒤 */
+  onClearSelection?: () => void;
+  /** '되돌리기' — 방금 해제한 선택을 그대로 되살린다 */
+  onRestoreSelection?: (verses: BibleVerse[]) => void;
   isAddingMore: boolean;
   bulkEditMode?: boolean;
   onVerseUpdated?: (updated: BibleVerse) => void;
@@ -135,6 +139,8 @@ export default function SearchPanel({
   onSubVersionChange: setSubVersion,
   onToggleVerse,
   onConfirm,
+  onClearSelection,
+  onRestoreSelection,
   isAddingMore,
   bulkEditMode = false,
   onVerseUpdated,
@@ -464,6 +470,7 @@ export default function SearchPanel({
     // 즉시 반영(visibility 포함) + 모달 닫기 → 재오픈 시 방금 고른 공개범위가 그대로 보임
     upsertLocalNote(v, { note, visibility: noteVisibility });
     setNoteEditorVerse(null);
+    onClearSelection?.(); // 저장했으면 선택을 푼다(취소하면 그대로)
     // 서버 저장 백그라운드
     saveVerseNote({
       book_code: v.book_code,
@@ -1010,6 +1017,45 @@ export default function SearchPanel({
   const [editError, setEditError] = useState<string | null>(null);
   const [comparisonVerses, setComparisonVerses] = useState<{ version: string; text: string }[]>([]);
   const [editToast, setEditToast] = useState<string | null>(null);
+  /** 짧은 알림 — 관리자 편집 토스트와 같은 자리를 쓴다 */
+  function flashToast(msg: string, ms = 1800) {
+    setEditToast(msg);
+    setTimeout(() => setEditToast(null), ms);
+  }
+  /** '해제' 뒤 5초 동안 '되돌리기' — 모아 둔 절을 실수로 다 풀었을 때 */
+  const [undoSel, setUndoSel] = useState<BibleVerse[] | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function clearSelectionWithUndo() {
+    if (selectedVerses.length === 0) return;
+    const prev = [...selectedVerses];
+    onClearSelection?.();
+    setUndoSel(prev);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = setTimeout(() => setUndoSel(null), 5000);
+  }
+  /** 관리자 — 고른 새번역 절의 영희 음원을 다시 만들어 달라고 요청한다(생성 PC 가 10분 안에 가져간다) */
+  async function requestAudioRegen() {
+    const targets = selectedVerses.filter((v) => v.version === "rnksv");
+    if (targets.length === 0) return;
+    try {
+      const res = await fetch("/api/voice-studio/verse-regen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          verses: targets.map((v) => ({ bookCode: v.book_code, chapter: v.chapter, verse: v.verse })),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        flashToast(j.error || `요청 실패 (${res.status})`, 2600);
+        return;
+      }
+      onClearSelection?.();
+      flashToast(`${j.created ?? targets.length}절 음원 다시 만들기를 요청했습니다`, 2600);
+    } catch {
+      flashToast("네트워크 오류", 2600);
+    }
+  }
 
   async function enterEdit(verse: BibleVerse) {
     setEditingVerseId(verse.id);
@@ -1088,8 +1134,12 @@ export default function SearchPanel({
       const where = updated.book_name && updated.chapter && updated.verse
         ? `${updated.book_name} ${updated.chapter}:${updated.verse}`
         : "구절";
-      setEditToast(`저장됨: ${where}`);
-      setTimeout(() => setEditToast(null), 1800);
+      // 새번역은 서버가 음원 다시 만들기를 자동으로 요청한다 — 본문이 바뀌면 음원 열쇠도 바뀐다
+      flashToast(
+        json.regenRequested ? `저장됨: ${where} · 음원 다시 만들기 요청됨` : `저장됨: ${where}`,
+        json.regenRequested ? 2600 : 1800,
+      );
+      onClearSelection?.(); // 저장했으면 선택을 푼다(취소하면 그대로)
       // 저장 완료된 verse가 현재 편집 중인 것과 같을 때만 닫기 (race 방지)
       if (editingVerseId === targetId) {
         cancelEdit();
@@ -1180,6 +1230,10 @@ export default function SearchPanel({
       await navigator.clipboard.writeText(fullText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+      // 복사가 끝났으면 선택을 푼다(색칠처럼) — 팝업이 사라지므로 알림으로 알린다
+      const n = selectedVerses.length;
+      onClearSelection?.();
+      flashToast(`${n}절 복사했습니다`);
     } catch {
       /* 클립보드 실패 시 silent */
     }
@@ -2867,6 +2921,19 @@ export default function SearchPanel({
                 수정
               </button>
             )}
+            {/* 음원 다시 만들기 (관리자 · 새번역) — 생성 PC 가 10분 안에 가져가 새로 만들어 기존 음원을 바꾼다 */}
+            {adminMode && selectedVerses.some((v) => v.version === "rnksv") && (
+              <button
+                onClick={requestAudioRegen}
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-amber-700 dark:text-amber-400 border-b border-[var(--line)] dark:border-gray-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 active:bg-amber-100 dark:active:bg-amber-900/40 transition-colors"
+                title="고른 절의 영희 음원을 다시 만듭니다"
+              >
+                <svg className="w-[17px] h-[17px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                음원 다시 만들기
+              </button>
+            )}
             {/* 하이라이트 색칩 4종 + 지우개 (로그인) */}
             {isLoggedIn && (
               <div className="flex items-center px-3 py-3 border-b border-[var(--line)] dark:border-gray-700">
@@ -2896,16 +2963,27 @@ export default function SearchPanel({
                 </button>
               </div>
             )}
-            {/* 선택 완료 (primary) */}
-            <button
-              onClick={onConfirm}
-              className="w-full flex items-center justify-center gap-2 px-2 py-3 bg-[var(--amber)] hover:bg-[var(--amber-deep)] text-white text-[13px] font-bold active:brightness-95 transition-colors"
-            >
-              선택 완료
-              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[11px] font-semibold bg-white/25 rounded-full">
-                {selectedVerses.length}
-              </span>
-            </button>
+            {/* 선택 N │ 해제 — 왼쪽은 고른 절 화면으로, 오른쪽은 한 번에 모두 해제(5초 동안 되돌리기) */}
+            <div className="flex bg-[var(--amber)] text-white text-[13px] font-bold">
+              <button
+                onClick={onConfirm}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-3 hover:bg-[var(--amber-deep)] active:brightness-95 transition-colors"
+                aria-label={`고른 ${selectedVerses.length}절 보기`}
+              >
+                선택
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[11px] font-semibold bg-white/25 rounded-full">
+                  {selectedVerses.length}
+                </span>
+              </button>
+              <span aria-hidden className="w-px my-2 bg-white/35" />
+              <button
+                onClick={clearSelectionWithUndo}
+                className="w-[58px] flex items-center justify-center px-2 py-3 hover:bg-[var(--amber-deep)] active:brightness-95 transition-colors"
+                aria-label="선택 모두 해제"
+              >
+                해제
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3040,6 +3118,23 @@ export default function SearchPanel({
             setShowSearchRow(false);
           }}
         />
+      )}
+
+      {/* '해제' 되돌리기 — 5초 */}
+      {undoSel && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 pl-3 pr-1.5 py-1.5 bg-gray-900/90 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg animate-[fadeInUp_0.2s_ease-out]">
+          <span className="whitespace-nowrap">{undoSel.length}절 선택을 해제했습니다</span>
+          <button
+            onClick={() => {
+              onRestoreSelection?.(undoSel);
+              setUndoSel(null);
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+            }}
+            className="px-2.5 py-1 rounded-md bg-white/15 hover:bg-white/25 font-semibold whitespace-nowrap"
+          >
+            되돌리기
+          </button>
+        </div>
       )}
 
       {/* 관리자 편집 결과 토스트 */}

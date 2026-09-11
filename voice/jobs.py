@@ -115,7 +115,8 @@ def _upload_ready(job):
         for it in chunk:
             try:
                 payload.append({"ref": it["ref"], "text": it["text"],
-                                "mp3": engine.encode_mp3(it["out"])})
+                                "mp3": engine.encode_mp3(it["out"]),
+                                "request_id": it.get("request_id")})   # 요청 절은 서버가 덮어쓴다
             except Exception as e:
                 it["upload_error"] = str(e)[:120]
         if not payload:
@@ -273,6 +274,86 @@ def _apply_regen_requests(job):
 
 ADMIN_SYNC_INTERVAL = 600      # 초
 _last_admin_sync = [0.0]
+# 앱의 '음원 다시 만들기' 요청을 가져와 작업을 걸었다 — 지금 작업은 이번 묶음이 끝나면 잠시 비켜 준다
+_preempt = [False]
+
+
+def _take_verse_regen(job):
+    """앱에서 관리자가 '음원 다시 만들기'를 요청한 절을 가져와 먼저 만든다(seq 0 작업).
+
+    지금 작업은 이번 묶음이 끝나면 잠시 '대기'로 비켜 주고(_preempt), 요청 작업이 끝나면 이어서 한다.
+    요청 절은 서버에 음원이 있어도 건너뛰지 않고(_skip_already_made), 올릴 때 요청 id 를 실어 기존 음원을
+    덮어쓴다. 본문은 지금 DB 에서 읽는다 — 본문을 고친 뒤의 요청이면 고친 본문으로 만든다. 반환: 건 절 수"""
+    key = job.get("upload_key")
+    try:
+        import server
+        if not key or not server.enabled():
+            return 0
+        reqs = server.claim_verse_regen(key)
+    except Exception:
+        return 0
+    if not reqs:
+        return 0
+    items, books = [], {}
+    for r in reqs:
+        ver, code = r.get("version") or "rnksv", r["bookCode"]
+        ch, v = int(r["chapter"]), int(r["verse"])
+        if (ver, code) not in books:
+            try:
+                books[(ver, code)] = {(c, vv): t for c, vv, t in engine.get_book_verses(ver, code)}
+            except Exception:
+                books[(ver, code)] = {}
+        text = books[(ver, code)].get((ch, v))
+        if not text:
+            try:
+                server.finish_verse_regen(r["id"], "held", "본문을 찾지 못함")
+            except Exception:
+                pass
+            continue
+        stem = f"{ver}_{code}_{ch:03d}"
+        out = engine.OUT / job["voice"] / stem / f"{stem}_{v:03d}.wav"
+        items.append({"key": f"{stem}_{v:03d}", "ref": r.get("ref") or f"{code} {ch}:{v}",
+                      "text": text, "out": str(out), "request_id": r["id"]})
+    if not items:
+        return 0
+    jid = new_job(job["voice"], f"음원 다시 만들기 요청 {time.strftime('%m-%d %H:%M')} ({len(items)}절)", items,
+                  temp=job.get("temp", 0.75), punct=job.get("punct", True), batch=job.get("batch", 4),
+                  retry_max=job.get("retry_max", 3), seq=0, upload_key=key)
+    nj = load(jid)
+    for it, src in zip(nj["items"], items):
+        it["status"], it["reason"], it["tries"] = "pending", "관리자 음원 다시 만들기 요청", 0
+        it["request_id"] = src["request_id"]
+    save(nj)
+    _preempt[0] = True
+    print(f"[음원 다시 만들기] {len(items)}절을 먼저 만듭니다 — "
+          + ", ".join(i["ref"] for i in items[:5]) + (" …" if len(items) > 5 else ""), flush=True)
+    return len(items)
+
+
+def _finish_verse_regen(job):
+    """요청 절의 결과를 서버에 알린다 — 올렸으면 'done', 보류됐으면 'held'(보류 절 검수로). 한 번만."""
+    todo = [i for i in job.get("items", []) if i.get("request_id") and not i.get("request_done")
+            and (i["status"] == "held" or (i["status"] == "ok" and i.get("uploaded")))]
+    if not todo:
+        return
+    try:
+        import server
+        for it in todo:
+            server.finish_verse_regen(it["request_id"], "done" if it["status"] == "ok" else "held",
+                                      it.get("reason") or "")
+            it["request_done"] = True
+    except Exception:
+        pass
+
+
+def _idle_take_verse_regen():
+    """할 작업이 없을 때도 앱의 요청은 받는다 — 가장 최근 작업의 성우·슬롯으로."""
+    if time.time() - _last_admin_sync[0] < ADMIN_SYNC_INTERVAL:
+        return
+    _last_admin_sync[0] = time.time()
+    ctx = next((j for j in list_jobs() if j.get("upload_key")), None)
+    if ctx:
+        _take_verse_regen(ctx)
 
 
 def _sync_admin_if_due(job):
@@ -285,6 +366,7 @@ def _sync_admin_if_due(job):
     if not key or time.time() - _last_admin_sync[0] < ADMIN_SYNC_INTERVAL:
         return
     _last_admin_sync[0] = time.time()
+    _take_verse_regen(job)          # 앱의 '음원 다시 만들기' 요청 — 있으면 지금 작업을 잠시 비켜 먼저 만든다
     tasks = _held_tasks()
     if not tasks:
         return
@@ -413,8 +495,8 @@ def _skip_already_made(job):
         return 0
     n = 0
     for it in job["items"]:
-        if it["status"] != "pending":
-            continue
+        if it["status"] != "pending" or it.get("request_id"):
+            continue                        # 음원 다시 만들기 요청 절은 서버에 있어도 새로 만든다
         if engine.text_hash(it["text"]) in have:
             it["status"] = "ok"
             it["uploaded"] = True          # 서버에 이미 있으니 올릴 것도 없다
@@ -607,12 +689,19 @@ def _process(job):
 
             _judge(job, it, p, w, sr, ok)
         _upload_ready(job)
+        _finish_verse_regen(job)
         _report_held_if_due(job)
         _sync_admin_if_due(job)
         save(job)
+        if _preempt[0] and job.get("seq", 9999) > 0:
+            # 앱의 '음원 다시 만들기' 요청 작업(seq 0)을 먼저 — 이 작업은 '대기'로 비켜 줬다가 곧 이어서 한다
+            job["status"] = "queued"
+            save(job)
+            return
 
     if not _stop.is_set():
         _upload_ready(job)          # 마지막 배치까지 확실히 올리고 끝낸다
+        _finish_verse_regen(job)
         # 관리자가 이미 재생성을 요청해 둔 절이 있으면 지금 처리하고 끝낸다
         if _apply_regen_requests(job):
             save(job)
@@ -639,8 +728,11 @@ def _loop():
         if not nxt:
             _cur["job"] = None
             _cur["note"] = ""
+            _idle_take_verse_regen()
             time.sleep(1.5)
             continue
+        if nxt.get("seq", 9999) <= 0:
+            _preempt[0] = False             # 먼저 할 작업(요청)을 집었다
         _cur["job"] = nxt["id"]
         _process(nxt)
     _cur["job"] = None

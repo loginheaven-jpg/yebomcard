@@ -56,6 +56,7 @@
 - **비용 절감(공유 캐시)**: 합성은 항상 **1.0x** 로만 하고 재생 속도는 클라이언트 `playbackRate`(녹음과 동일). `app/api/tts` 가 합성 전 **R2 공유 캐시**(`lib/tts/r2Cache.ts`, 키 `tts/v1/{ko|en}/{voiceKey}/{sha1(본문)}.mp3`) 조회→hit 시 서빙(`X-TTS-Cache: hit`). canonical(요청 성우 1순위 산출물: 영문/한국어 Chirp, 또는 EL/Supertone 성공)만 업로드 → 절·성우당 **전역 1회만 합성**(교인 N명=1회). 폴백 산출물은 캐시 안 함. 본문 변경은 sha1 로 자동 무효화, 엔진 재매핑은 `TTS_CACHE_VERSION` bump.
 - 클라 캐시 키: `version-book-ch-vs-voice-accent` (speed 제외 — playbackRate). 한국어는 voice 슬롯에 koreanVoice. 엔진 재매핑 시 `ttsCache.ts` `DB_VERSION` bump. 다음 절 프리페치(`prefetchIndex`)로 절 사이 무음 제거.
   - **사전 생성 성우(영희 f4)의 대신 읽기 음원은 기기에 저장하지 않는다**(`X-TTS-Voice` 가 `voice:f4` 가 아니면 세션 메모리만, 이미 저장된 것도 무시). 캐시 키에 본문이 없어, 저장하면 영희 음원이 생긴 뒤에도 김단아가 계속 나온다
+- **절 음원 다시 만들기(관리자)**: 절 선택 팝업 '음원 다시 만들기' 또는 새번역 본문 수정 저장 → `voice-studio/verse-regen` 요청 → 생성 PC 가 10분 안에 가져가 먼저 만들고 기존 음원을 덮어씀(`lib/voiceStudio/verseRegen.ts`). 결과는 관리자 '보류 절 검수' 아래 목록
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
 ### 데이터 (Supabase)

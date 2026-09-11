@@ -121,6 +121,8 @@ def upload_verses(voice_key, items, replace=False, timeout=180):
                 "ref": it["ref"],
                 "text": it["text"],
                 "mp3Base64": base64.b64encode(it["mp3"]).decode("ascii"),
+                # 음원 다시 만들기 요청을 이 PC 가 맡은 절 — 서버가 기존 파일을 덮어쓴다
+                **({"requestId": it["request_id"]} if it.get("request_id") else {}),
             }
             for it in items
         ],
@@ -229,6 +231,32 @@ def held_tasks(timeout=60):
 def regen_requests(timeout=60):
     """관리자가 '재생성 요청'을 누른 절 목록. [{'id','ref','text'}]"""
     return held_tasks(timeout)["regenerate"]
+
+
+def claim_verse_regen(voice_key, timeout=60):
+    """앱에서 관리자가 '음원 다시 만들기'를 요청한 절을 이 PC 가 맡는다(먼저 가져가는 PC 가 맡음).
+    [{'id','version','bookCode','chapter','verse','ref'}]"""
+    if not enabled():
+        return []
+    r = requests.post(f"{config()['base']}/api/voice-studio/verse-regen/claim",
+                      headers={**_headers(), "Content-Type": "application/json"},
+                      data=json.dumps({"voiceKey": voice_key}), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json().get("claimed", [])
+
+
+def finish_verse_regen(req_id, status, detail="", timeout=60):
+    """맡은 요청의 결과 — status 'done'(새로 만들어 올림) 또는 'held'(보류 → 보류 절 검수)."""
+    if not enabled():
+        return None
+    r = requests.post(f"{config()['base']}/api/voice-studio/verse-regen/done",
+                      headers={**_headers(), "Content-Type": "application/json"},
+                      data=json.dumps({"id": req_id, "status": status, "detail": (detail or "")[:200]}),
+                      timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
 
 
 def cache_index(voice_key, legacy=False, timeout=120):
