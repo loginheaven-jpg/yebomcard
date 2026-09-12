@@ -333,6 +333,12 @@ interface TtsContextValue {
   pause: () => void;
   resume: () => void;
   jumpTo: (index: number) => void;
+  /** 재생 중인 오디오 엘리먼트를 구독한다(진행도·탐색용). 해지 함수를 돌려준다 */
+  subscribeAudio: (cb: (audio: HTMLAudioElement | null) => void) => () => void;
+  /** 본문 화면이 인라인 플레이어를 그리고 있는가 — 떠 있는 미니 플레이어가 물러날 조건 */
+  inlinePlayerActive: boolean;
+  /** 인라인 플레이어가 자기 존재를 알린다. 해지 함수를 돌려준다 */
+  registerInlinePlayer: () => () => void;
   setVoice: (v: TTSVoice) => void;
   setKoreanVoice: (v: KoreanVoice) => void;
   /** 개역·통독 성우. 녹음 ↔ AI 가 바뀌면 지금 장을 새 방식으로 처음부터 다시 읽는다 */
@@ -463,6 +469,31 @@ export function TtsProvider({ children }: { children: ReactNode }) {
   const loadNextChapterRef = useRef<LoadNextChapterFn | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /**
+   * 재생 중인 오디오 엘리먼트가 바뀔 때 알린다 — **진행도를 컨텍스트 값으로 흘리지 않기 위해서다.**
+   * timeupdate 는 초당 4회 넘게 오는데 그것을 컨텍스트에 담으면 이 컨텍스트를 쓰는 본문 화면(수백 절)
+   * 까지 매번 다시 그려진다. 플레이어만 여기 구독해 자기 안에서 시간을 갱신하면 다시 그리는 범위가
+   * 플레이어 한 줄로 끝난다. 탐색(seek)도 구독으로 받은 엘리먼트에 직접 한다.
+   */
+  const audioSubsRef = useRef(new Set<(a: HTMLAudioElement | null) => void>());
+  const setAudioEl = useCallback((a: HTMLAudioElement | null) => {
+    audioRef.current = a;
+    audioSubsRef.current.forEach((cb) => cb(a));
+  }, []);
+  const subscribeAudio = useCallback((cb: (a: HTMLAudioElement | null) => void) => {
+    audioSubsRef.current.add(cb);
+    cb(audioRef.current);          // 구독 즉시 지금 상태를 준다
+    return () => {
+      audioSubsRef.current.delete(cb);
+    };
+  }, []);
+
+  /** 본문 화면이 플레이어를 직접 그리고 있으면 떠 있는 미니 플레이어는 물러난다(둘이 겹치지 않게) */
+  const [inlineHosts, setInlineHosts] = useState(0);
+  const registerInlinePlayer = useCallback(() => {
+    setInlineHosts((n) => n + 1);
+    return () => setInlineHosts((n) => Math.max(0, n - 1));
+  }, []);
   const objectUrlRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const prefetchAbortRef = useRef<AbortController | null>(null);
@@ -576,7 +607,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       audioRef.current.pause();
       audioRef.current.onended = null;
       audioRef.current.onerror = null;
-      audioRef.current = null;
+      setAudioEl(null);
     }
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
@@ -587,7 +618,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       abortRef.current = null;
     }
     webSpeechRef.current?.stop();
-  }, []);
+  }, [setAudioEl]);
 
   /**
    * 절 하나가 끝나면 쉼을 주고 다음 절로 넘어간다.
@@ -777,7 +808,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         setIsWebSpeechFallback(false);
         const audio = new Audio(track.mp3Url);
         audio.playbackRate = speedRef.current;
-        audioRef.current = audio;
+        setAudioEl(audio);
         audio.onended = () => {
           if (playGenRef.current !== gen) return;
           if (statusRef.current !== "speaking") return;
@@ -913,7 +944,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       objectUrlRef.current = url;
       const audio = new Audio(url);
       audio.playbackRate = speedRef.current; // 합성음은 1.0x 로 만들어졌으므로 재생 속도는 여기서
-      audioRef.current = audio;
+      setAudioEl(audio);
       audio.onended = () => {
         if (playGenRef.current !== gen) return;
         if (statusRef.current !== "speaking") return;
@@ -939,7 +970,7 @@ export function TtsProvider({ children }: { children: ReactNode }) {
         statusRef.current = "idle";
       }
     },
-    [cleanupAudio, prefetchIndex, advanceAfterGap],
+    [cleanupAudio, prefetchIndex, advanceAfterGap, setAudioEl],
   );
 
   useEffect(() => {
@@ -1096,6 +1127,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setReadVerseNumber,
       setVerseGap,
       setEnglishAccent,
+      subscribeAudio,
+      inlinePlayerActive: inlineHosts > 0,
+      registerInlinePlayer,
     }),
     [
       status,
@@ -1128,6 +1162,9 @@ export function TtsProvider({ children }: { children: ReactNode }) {
       setReadVerseNumber,
       setVerseGap,
       setEnglishAccent,
+      subscribeAudio,
+      inlineHosts,
+      registerInlinePlayer,
     ],
   );
 

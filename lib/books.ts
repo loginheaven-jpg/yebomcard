@@ -99,6 +99,21 @@ export const CHAPTER_COUNTS: Record<string, number> = {
 
 export const TOTAL_CHAPTERS = 1189;
 
+/**
+ * 본문 화면 상단 한 줄에 쓸 책 이름.
+ *
+ * 한 줄에 제목·역본 칩 2개·읽기·전체화면·더보기를 넣으면 390px 화면에서 제목에 약 90px만 남는다.
+ * 15.5px 글씨로 세 글자(47px) + 장 번호가 들어가는 폭이다. 그래서 **세 글자까지는 이름 그대로**
+ * (창세기·신명기·시편), **네 글자 이상은 약어**(데살로니가전서 → 살전, 마태복음 → 마)로 쓴다.
+ * 66권 중 33권이 약어가 된다. 약어는 한국 교회가 성경 인용에 쓰는 그 표기라 낯설지 않다.
+ * 전체 이름은 목차 화면과 책갈피에서 그대로 보인다.
+ */
+export function bookBarName(code: string): string {
+  const b = getBookByCode(code);
+  if (!b) return code;
+  return b.nameKr.length <= 3 ? b.nameKr : b.abbr;
+}
+
 export function getBookByCode(code: string): BookInfo | undefined {
   return BOOKS.find((b) => b.code === code);
 }

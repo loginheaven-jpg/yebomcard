@@ -6,6 +6,9 @@
  * 소진/장애 성우는 disable + 뱃지.
  * 자동다음장/절번호/영문 발음 등 나머지 설정은 설정 시트로 이관됨.
  * 기본 위치: 화면 우상단(읽기 버튼 근처). dockBottom=true(전체화면): footer 위 하단 중앙.
+ * inline=true(본문 화면): 상단 바 아래 한 줄. 진행 막대가 붙고 ✕(종료) 자리가 접기(▾)가 된다 —
+ *   본문 화면에서 읽기를 끝내는 길은 상단 정지 아이콘 하나뿐이다. 접어도 소리는 계속 난다.
+ *   인라인이 떠 있는 동안 떠다니는 미니 플레이어는 스스로 물러난다(둘이 겹치지 않게).
  * status === "idle" 이면 렌더하지 않음.
  */
 
@@ -24,11 +27,70 @@ import {
 } from "@/contexts/TtsContext";
 import { isEnglishVersion } from "@/lib/versions";
 
-export default function TTSMiniPlayer({ dockBottom = false }: { dockBottom?: boolean }) {
+/** 0:42 꼴 — 진행 시간은 장 통째 녹음일 때만 쓴다 */
+function mmss(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return "0:00";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+export default function TTSMiniPlayer({
+  dockBottom = false,
+  inline = false,
+  onCollapse,
+}: {
+  dockBottom?: boolean;
+  /** 본문 화면 상단 바 아래 한 줄 변형 */
+  inline?: boolean;
+  /** 인라인일 때 접기 버튼이 부를 함수 */
+  onCollapse?: () => void;
+}) {
   const tts = useTts();
   const [speedOpen, setSpeedOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // 인라인이 떠 있으면 떠다니는 쪽은 물러난다
+  const { registerInlinePlayer, subscribeAudio } = tts;
+  useEffect(() => (inline ? registerInlinePlayer() : undefined), [inline, registerInlinePlayer]);
+
+  // 진행도는 컨텍스트를 거치지 않는다 — 이 컴포넌트만 오디오를 구독해 다시 그린다(본문은 건드리지 않는다)
+  // 그리기용 상태와 조작용 ref 를 함께 둔다 — 탐색은 엘리먼트를 직접 고치므로 상태로 만지면 안 된다
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const [pos, setPos] = useState(0);
+  const [dur, setDur] = useState(0);
+  useEffect(
+    () =>
+      inline
+        ? subscribeAudio((a) => {
+            audioElRef.current = a;
+            setAudioEl(a);
+            if (!a) {
+              // 절이 끝나 엘리먼트가 걷힌 순간 — 표시도 함께 0 으로(effect 안에서 상태를 만지지 않는다)
+              setPos(0);
+              setDur(0);
+            }
+          })
+        : undefined,
+    [inline, subscribeAudio],
+  );
+  useEffect(() => {
+    if (!audioEl) return;
+    const onTime = () => setPos(audioEl.currentTime || 0);
+    const onMeta = () => setDur(Number.isFinite(audioEl.duration) ? audioEl.duration : 0);
+    onTime();
+    onMeta();
+    audioEl.addEventListener("timeupdate", onTime);
+    audioEl.addEventListener("loadedmetadata", onMeta);
+    audioEl.addEventListener("durationchange", onMeta);
+    return () => {
+      audioEl.removeEventListener("timeupdate", onTime);
+      audioEl.removeEventListener("loadedmetadata", onMeta);
+      audioEl.removeEventListener("durationchange", onMeta);
+    };
+  }, [audioEl]);
 
   const isEng = useMemo(
     () => isEnglishVersion(tts.currentTrack?.version ?? ""),
@@ -48,6 +110,7 @@ export default function TTSMiniPlayer({ dockBottom = false }: { dockBottom?: boo
   }, [speedOpen, voiceOpen]);
 
   if (tts.status === "idle") return null;
+  if (!inline && tts.inlinePlayerActive) return null;
 
   const isPlaying = tts.status === "speaking";
   const isLoading = tts.status === "loading";
@@ -83,19 +146,55 @@ export default function TTSMiniPlayer({ dockBottom = false }: { dockBottom?: boo
 
   const popoverPos = dockBottom ? "bottom-full mb-2" : "top-full mt-2";
 
+  // 장 통째 녹음(개역·통독)은 시간으로, 절 단위 낭독(새번역 등)은 절로 센다 — 단위가 다르다.
+  // 절 모드에 시간을 보이면 '한 절 안의 시간'이라 엉뚱하다.
+  const isChapterAudio = !!tts.currentTrack?.mp3Url;
+  const verseNo = tts.currentTrack?.verse ?? 0;
+  const progressPct = isChapterAudio
+    ? dur > 0
+      ? Math.min(100, (pos / dur) * 100)
+      : 0
+    : tts.queueLength > 0
+      ? Math.min(100, ((tts.currentIndex + 1) / tts.queueLength) * 100)
+      : 0;
+  const seek = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
+    if (isChapterAudio) {
+      const el = audioElRef.current;
+      if (el && dur > 0) el.currentTime = ratio * dur;
+    } else if (tts.queueLength > 0) {
+      tts.jumpTo(Math.round(ratio * (tts.queueLength - 1)));
+    }
+  };
+
   return (
     <div
       ref={rootRef}
       role="region"
       aria-label="TTS 미니 플레이어"
-      className={dockBottom ? "fixed left-1/2 -translate-x-1/2 z-50" : "fixed z-50"}
+      className={
+        inline
+          ? "w-full mb-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 pt-1.5 pb-1"
+          : dockBottom
+            ? "fixed left-1/2 -translate-x-1/2 z-50"
+            : "fixed z-50"
+      }
       style={
-        dockBottom
-          ? { bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)" }
-          : { top: "calc(env(safe-area-inset-top, 0px) + 10px)", right: "12px" }
+        inline
+          ? undefined
+          : dockBottom
+            ? { bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)" }
+            : { top: "calc(env(safe-area-inset-top, 0px) + 10px)", right: "12px" }
       }
     >
-      <div className="rounded-full border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur px-2 py-1.5 flex items-center gap-1.5">
+      <div
+        className={
+          inline
+            ? "flex items-center gap-1.5"
+            : "rounded-full border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur px-2 py-1.5 flex items-center gap-1.5"
+        }
+      >
         {/* 재생/일시정지 */}
         <button
           type="button"
@@ -122,6 +221,25 @@ export default function TTSMiniPlayer({ dockBottom = false }: { dockBottom?: boo
             </svg>
           )}
         </button>
+
+        {inline && (
+          <div className="min-w-0 flex-1 text-[13.5px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tabular-nums whitespace-nowrap">
+            {isChapterAudio ? (
+              <>
+                {mmss(pos)}
+                <span className="mx-1 font-normal text-gray-400 dark:text-gray-500">/</span>
+                <span className="font-medium text-gray-400 dark:text-gray-500">{mmss(dur)}</span>
+              </>
+            ) : verseNo > 0 ? (
+              <>
+                {verseNo}
+                <span className="ml-0.5 font-medium text-gray-400 dark:text-gray-500">절</span>
+              </>
+            ) : (
+              <span className="font-medium text-gray-400 dark:text-gray-500">시작</span>
+            )}
+          </div>
+        )}
 
         {/* 속도 */}
         <div className="relative shrink-0">
@@ -220,19 +338,50 @@ export default function TTSMiniPlayer({ dockBottom = false }: { dockBottom?: boo
           </div>
         )}
 
-        {/* 종료 */}
+        {inline ? (
+          /* 줄만 접는다 — 소리는 계속 난다. 끝내는 것은 상단 정지 아이콘 하나뿐 */
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="플레이어 접기"
+            title="플레이어 접기"
+            className="shrink-0 w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+              <path d="M3 5 L7 9 L11 5" stroke="currentColor" strokeWidth="1.9" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        ) : (
+          /* 종료 */
+          <button
+            type="button"
+            onClick={() => tts.stop()}
+            aria-label="듣기 종료"
+            title="듣기 종료"
+            className="shrink-0 w-7 h-7 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center justify-center"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+              <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {inline && (
         <button
           type="button"
-          onClick={() => tts.stop()}
-          aria-label="듣기 종료"
-          title="듣기 종료"
-          className="shrink-0 w-7 h-7 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center justify-center"
+          onClick={seek}
+          aria-label={isChapterAudio ? "재생 위치 이동" : "절 이동"}
+          className="mt-1 w-full h-3 flex items-center"
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
+          <span className="relative block w-full h-1 rounded-full bg-gray-200 dark:bg-gray-700">
+            <span
+              className="absolute left-0 top-0 bottom-0 rounded-full bg-[var(--amber)] transition-[width] duration-150"
+              style={{ width: `${progressPct}%` }}
+            />
+          </span>
         </button>
-      </div>
+      )}
     </div>
   );
 }

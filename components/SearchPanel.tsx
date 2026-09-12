@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { BOOKS, CHAPTER_COUNTS, OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName } from "@/lib/books";
+import { BOOKS, CHAPTER_COUNTS, OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName, bookBarName } from "@/lib/books";
 import { parseReference } from "@/lib/parseReference";
 import { stripNotes, type BibleVerse, type BibleVersion, type SearchMode, type AIRecommendation } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
@@ -37,6 +37,7 @@ import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
 import HomeBlankContent from "./HomeBlankContent";
 import TTSButton from "./TTSButton";
+import TTSMiniPlayer from "./TTSMiniPlayer";
 import { useTts, type TtsTrack } from "@/contexts/TtsContext";
 import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
@@ -842,15 +843,30 @@ export default function SearchPanel({
   const tts = useTts();
   // 재생 중 미니플레이어(하단 고정 오버레이)가 본문 끝줄을 가리지 않도록 스크롤 영역 하단 예약을 늘림
   const playerActive = tts.status !== "idle";
+  // 플레이어 줄은 접을 수 있다 — 접어도 소리는 계속 난다(끝내는 것은 상단 정지 아이콘 하나뿐).
+  // 읽기가 끝나면 다음 재생을 위해 펼친 상태로 돌려놓는다.
+  const [playerOpen, setPlayerOpen] = useState(true);
+  useEffect(() => {
+    if (!playerActive) setPlayerOpen(true);
+  }, [playerActive]);
+  /** 상단 ⋮ 메뉴 — 지금은 글자 크기. 앞으로 상단에서 내려올 기능이 모이는 자리 */
+  const [moreOpen, setMoreOpen] = useState(false);
   // 하단 탭바(높이 약 56px)가 감춰지면 그만큼 본문 영역을 아래로 확장.
   // 컨테이너 폭은 그대로라 글자가 다시 흐르지 않고, 아래쪽이 더 보일 뿐임.
+  // 상단이 두 줄(약 99px)에서 한 줄(바 44 + 여백 8 = 52px)로 줄었다 — 그만큼 본문에 돌려준다.
+  // 재생 중에는 플레이어 줄(약 66px)이 붙고, 접으면 손잡이(28px)만 남아 본문이 다시 올라온다.
+  // 이 상수를 함께 고치지 않으면 줄을 줄여도 본문 칸은 넓어지지 않는다.
   const browseMaxHClass = playerActive
-    ? (tabBarHidden
-        ? "max-h-[calc(100dvh-216px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-166px)]"
-        : "max-h-[calc(100dvh-272px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-222px)]")
+    ? playerOpen
+      ? (tabBarHidden
+          ? "max-h-[calc(100dvh-170px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-113px)]"
+          : "max-h-[calc(100dvh-226px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-169px)]")
+      : (tabBarHidden
+          ? "max-h-[calc(100dvh-132px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-75px)]"
+          : "max-h-[calc(100dvh-188px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-131px)]")
     : (tabBarHidden
-        ? "max-h-[calc(100dvh-144px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-94px)]"
-        : "max-h-[calc(100dvh-200px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-150px)]");
+        ? "max-h-[calc(100dvh-104px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-47px)]"
+        : "max-h-[calc(100dvh-160px-env(safe-area-inset-bottom,0px))] lg:max-h-[calc(100dvh-103px)]");
   const browseScrollMaxH = `${browseMaxHClass} transition-[max-height] duration-200 ease-out`;
   const ttsActiveOnThisChapter =
     tts.status !== "idle" &&
@@ -2132,8 +2148,10 @@ export default function SearchPanel({
           onClose={() => setShowFullscreen(false)}
         />
       )}
-      {/* Header — 3열 grid: 좌(브랜드) · 중앙(번역본 셀렉터들) · 우(QuickNavFab 자리 비움) */}
-      {!isAddingMore && (
+      {/* Header — 3열 grid: 좌(브랜드) · 중앙(번역본 셀렉터들) · 우(글자 크기).
+          **읽기 화면에서는 그리지 않는다**(2026-09-12) — 그 화면은 아래의 한 줄 상단 바가 대신한다.
+          이 줄은 검색·목차 화면과 공용이므로 그 화면들에서는 그대로 남는다. */}
+      {!isAddingMore && !isReadingView && (
         <div className="grid grid-cols-3 items-start mb-3 gap-2">
           <div className="flex flex-col items-center justify-self-start shrink-0 leading-none">
             <div className="text-gray-900 dark:text-gray-100">
@@ -2684,73 +2702,171 @@ export default function SearchPanel({
               onTouchEnd={handleVerseSwipeEnd}
               onTouchCancel={() => { cancelLongPress(); swipeStartRef.current = null; }}
             >
-              {/* 헤더: ← 목차로 | ◀ 책이름 장/총장 ▶ | 가━●━가 */}
-              <div className="flex items-center justify-between mb-3">
-                {/* 좌: 목차로 */}
+              {/* 상단 한 줄 (2026-09-12 개편) — 제목 · 역본 · 읽기 · 전체화면 · ⋮
+                  전에는 두 줄이었다. 위 줄은 브랜드+역본+글자크기(검색·목차와 공용), 아래 줄은 목차로+장 이동+읽기.
+                  본문이 그만큼 좁았고, 재생을 시작하면 떠 있는 플레이어가 위를 덮어 역본·글자크기를 숨겨야 했다.
+                  장 이동 화살표는 뺐다(지휘부 결정) — 390px 한 줄에 제목까지 들어갈 폭이 없었다.
+                  장 이동은 본문 스와이프·제목 탭(목차)·하단 목차 탭·PC 좌우 여백 클릭으로 한다. */}
+              <div className="flex items-center gap-1 mb-2">
+                {/* 제목 — 누르면 장 목록으로. 두 줄로 세워 44px 안에 들어간다.
+                    책 이름은 세 글자까지 그대로, 길면 약어(bookBarName) */}
                 <button
+                  type="button"
                   onClick={() => setBrowseStep("chapter")}
-                  className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 transition-colors shrink-0"
+                  title="장 선택으로"
+                  className="flex-1 min-w-0 flex flex-col items-start justify-center px-1 py-1 rounded-lg active:bg-gray-100 dark:active:bg-gray-800 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  목차로
+                  <span className="flex items-baseline gap-1 max-w-full">
+                    <span className="truncate text-[15.5px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
+                      {bookBarName(bookCode)}
+                    </span>
+                    <span className="shrink-0 text-[19px] font-bold leading-none text-gray-900 dark:text-gray-100">
+                      {chapter}
+                    </span>
+                  </span>
+                  <span className="text-[10.5px] leading-tight text-gray-400 dark:text-gray-500">
+                    {chapters.length}장
+                  </span>
                 </button>
 
-                {/* 중앙: ◀ 책이름 장 ▶ */}
-                <div className="flex items-center gap-0">
-                  <button
-                    onClick={() => goChapter(-1)}
-                    disabled={!canPrevChapter}
-                    className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
-                  >
-                    <svg className="w-5 h-7 text-gray-400" viewBox="0 0 18 28" fill="currentColor">
-                      <path d="M15 4 L4 14 L15 24 Z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBrowseStep("chapter")}
-                    className="text-sm text-gray-600 dark:text-gray-400 mx-1 hover:text-gray-800 dark:hover:text-gray-200 transition-colors cursor-pointer"
-                    title="장 선택으로"
-                  >
-                    {getBookByCode(bookCode)?.nameKr}{" "}
-                    <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{chapter}</span>
-                    <span className="text-gray-400">/{chapters.length}장</span>
-                  </button>
-                  <button
-                    onClick={() => goChapter(1)}
-                    disabled={!canNextChapter}
-                    className="px-1 py-1 disabled:opacity-20 disabled:cursor-not-allowed transition-opacity"
-                  >
-                    <svg className="w-5 h-7 text-gray-400" viewBox="0 0 18 28" fill="currentColor">
-                      <path d="M3 4 L14 14 L3 24 Z" />
-                    </svg>
-                  </button>
-                </div>
+                {/* 역본 — 네이티브 select 를 칩 모양으로만 바꿨다.
+                    모바일에서 누르면 OS 선택기가 뜨고 전체 이름·접근성·다크모드가 따라온다 */}
+                <select
+                  value={mainVersion}
+                  onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
+                  aria-label="주 역본"
+                  className="shrink-0 text-[11.5px] font-bold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
+                  style={{
+                    height: "36px",
+                    width: "64px",
+                    paddingLeft: "8px",
+                    paddingRight: "16px",
+                    borderRadius: "8px",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 6px center",
+                    backgroundSize: "8px",
+                  }}
+                >
+                  {versionOptions.map((v) => (
+                    <option key={v} value={v}>{getVersionLabel(v)}</option>
+                  ))}
+                </select>
+                <select
+                  value={subVersion}
+                  onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
+                  aria-label="대역(대조할 역본)"
+                  className={`shrink-0 text-[11.5px] font-bold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
+                    subVersion === "none"
+                      ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
+                      : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+                  }`}
+                  style={{
+                    height: "36px",
+                    width: "64px",
+                    paddingLeft: "8px",
+                    paddingRight: "16px",
+                    borderRadius: "8px",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "right 6px center",
+                    backgroundSize: "8px",
+                  }}
+                >
+                  <option value="none">대역</option>
+                  {subVersionOptions.map((v) => (
+                    <option key={v} value={v}>{getVersionLabel(v)}</option>
+                  ))}
+                </select>
 
-                {/* 우: 읽기(TTS) + 전체화면(1절씩) 버튼 */}
-                <div className="flex items-center shrink-0 gap-1.5">
-                  <TTSButton
-                    isPlaying={ttsActiveOnThisChapter}
-                    isLoading={ttsActiveOnThisChapter && tts.status === "loading"}
-                    disabled={browseVerses.length === 0}
-                    onClick={handleTtsToggle}
-                  />
+                {/* 읽기 — 읽기를 끝내는 유일한 버튼이다(플레이어의 접기는 소리를 끊지 않는다) */}
+                <TTSButton
+                  variant="icon"
+                  isPlaying={ttsActiveOnThisChapter}
+                  isLoading={ttsActiveOnThisChapter && tts.status === "loading"}
+                  disabled={browseVerses.length === 0}
+                  onClick={handleTtsToggle}
+                />
+
+                {/* 전체화면 (1절씩 보기) */}
+                <button
+                  type="button"
+                  onClick={() => setShowFullscreen(true)}
+                  disabled={browseVerses.length === 0}
+                  aria-label="전체화면 (1절씩 보기)"
+                  title="전체화면 (1절씩 보기)"
+                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                </button>
+
+                {/* ⋮ — 지금은 글자 크기만. 앞으로 상단에서 내려올 기능이 모이는 자리 */}
+                <div className="relative shrink-0">
                   <button
                     type="button"
-                    onClick={() => setShowFullscreen(true)}
-                    disabled={browseVerses.length === 0}
-                    aria-label="전체화면 (1절씩 보기)"
-                    title="전체화면 (1절씩 보기)"
-                    className="inline-flex items-center px-2.5 py-1.5 rounded-lg shadow-sm dark:shadow-none transition-all border text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    aria-label="더 보기"
+                    aria-expanded={moreOpen}
+                    title="더 보기"
+                    className="w-8 h-11 flex items-center justify-center rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <circle cx="12" cy="5" r="1.7" />
+                      <circle cx="12" cy="12" r="1.7" />
+                      <circle cx="12" cy="19" r="1.7" />
                     </svg>
                   </button>
+                  {moreOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[59]" onClick={() => setMoreOpen(false)} aria-hidden />
+                      <div className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="pl-1 text-xs font-semibold text-gray-500 dark:text-gray-400">글자 크기</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setFontSize(Math.max(16, fontSize - 2))}
+                              aria-label="글자 작게"
+                              className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                            >
+                              A−
+                            </button>
+                            <span className="min-w-[30px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
+                            <button
+                              type="button"
+                              onClick={() => setFontSize(Math.min(60, fontSize + 2))}
+                              aria-label="글자 크게"
+                              className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                            >
+                              A+
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+
+              {/* 플레이어 — 재생 중에만 둘째 줄로. 접으면 하단 탭바와 같은 손잡이(36×4)만 남고
+                  본문이 그만큼 올라온다. 접어도 소리는 계속 난다. 전체화면일 때는 그쪽 도킹 플레이어에 맡긴다. */}
+              {playerActive && !showFullscreen && (
+                playerOpen ? (
+                  <TTSMiniPlayer inline onCollapse={() => setPlayerOpen(false)} />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPlayerOpen(true)}
+                    aria-label="플레이어 펼치기"
+                    title="플레이어 펼치기"
+                    className="w-full mb-2 h-5 flex items-start justify-center bg-transparent border-0 p-0"
+                  >
+                    <span aria-hidden className="mt-1 block rounded-full bg-gray-400/60 dark:bg-gray-500/60" style={{ width: 36, height: 4 }} />
+                  </button>
+                )
+              )}
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 */
