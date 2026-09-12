@@ -548,6 +548,35 @@ def qc_threshold(n_chars, base=0.85):
     return base
 
 
+# 연속으로 이만큼 빠지면 불합격. 일치율(%)만 보면 **긴 절에서 한 문장이 통째로 빠져도 몇 %밖에 안 깎여**
+# 통과한다(창세기 1:16 '또 별들도 만드셨다' 가 빠졌는데 90%로 합격, 두 번이나). 지휘부 지시로 절대 기준을 넣는다.
+#
+# '합계' 가 아니라 '연속' 으로 세는 이유 — 실측(2026-09-12, 새 방식 5,553절):
+#   합계 8자 이상 159절(2.9%) · 연속 8자 이상 55절(1.0%)
+# 받아쓰기는 늘 한두 글자씩 틀리는데(태초에→대초의, 둘→돌) 긴 절에서 그것이 쌓여 합계를 부풀린다.
+# 문장이 통째로 빠지면 한 자리에서 연달아 빠지므로 '연속' 이라야 실제 누락만 잡힌다.
+#
+# 8자인 이유 — 확인된 누락 중 가장 짧은 것이 8자('또 별들도 만드셨다')다. 10자로 하면 그 절이 다시 빠져나간다.
+GAP_MAX = 8
+
+
+def text_gap(src_norm, hyp_norm):
+    """본문에서 받아쓰기와 못 맞춘 '연속' 구간 중 가장 긴 것 — (길이, 그 글자)"""
+    import difflib
+    sm = difflib.SequenceMatcher(None, src_norm, hyp_norm)
+    gaps, pos = [], 0
+    for b in sm.get_matching_blocks():
+        if b.a > pos:
+            gaps.append((pos, b.a))
+        pos = b.a + b.size
+    if pos < len(src_norm):
+        gaps.append((pos, len(src_norm)))
+    if not gaps:
+        return 0, ""
+    s, e = max(gaps, key=lambda g: g[1] - g[0])
+    return e - s, src_norm[s:e]
+
+
 def qc(wav_path, src_text, min_ratio=0.85):
     """생성음을 ASR 로 되받아 원문과 대조. (ok, ratio, reason, asr_text)"""
     import difflib
@@ -568,13 +597,19 @@ def qc(wav_path, src_text, min_ratio=0.85):
     # Whisper 는 수사를 숫자로 받아쓴다. 한자어(육십오)와 고유어(예순다섯) 둘 다
     # 같은 수를 읽은 것이므로, 두 표기로 각각 대조해 더 나은 쪽을 택한다.
     # 한쪽만 보면 족보·나이가 많은 책(창세기 등)이 통째로 오탐이 된다.
-    ratio = max(
-        difflib.SequenceMatcher(None, a, NORM_RE.sub("", num_to_kor(hyp))).ratio(),
-        difflib.SequenceMatcher(None, a, NORM_RE.sub("", num_to_kor_native(hyp))).ratio(),
-    )
+    scored = [
+        (difflib.SequenceMatcher(None, a, c).ratio(), c)
+        for c in (NORM_RE.sub("", num_to_kor(hyp)), NORM_RE.sub("", num_to_kor_native(hyp)))
+    ]
+    ratio, best = max(scored, key=lambda x: x[0])
     thr = qc_threshold(len(a), min_ratio)
     if ratio < thr:
         return False, ratio, f"본문 불일치({ratio*100:.0f}%<{thr*100:.0f}%)", hyp
+    # 3) 통째로 빠진 자리 — 일치율이 기준을 넘어도 한 자리에서 GAP_MAX 자 이상 빠졌으면 불합격.
+    #    재시도는 본문을 조각으로 나눠 만들므로(tries 1 부터 force) 빠진 문장이 자기 조각을 갖게 된다.
+    gap, piece = text_gap(a, best)
+    if gap >= GAP_MAX:
+        return False, ratio, f"본문 일부 빠짐(연속 {gap}자: {piece[:14]})", hyp
     return True, ratio, "", hyp
 
 
