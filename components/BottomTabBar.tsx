@@ -3,7 +3,11 @@
 /**
  * 하단 6탭 네비게이션 — 리디자인 Phase 2a
  *
- * 탭: 목차 / 검색 / 본문 / 말씀의삶 / 책갈피 / 설정
+ * 탭: 목차 / 검색 / 본문 / 찬송가 / 책갈피 / 설정
+ *
+ * 2026-09-12 지휘부 지시로 네 번째 자리를 '말씀의삶' 에서 '찬송가' 로 바꿨다 — 찬송가가 더 자주,
+ * 더 급히 찾는 것이라는 판단이다(예배 중). 말씀의삶은 본문 상단 ⋮ 메뉴로 들어간다.
+ * 찬송가는 화면이 아니라 **창**이라, 눌러도 화면이 바뀌지 않고 창이 열린다(설정 탭과 같은 꼴).
  *
  * Phase 2a 는 *전환기* — 기존 상단 탭(성경목차/본문검색/주제추천/책갈피)도 살아있고,
  * 사용자는 양쪽 어디서든 진입 가능. Phase 2b 에서 상단 탭 제거 + 시트 통합 완료.
@@ -11,7 +15,7 @@
 
 import type { ReactNode } from "react";
 
-export type ActiveTab = "toc" | "search" | "read" | "plan" | "bookmark" | "settings";
+export type ActiveTab = "toc" | "search" | "read" | "hymn" | "bookmark" | "settings";
 
 interface Tab {
   id: ActiveTab;
@@ -48,11 +52,11 @@ const TABS: Tab[] = [
     ),
   },
   {
-    id: "plan",
-    label: "말씀의삶",
+    id: "hymn",
+    label: "찬송가",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l10-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0zm10-2a2 2 0 11-4 0 2 2 0 014 0z" />
       </svg>
     ),
   },

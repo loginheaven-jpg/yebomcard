@@ -322,10 +322,10 @@ export default function Home() {
       setShowSettingsSheet(true);
       return;
     }
-    // 말씀의삶은 별도 뷰다. 아래로 내려가면 setView("search") 가 먼저 걸려
-    // 검색 뷰만 뜨고 target="plan" 은 SearchPanel 에서 조용히 무시된다.
-    if (tab === "plan") {
-      setView("plan");
+    // 찬송가는 화면이 아니라 창이다 — 보고 있던 화면 위에 열고, 닫으면 그 화면으로 돌아온다.
+    // (2026-09-12 이 자리는 '말씀의삶' 이었다. 말씀의삶은 본문 상단 ⋮ 메뉴로 옮겼다.)
+    if (tab === "hymn") {
+      setShowHymn(true);
       return;
     }
     // 목차·검색·책갈피로 나가면 플랜 모드를 푼다. 본문(read)은 유지한다.
@@ -600,6 +600,14 @@ export default function Home() {
           }}
           scrapCount={scrapCount}
           onReadingViewChange={setIsReadingView}
+          // 본문 상단 ⋮ 메뉴 — 설정 시트에도 그대로 있고, 읽는 중에 손 닿는 지름길로 함께 둔다
+          onOpenPlan={() => { setCompletedSeq(null); setView("plan"); }}
+          onOpenWorship={() => setShowWorship(true)}
+          onLogin={() => {
+            markIntentionalLeave();
+            window.location.href = LOGIN_URL;
+          }}
+          onLogout={async () => { await logout(); }}
           onPositionChange={handlePositionChange}
           planNav={view === "search" ? planNav : undefined}
           unitChapters={planUnitChapters}

@@ -6,7 +6,8 @@
  * 소진/장애 성우는 disable + 뱃지.
  * 자동다음장/절번호/영문 발음 등 나머지 설정은 설정 시트로 이관됨.
  * 기본 위치: 화면 우상단(읽기 버튼 근처). dockBottom=true(전체화면): footer 위 하단 중앙.
- * inline=true(본문 화면): 상단 바 아래 한 줄. 진행 막대가 붙고 ✕(종료) 자리가 접기(▾)가 된다 —
+ * inline=true(본문 화면): 상단 바 아래 한 줄. 순서가 다르다 — 진행 · 속도 · 성우 · 재생/일시정지 · 접기.
+ *   진행 막대가 붙고 ✕(종료) 자리가 접기(▾)가 된다 —
  *   본문 화면에서 읽기를 끝내는 길은 상단 정지 아이콘 하나뿐이다. 접어도 소리는 계속 난다.
  *   인라인이 떠 있는 동안 떠다니는 미니 플레이어는 스스로 물러난다(둘이 겹치지 않게).
  * status === "idle" 이면 렌더하지 않음.
@@ -168,6 +169,40 @@ export default function TTSMiniPlayer({
     }
   };
 
+  /**
+   * 재생/일시정지 버튼. 놓이는 자리가 다르다 —
+   *  · 떠 있는 플레이어: 맨 왼쪽(여느 플레이어와 같은 관습)
+   *  · 본문 인라인: **성우 칩 오른쪽**. 바로 위의 읽기·⋮ 와 같은 쪽에 모여 엄지 하나로 닿는다
+   *    (2026-09-12 지휘부 지시 — 왼쪽에 홀로 있는 것이 어색하다)
+   */
+  const playPauseBtn = (
+    <button
+      type="button"
+      onClick={() => {
+        if (isPlaying) tts.pause();
+        else if (isPaused) tts.resume();
+      }}
+      disabled={isLoading}
+      aria-label={isPlaying ? "일시정지" : isPaused ? "재생" : "준비 중"}
+      className="shrink-0 w-9 h-9 rounded-full bg-[var(--amber)] text-white flex items-center justify-center shadow-sm active:scale-95 transition-transform disabled:opacity-60"
+    >
+      {isLoading ? (
+        <svg width="14" height="14" viewBox="0 0 16 16" className="animate-spin" aria-hidden>
+          <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" fill="none" strokeDasharray="28" strokeDashoffset="8" />
+        </svg>
+      ) : isPlaying ? (
+        <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
+          <rect x="0" y="0" width="4" height="14" rx="1" fill="white" />
+          <rect x="8" y="0" width="4" height="14" rx="1" fill="white" />
+        </svg>
+      ) : (
+        <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
+          <polygon points="1,0 12,7 1,14" fill="white" />
+        </svg>
+      )}
+    </button>
+  );
+
   return (
     <div
       ref={rootRef}
@@ -195,32 +230,7 @@ export default function TTSMiniPlayer({
             : "rounded-full border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 shadow-lg backdrop-blur px-2 py-1.5 flex items-center gap-1.5"
         }
       >
-        {/* 재생/일시정지 */}
-        <button
-          type="button"
-          onClick={() => {
-            if (isPlaying) tts.pause();
-            else if (isPaused) tts.resume();
-          }}
-          disabled={isLoading}
-          aria-label={isPlaying ? "일시정지" : isPaused ? "재생" : "준비 중"}
-          className="shrink-0 w-9 h-9 rounded-full bg-[var(--amber)] text-white flex items-center justify-center shadow-sm active:scale-95 transition-transform disabled:opacity-60"
-        >
-          {isLoading ? (
-            <svg width="14" height="14" viewBox="0 0 16 16" className="animate-spin" aria-hidden>
-              <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" fill="none" strokeDasharray="28" strokeDashoffset="8" />
-            </svg>
-          ) : isPlaying ? (
-            <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
-              <rect x="0" y="0" width="4" height="14" rx="1" fill="white" />
-              <rect x="8" y="0" width="4" height="14" rx="1" fill="white" />
-            </svg>
-          ) : (
-            <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden>
-              <polygon points="1,0 12,7 1,14" fill="white" />
-            </svg>
-          )}
-        </button>
+        {!inline && playPauseBtn}
 
         {inline && (
           <div className="min-w-0 flex-1 text-[13.5px] leading-tight font-semibold text-gray-900 dark:text-gray-100 tabular-nums whitespace-nowrap">
@@ -338,14 +348,17 @@ export default function TTSMiniPlayer({
           </div>
         )}
 
+        {inline && playPauseBtn}
+
         {inline ? (
-          /* 줄만 접는다 — 소리는 계속 난다. 끝내는 것은 상단 정지 아이콘 하나뿐 */
+          /* 줄만 접는다 — 소리는 계속 난다. 끝내는 것은 상단 정지 아이콘 하나뿐.
+             재생 버튼과 붙어 있으면 잘못 누르므로 한 칸 띄우고 조금 작게 둔다 */
           <button
             type="button"
             onClick={onCollapse}
             aria-label="플레이어 접기"
             title="플레이어 접기"
-            className="shrink-0 w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center"
+            className="shrink-0 ml-1 w-7 h-7 rounded-full text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
               <path d="M3 5 L7 9 L11 5" stroke="currentColor" strokeWidth="1.9" fill="none" strokeLinecap="round" strokeLinejoin="round" />

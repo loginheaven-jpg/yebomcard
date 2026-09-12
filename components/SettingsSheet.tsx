@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, RECORDED_VOICE_LABELS, RECORDED_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice, type RecordedVoice } from "@/contexts/TtsContext";
-import { triggerInstall, isStandaloneMode, isIOSDevice } from "@/lib/pwaInstall";
+import { promptAppInstall } from "@/lib/pwaInstall";
 import { VERSE_GAP_LABELS, type VerseGap } from "@/lib/tts/verseGap";
 
 interface Props {
@@ -658,22 +658,7 @@ export default function SettingsSheet({
             </div>
             {/* 앱으로 설치 — 자동 설치 팝업이 불규칙하므로 수동 설치 진입점 제공 */}
             <button
-              onClick={async () => {
-                if (isStandaloneMode()) {
-                  window.alert("이미 앱으로 설치되어 실행 중입니다.");
-                  return;
-                }
-                const r = await triggerInstall();
-                if (r === "unavailable") {
-                  if (isIOSDevice()) {
-                    window.alert("iPhone/iPad: Safari 하단의 [공유] 버튼 → [홈 화면에 추가]를 눌러 설치하세요.");
-                  } else {
-                    window.alert(
-                      "지금 바로 설치창을 열 수 없습니다.\n브라우저 메뉴(⋮)의 '앱 설치' 또는 '홈 화면에 추가'를 눌러 설치하세요.\n(페이지를 잠시 사용하면 설치 자격이 잡혀 자동 설치창이 뜨기도 합니다)",
-                    );
-                  }
-                }
-              }}
+              onClick={() => void promptAppInstall()}
               className="w-full mt-2 flex items-center justify-center gap-2 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95"
             >
               <svg className="w-5 h-5 text-[var(--amber-deep)] dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>

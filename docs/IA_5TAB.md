@@ -1,6 +1,7 @@
 # 하단 6탭 IA + 통합 SettingsSheet 정책
 
 > Phase 2a~3 리디자인으로 도입된 정보 구조(IA). 2026-09-09 '말씀의삶' 탭 추가로 6탭.
+> 2026-09-12 네 번째 탭이 '말씀의삶' → '찬송가' 로 바뀌었다(말씀의삶은 본문 상단 ⋮ 메뉴로).
 > (파일명은 이력 보존을 위해 IA_5TAB.md 를 유지한다)
 
 ---
@@ -14,15 +15,16 @@
 | **목차** (toc) | `navRequest.target="toc"` — SearchPanel 의 책·장 선택 모드 |
 | **검색** (search) | `navRequest.target="search"` — 단어·주제 검색 모드 |
 | **본문** (read) | `navRequest.target="read"` — 본문 chapter 직진입 |
-| **말씀의삶** (plan) | `setView("plan")` — 성경읽기진도표 91회차. **navRequest 를 타지 않는다** |
+| **찬송가** (hymn) | `setShowHymn(true)` — 창을 띄운다(view 변경 없음). 2026-09-12 이 자리의 '말씀의삶' 을 대신했다 |
 | **책갈피** (bookmark) | `navRequest.target="bookmark"` — 책갈피 메뉴 노출 (+ 스크랩 진입) |
 | **설정** (settings) | `SettingsSheet` 띄움 (view 변경 안 함) |
 
-### 말씀의삶 탭에서 주의할 것 세 가지
+### 말씀의삶(plan 뷰)에서 주의할 것 세 가지
 
-**하나 — `handleTabChange` 에서 navRequest 앞에 끊는다.**
-`ActiveTab` 과 `navRequest.target` 유니온이 겹쳐 타입 오류 없이 통과하지만,
-`setView("search")` 가 먼저 걸려 검색 뷰만 뜨고 `target="plan"` 은 조용히 무시된다.
+**하나 — 진입로가 탭이 아니라 본문 상단 ⋮ 메뉴다(2026-09-12).**
+`SearchPanel` 의 ⋮ 메뉴가 `onOpenPlan` 을 부르고, page 가 `setView("plan")` 한다. plan 은 이제
+`ActiveTab` 에 없다 — 탭에서 다루려 하면 `setView("search")` 가 먼저 걸려 검색 뷰만 뜬다(옛 함정).
+회차를 읽는 중에는 `PlanHeader` 의 '진도표로' 로도 돌아온다.
 
 **둘 — 탭바 자동 숨김을 반드시 제외한다.**
 판정식은 `autoHideTabBar && isReadingView && view === "search"`(`shouldAutoHideTabBar`).

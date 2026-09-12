@@ -38,6 +38,7 @@ import QuickNavFab from "./QuickNavFab";
 import HomeBlankContent from "./HomeBlankContent";
 import TTSButton from "./TTSButton";
 import TTSMiniPlayer from "./TTSMiniPlayer";
+import { promptAppInstall } from "@/lib/pwaInstall";
 import { useTts, type TtsTrack } from "@/contexts/TtsContext";
 import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { useSession } from "@/hooks/useSession";
@@ -120,6 +121,14 @@ interface SearchPanelProps {
   onReadingViewChange?: (reading: boolean) => void;
   /** 하단 탭바가 감춰진 상태 — 그만큼 본문 스크롤 영역을 아래로 확장 */
   tabBarHidden?: boolean;
+  /**
+   * 본문 상단 ⋮ 메뉴 — 설정 시트에 있는 것들의 **지름길**이다(설정에서도 그대로 쓸 수 있다).
+   * 읽는 중에는 하단 탭바가 자동으로 숨으므로, 손 닿는 곳에 같은 길을 하나 더 둔다.
+   */
+  onOpenPlan?: () => void;
+  onOpenWorship?: () => void;
+  onLogin?: () => void;
+  onLogout?: () => void | Promise<void>;
 }
 
 function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
@@ -157,6 +166,10 @@ export default function SearchPanel({
   scrapCount,
   onReadingViewChange,
   tabBarHidden = false,
+  onOpenPlan,
+  onOpenWorship,
+  onLogin,
+  onLogout,
 }: SearchPanelProps) {
   const { session, isLoggedIn, loading: sessionLoading, deviceReady } = useSession();
   const adminMode = isAdmin(session);
@@ -849,8 +862,10 @@ export default function SearchPanel({
   useEffect(() => {
     if (!playerActive) setPlayerOpen(true);
   }, [playerActive]);
-  /** 상단 ⋮ 메뉴 — 지금은 글자 크기. 앞으로 상단에서 내려올 기능이 모이는 자리 */
+  /** 상단 ⋮ 메뉴 — 글자 크기 · 한 절씩 크게 · 설정 지름길 몇 개 */
   const [moreOpen, setMoreOpen] = useState(false);
+  // 안드로이드 뒤로가기로 메뉴만 닫는다(본문을 벗어나지 않게)
+  useHardwareBack(moreOpen, () => setMoreOpen(false));
   // 하단 탭바(높이 약 56px)가 감춰지면 그만큼 본문 영역을 아래로 확장.
   // 컨테이너 폭은 그대로라 글자가 다시 흐르지 않고, 아래쪽이 더 보일 뿐임.
   // 상단이 두 줄(약 99px)에서 한 줄(바 44 + 여백 8 = 52px)로 줄었다 — 그만큼 본문에 돌려준다.
@@ -2788,21 +2803,7 @@ export default function SearchPanel({
                   onClick={handleTtsToggle}
                 />
 
-                {/* 전체화면 (1절씩 보기) */}
-                <button
-                  type="button"
-                  onClick={() => setShowFullscreen(true)}
-                  disabled={browseVerses.length === 0}
-                  aria-label="전체화면 (1절씩 보기)"
-                  title="전체화면 (1절씩 보기)"
-                  className="shrink-0 w-11 h-11 flex items-center justify-center rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                  </svg>
-                </button>
-
-                {/* ⋮ — 지금은 글자 크기만. 앞으로 상단에서 내려올 기능이 모이는 자리 */}
+                {/* ⋮ — 글자 크기 · 한 절씩 크게 · 설정 지름길. 펼쳐보기 아이콘은 2026-09-12 여기로 들어왔다 */}
                 <div className="relative shrink-0">
                   <button
                     type="button"
@@ -2821,7 +2822,8 @@ export default function SearchPanel({
                   {moreOpen && (
                     <>
                       <div className="fixed inset-0 z-[59]" onClick={() => setMoreOpen(false)} aria-hidden />
-                      <div className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-2">
+                      <div className="absolute right-0 top-full mt-1.5 z-[60] w-[216px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-2">
+                        {/* 글자 크기 — 지금 모양 그대로 */}
                         <div className="flex items-center justify-between gap-2">
                           <span className="pl-1 text-xs font-semibold text-gray-500 dark:text-gray-400">글자 크기</span>
                           <div className="flex items-center gap-1">
@@ -2844,6 +2846,85 @@ export default function SearchPanel({
                             </button>
                           </div>
                         </div>
+
+                        <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
+                        {/* 한 절씩 크게 — 옛 '전체화면(1절씩 보기)'. 이름은 얻는 것(크게)을 앞세웠다 */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            setShowFullscreen(true);
+                          }}
+                          disabled={browseVerses.length === 0}
+                          className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                          </svg>
+                          한 절씩 크게
+                        </button>
+
+                        <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
+                        {/* 설정 시트의 지름길 — 설정에도 그대로 남아 있다 */}
+                        {onOpenPlan && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreOpen(false);
+                              onOpenPlan();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            말씀의삶
+                          </button>
+                        )}
+                        {onOpenWorship && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreOpen(false);
+                              onOpenWorship();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                            </svg>
+                            예배성경
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMoreOpen(false);
+                            void promptAppInstall();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                          </svg>
+                          앱으로 설치
+                        </button>
+                        {(isLoggedIn ? onLogout : onLogin) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMoreOpen(false);
+                              if (isLoggedIn) void onLogout?.();
+                              else onLogin?.();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                            </svg>
+                            {isLoggedIn ? "로그아웃" : "로그인"}
+                          </button>
+                        )}
                       </div>
                     </>
                   )}

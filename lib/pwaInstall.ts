@@ -36,6 +36,26 @@ export function isIOSDevice() {
   const ua = navigator.userAgent.toLowerCase();
   return /iphone|ipad|ipod/.test(ua) && !("MSStream" in window);
 }
+/**
+ * '앱으로 설치' 를 눌렀을 때의 안내 흐름 — 설정 시트와 본문 ⋮ 메뉴가 **같은 코드**를 쓴다.
+ * 브라우저가 설치창을 내주지 않는 경우가 흔해(iOS, 설치 자격 미충족) 기기에 맞는 방법을 알려야 한다.
+ */
+export async function promptAppInstall(): Promise<void> {
+  if (isStandaloneMode()) {
+    window.alert("이미 앱으로 설치되어 실행 중입니다.");
+    return;
+  }
+  const r = await triggerInstall();
+  if (r !== "unavailable") return;
+  if (isIOSDevice()) {
+    window.alert("iPhone/iPad: Safari 하단의 [공유] 버튼 → [홈 화면에 추가]를 눌러 설치하세요.");
+  } else {
+    window.alert(
+      "지금 바로 설치창을 열 수 없습니다.\n브라우저 메뉴(⋮)의 '앱 설치' 또는 '홈 화면에 추가'를 눌러 설치하세요.\n(페이지를 잠시 사용하면 설치 자격이 잡혀 자동 설치창이 뜨기도 합니다)",
+    );
+  }
+}
+
 export function isStandaloneMode() {
   if (typeof window === "undefined") return false;
   return (

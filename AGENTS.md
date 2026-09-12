@@ -31,13 +31,18 @@
 - 상세: [AUTH_INTEGRATION_GUIDE.md](AUTH_INTEGRATION_GUIDE.md)
 
 ### 하단 6탭 IA
-- `BottomTabBar` (목차/검색/본문/**말씀의삶**/책갈피/설정) — `view==="search" || view==="plan"` 일 때 렌더
+- `BottomTabBar` (목차/검색/본문/**찬송가**/책갈피/설정) — `view==="search" || view==="plan"` 일 때 렌더.
+  2026-09-12 네 번째 자리를 '말씀의삶' 에서 **찬송가**로 바꿨다(지휘부: 더 자주·급히 찾는다). 찬송가는 화면이 아니라
+  **창**이라 눌러도 view 가 바뀌지 않는다(설정 탭과 같은 꼴). 말씀의삶 진입은 **본문 상단 ⋮ 메뉴**로 옮겼다
 - **말씀의삶** — 성경읽기진도표 91회차. 플랜 정의는 정적 파일 `lib/plans/yebom91.ts`,
   회차 완료는 `reading_progress` 에서 **파생 계산**(저장하지 않음). 수동 체크만 `reading_unit_checks`.
   비로그인 = 보기만 / 로그인 = 진도 기록 / 그룹 = 서로의 진도. 진입 때 한 번 그룹 초대코드 창(`GroupCodePrompt` — 참여·건너뛰기 후엔 그 기기에서 다시 안 물음, 비로그인은 로그인 후 자동 참여).
-  `handleTabChange` 에서 navRequest 앞에 끊고, 탭바 자동 숨김에서 제외하고,
-  `useHardwareBack` 을 등록해 키보드 격리까지 해야 한다 — 셋 다 [docs/IA_5TAB.md](docs/IA_5TAB.md) §1 참조
+  진입은 본문 상단 ⋮ 메뉴(2026-09-12부터. 탭이 아니다). 탭바 자동 숨김에서 제외하고 `useHardwareBack` 을 등록해
+  키보드 격리까지 해야 한다 — [docs/IA_5TAB.md](docs/IA_5TAB.md) §1 참조
 - `SettingsSheet` — 계정/찬송가/예배성경/카드빌더/풀스크린/관리자/종료 통합
+- **본문 상단 ⋮ 메뉴**(읽기 화면 전용, `SearchPanel`) — 글자 크기 · 한 절씩 크게(전체화면 1절씩) ·
+  말씀의삶 · 예배성경 · 앱으로 설치 · 로그인(로그아웃). 설정 시트의 **지름길**이며 설정에서도 그대로 쓸 수 있다
+  (본문을 볼 때 하단 탭바가 자동으로 숨으므로 손 닿는 곳에 한 길을 더 둔다). 안드로이드 뒤로가기로 메뉴만 닫힌다
 - **본문 몰입 — 하단 탭바 자동 숨김**: 본문(`browseStep==="verse"`)에서 무조작 3초 → 아래로 슬라이드 감춤(얇은 손잡이만 남김). 복귀 = 하단 손잡이 탭 + 위로 스크롤(본문은 내부 컨테이너 스크롤이라 `window` **capture** 로 수집). 리빌 존은 `safe-area-inset-bottom` 위 28px 에 두어 iOS 홈 인디케이터 제스처와 분리. 상태는 `app/page.tsx` 소유(`tabBarHidden`), SearchPanel 은 `onReadingViewChange` 로 본문 여부만 보고. 설정 토글 `본문 볼 때 하단 메뉴 자동 숨김`(기본 ON, `yebom_autohide_tabbar`). 숨겨도 본문 컨테이너 높이(`browseScrollMaxH`)는 그대로 두어 **리플로우 없음**
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
