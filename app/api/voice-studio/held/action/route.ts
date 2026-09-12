@@ -2,6 +2,9 @@
  * POST /api/voice-studio/held/action — 보류 절에 대한 판단 실행 (관리자 세션).
  *
  *   use     : 들어보니 멀쩡하다 → 서버가 보관 중인 음원을 그대로 공유 캐시에 넣는다.
+ *             **구방식 파일이 이미 있으면 덮어쓴다**(2026-09-12) — 전에는 '파일이 없을 때만' 올려서,
+ *             교체 대상 절에 이대로 사용을 눌러도 아무 일도 일어나지 않고 옛 음원이 남았다
+ *             (창세기 16절·욥기 2절이 그렇게 교체를 건너뛰었다). 새 방식 파일은 건드리지 않는다.
  *             **생성 PC 가 관여하지 않는다** — 그 PC 가 꺼져 있어도 즉시 반영된다.
  *   regen   : 진짜 오류다 → 재생성 요청을 남긴다. 해당 PC 가 가져가 다시 만든다.
  *   discard : 그냥 비워 둔다 → 그 절은 Chirp(여) 폴백으로 읽힌다.
@@ -13,7 +16,8 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/voiceStudio/auth";
 import { studioGetBytes, studioPutJson, studioDelete, studioList } from "@/lib/voiceStudio/r2";
-import { putR2Audio, getR2Audio } from "@/lib/tts/r2Cache";
+import { putR2Audio, headR2Audio } from "@/lib/tts/r2Cache";
+import { isLegacyFile, keyHash } from "@/lib/voiceStudio/legacy";
 import { cleanForTts, ttsCacheKey, PREGENERATED_VOICE_KEYS } from "@/lib/tts/verseText";
 
 export const runtime = "nodejs";
@@ -58,7 +62,11 @@ export async function POST(req: Request) {
       );
     }
     const key = ttsCacheKey(cleanForTts(text), voiceKey, "ko");
-    if (!(await getR2Audio(key))) {
+    // 파일이 없거나 **아직 구방식**이면 올린다. 교체 업로드와 같은 판정(`isLegacyFile`)을 쓴다 —
+    // 관리자가 들어 보고 승인한 음원이 옛 파일에 막혀 반영되지 않는 일을 막는다.
+    // 존재 확인은 HEAD 로 한다(전에는 음원을 통째로 내려받아 확인했다).
+    const existing = await headR2Audio(key);
+    if (!existing || isLegacyFile(voiceKey, keyHash(key), existing.lastModified)) {
       await putR2Audio(key, mp3, `voice:${voiceKey}`);
     }
   }
