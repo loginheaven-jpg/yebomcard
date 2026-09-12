@@ -714,15 +714,17 @@ def _process(job):
         group = [i for i in pend if (i["tries"], bool(i.get("end_retry"))) == key0][:batch]
         tries0, end_retry = key0
         if end_retry:
-            max_len, force = engine.MAX_LEN, False
+            max_len, force, fine = engine.MAX_LEN, False, False
         else:
             max_len, force = max(40, engine.MAX_LEN // (1 + tries0)), tries0 >= 1
+            # 마지막 시도에서는 쉼표까지 쪼갠다 — 반복 열거를 통째로 건너뛰는 절(고전 1:12·6:9)을 위해
+            fine = tries0 >= 2
         _cur["note"] = (f"{group[0]['ref']} 외 {len(group)-1}건" if len(group) > 1
                         else group[0]["ref"]) + (f" (재시도{tries0})" if tries0 else "")
         try:
             wavs, sr = engine.synth_batch([g["text"] for g in group], voice,
                                           job["temp"], job["punct"], max_len=max_len,
-                                          force=force)
+                                          force=force, fine=fine)
         except Exception as e:
             # 그래픽 메모리 부족이면 같은 절을 배치를 반으로 줄여 다시 만든다 — 작업을 멈추지 않는다.
             # (예전엔 여기서 작업이 '오류'로 멈춰 누군가 이어하기를 누를 때까지 서 있었다)

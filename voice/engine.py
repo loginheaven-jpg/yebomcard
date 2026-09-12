@@ -296,27 +296,54 @@ def transcribe(path, with_ts=True):
 SENT_RE = re.compile(r"(?<=[.!?。？！])\s+")
 
 
-def force_split(text):
+def comma_split(t, min_len=8):
+    """쉼표로 쪼갠다. 쉼표는 **제 자리에 남겨야** 억양이 유지된다.
+
+    짧은 토막은 버리지 않고 옆에 붙인다. 전에는 한 토막이라도 8자 미만이면 쪼개기를 통째로
+    포기했는데, 그 때문에 고전 1:12('다름이 아니라,' 7자)가 한 조각으로 남아 가운데 두 구절이
+    통째로 빠졌다. 쪼개는 목적은 **반복되는 구절이 서로 다른 조각에 들어가게** 하는 것이다."""
+    segs = [s.strip() for s in (t or "").split(",") if s.strip()]
+    if len(segs) < 2:
+        return [(t or "").strip()]
+    segs = [s + "," for s in segs[:-1]] + [segs[-1]]
+    out = []
+    for s in segs:
+        if out and len(out[-1]) < min_len:
+            out[-1] = (out[-1] + " " + s).strip()      # 앞 토막이 짧다 — 여기에 붙인다
+        else:
+            out.append(s)
+    if len(out) > 1 and len(out[-1]) < min_len:
+        tail = out.pop()
+        out[-1] = (out[-1] + " " + tail).strip()       # 마지막이 짧다 — 앞에 붙인다
+    return out
+
+
+def force_split(text, fine=False):
     """길이와 무관하게 문장 → (안 되면) 쉼표 단위로 쪼갠다.
 
     구조가 반복되는 절에서 모델이 한쪽을 통째로 건너뛴다:
       "귀가 말을 알아듣지 못하겠느냐? 혀가 음식 맛을 알지 못하겠느냐?" → 앞 문장만
       "어찌하여 너는 ... 여기며, 어찌하여 우리를 ... 보느냐?"        → 뒷 절만
-    36~40자라 max_len 분할(최소 40)이 걸리지 않으니 재시도 때 이걸로 강제한다."""
+    36~40자라 max_len 분할(최소 40)이 걸리지 않으니 재시도 때 이걸로 강제한다.
+
+    fine=True(마지막 시도) — 문장으로 나눈 뒤 **각 문장을 쉼표로 한 번 더** 쪼갠다.
+    문장이 하나뿐인 열거(고전 1:12 '나는 바울 편이다', '나는 아볼로 편이다' …)나 문장 안에 열거가
+    들어앉은 절(고전 6:9)은 문장 단위로만 나누면 반복이 한 조각에 남아 또 건너뛴다."""
     t = (text or "").strip()
     segs = [s.strip() for s in SENT_RE.split(t) if s.strip()]
     if len(segs) > 1:
-        return segs
-    segs = [s.strip() for s in t.split(",") if s.strip()]
-    if len(segs) > 1 and min(len(s) for s in segs) >= 8:
-        # 쉼표는 제 자리에 남겨야 억양이 유지된다
-        return [s + "," for s in segs[:-1]] + [segs[-1]]
-    return [t]
+        if not fine:
+            return segs
+        out = []
+        for s in segs:
+            out += comma_split(s)
+        return out
+    return comma_split(t)
 
 
-def split_text(text, max_len=MAX_LEN, force=False):
+def split_text(text, max_len=MAX_LEN, force=False, fine=False):
     if force:
-        segs = force_split(text)
+        segs = force_split(text, fine)
         if len(segs) > 1:
             return segs
     parts, buf = [], ""
@@ -404,7 +431,7 @@ def synth_one(text, voice, temp=0.75, punct=True):
         return merged, sr
 
 
-def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=False):
+def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=False, fine=False):
     """여러 텍스트를 한 번에 합성(처리량↑). 분할이 필요한 긴 항목만 개별 처리.
 
     max_len 을 줄이면 더 잘게 쪼갠다 — 재시도 때 쓰면 '긴 입력에서 뒷문장이
@@ -416,7 +443,7 @@ def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=Fals
         prompt = tts.create_voice_clone_prompt(
             ref_audio=voice_ref(voice), ref_text=meta["ref_text"])
         kw = gen_kwargs(temp)
-        prepared = [split_text(prosody.add_punct(t) if punct else t, max_len, force)
+        prepared = [split_text(prosody.add_punct(t) if punct else t, max_len, force, fine)
                     for t in texts]
         results = [None] * len(texts)
         sr = SR_TARGET
