@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/rateLimit";
 
 export async function GET(request: NextRequest) {
+  // 사진 고르기는 여러 장 넘겨 보는 것이 정상이라 넉넉히 — 한 주소에서 10분에 90회
+  const limited = rateLimit(request, "unsplash-search", 90, 10 * 60_000);
+  if (limited) return limited;
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "nature";
   const perPage = searchParams.get("per_page") || "3";

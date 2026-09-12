@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/aiGateway";
 import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ const SYSTEM_PROMPT =
   "Focus on landscape, nature, mood. JSON array only, no markdown.";
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, "unsplash-suggest", 30, 10 * 60_000);
+  if (limited) return limited;
   try {
     const { verseText } = await request.json();
     if (!verseText || typeof verseText !== "string") {

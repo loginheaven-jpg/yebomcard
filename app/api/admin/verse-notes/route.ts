@@ -1,30 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { unsealData } from "iron-session";
-import { sessionOptions, type SessionData } from "@/lib/auth/session";
-import { isAdmin } from "@/lib/admin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireFreshAdmin } from "@/lib/auth/verifySession";
 
 export const dynamic = "force-dynamic";
 
-async function getSession(): Promise<SessionData | null> {
-  try {
-    const cookieStore = await cookies();
-    const sealed = cookieStore.get(sessionOptions.cookieName);
-    if (!sealed) return null;
-    const session = await unsealData<SessionData>(sealed.value, { password: sessionOptions.password });
-    return session?.isLoggedIn ? session : null;
-  } catch {
-    return null;
-  }
-}
-
 // GET : 신고된(또는 자동숨김된) 메모 목록 — 운영자·수퍼어드민(isAdmin)
 export async function GET() {
-  const session = await getSession();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 });
-  }
+  // 메모 영구 삭제·복원은 되돌릴 수 없다 — 쿠키만 믿지 않고 공유 DB 로 한 번 더 확인한다
+  const gate = await requireFreshAdmin();
+  if (!gate.ok) return gate.res;
 
   // 신고 레코드 수집 → note_id별 신고자/건수 집계
   const { data: reports } = await supabaseAdmin
@@ -68,10 +52,9 @@ export async function GET() {
 
 // DELETE ?id= : 메모 영구 삭제 (신고 레코드는 cascade 삭제)
 export async function DELETE(request: NextRequest) {
-  const session = await getSession();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 });
-  }
+  // 메모 영구 삭제·복원은 되돌릴 수 없다 — 쿠키만 믿지 않고 공유 DB 로 한 번 더 확인한다
+  const gate = await requireFreshAdmin();
+  if (!gate.ok) return gate.res;
   const id = Number(new URL(request.url).searchParams.get("id"));
   if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ error: "유효한 id가 필요합니다" }, { status: 400 });
@@ -83,10 +66,9 @@ export async function DELETE(request: NextRequest) {
 
 // PATCH { id } : 신고 기각(복원) — 숨김 해제 + 해당 메모 신고 레코드 삭제
 export async function PATCH(request: NextRequest) {
-  const session = await getSession();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 });
-  }
+  // 메모 영구 삭제·복원은 되돌릴 수 없다 — 쿠키만 믿지 않고 공유 DB 로 한 번 더 확인한다
+  const gate = await requireFreshAdmin();
+  if (!gate.ok) return gate.res;
   const body = await request.json().catch(() => ({}));
   const id = Number(body.id);
   if (!Number.isFinite(id) || id <= 0) {

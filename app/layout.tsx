@@ -75,6 +75,7 @@ import { FontProvider } from "@/contexts/FontContext";
 import { TtsProvider } from "@/contexts/TtsContext";
 import TTSMiniPlayer from "@/components/TTSMiniPlayer";
 import { LoginGateProvider } from "@/components/LoginGate";
+import { SessionProvider } from "@/contexts/SessionContext";
 
 export default function RootLayout({
   children,
@@ -88,14 +89,17 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-[family-name:var(--font-gothic-a1)] bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         <FontProvider>
-          <LoginGateProvider>
-            <TtsProvider>
-              {children}
-              <TTSMiniPlayer />
-            </TtsProvider>
-            <VersionCheck />
-            <PwaInstall />
-          </LoginGateProvider>
+          {/* 세션은 로그인 게이트보다 바깥에 — 게이트가 이 상태를 소비한다(로그아웃이 즉시 반영되게) */}
+          <SessionProvider>
+            <LoginGateProvider>
+              <TtsProvider>
+                {children}
+                <TTSMiniPlayer />
+              </TtsProvider>
+              <VersionCheck />
+              <PwaInstall />
+            </LoginGateProvider>
+          </SessionProvider>
         </FontProvider>
       </body>
     </html>

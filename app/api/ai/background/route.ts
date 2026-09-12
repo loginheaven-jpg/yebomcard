@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callImage, callAI } from "@/lib/aiGateway";
+import { rateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
+  // 이미지 생성이 가장 비싸다 — 한 주소에서 10분에 10장
+  const limited = rateLimit(request, "ai-background", 10, 10 * 60_000);
+  if (limited) return limited;
   try {
     const body = await request.json();
     const { verseText, keywords = [], mode = "background" } = body;

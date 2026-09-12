@@ -1,30 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
-import { unsealData } from "iron-session";
-import { sessionOptions, type SessionData } from "@/lib/auth/session";
-import { isAdmin } from "@/lib/admin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requireFreshAdmin } from "@/lib/auth/verifySession";
 import { createRegenRequests } from "@/lib/voiceStudio/verseRegen";
 
 export const dynamic = "force-dynamic";
 
-async function getSession(): Promise<SessionData | null> {
-  try {
-    const cookieStore = await cookies();
-    const sealed = cookieStore.get(sessionOptions.cookieName);
-    if (!sealed) return null;
-    const session = await unsealData<SessionData>(sealed.value, { password: sessionOptions.password });
-    return session?.isLoggedIn ? session : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 });
-  }
+  // 고친 본문은 모든 교인에게 그대로 나간다 — 쿠키만 믿지 않고 공유 DB 로 한 번 더 확인한다
+  const gate = await requireFreshAdmin();
+  if (!gate.ok) return gate.res;
+  const session = gate.session;
 
   let body: { id?: number; text?: string };
   try {

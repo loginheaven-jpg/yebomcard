@@ -157,7 +157,7 @@ export default function SearchPanel({
   onReadingViewChange,
   tabBarHidden = false,
 }: SearchPanelProps) {
-  const { session, isLoggedIn, loading: sessionLoading } = useSession();
+  const { session, isLoggedIn, loading: sessionLoading, deviceReady } = useSession();
   const adminMode = isAdmin(session);
   // 통독은 로그인 확정 시에만 표시 (loading 중에도 제외해 hydration mismatch 방지)
   const versionOptions: readonly BibleVersion[] = (
@@ -292,16 +292,20 @@ export default function SearchPanel({
     fetchReadChapters().then(setReadChapters);
   }, [sessionLoading, isLoggedIn]);
 
-  // ─── 기기간 동기화 (로그인 시 1회: 책갈피 union + 마지막 위치 merge) ───
-  const syncedRef = useRef(false);
+  // ─── 기기간 동기화 (로그인한 사용자마다 1회: 책갈피 union + 마지막 위치 merge) ───
+  // deviceReady 를 기다린다 — 이 동기화는 양방향이라, 기기 주인 판정(앞 사람 데이터 정리)보다 먼저 돌면
+  // 남이 비로그인으로 남긴 책갈피가 이 계정으로 올라간다. 사용자 id 로 기억해 계정이 바뀌면 다시 맞춘다.
+  const syncedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (sessionLoading || !isLoggedIn || syncedRef.current) return;
-    syncedRef.current = true;
+    const userId = session?.user_id;
+    if (sessionLoading || !isLoggedIn || !deviceReady || !userId) return;
+    if (syncedForRef.current === userId) return;
+    syncedForRef.current = userId;
     syncOnLogin().then(({ bookmarks, recent }) => {
       setBookmarks(bookmarks);
       if (recent) setRecent(recent);
     });
-  }, [sessionLoading, isLoggedIn]);
+  }, [sessionLoading, isLoggedIn, deviceReady, session?.user_id]);
 
   // ─── 묵상 노트·하이라이트 (로그인 전용, verse_notes) ───
   const [chapterNotes, setChapterNotes] = useState<VerseNote[]>([]);

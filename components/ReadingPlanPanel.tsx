@@ -19,6 +19,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/hooks/useSession";
+import {
+  clearPendingGroupCode,
+  readPendingGroupCode,
+  writePendingGroupCode,
+} from "@/lib/auth/device-owner";
 import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
 import {
   fetchUnitChecks,
@@ -49,10 +54,11 @@ const TOTAL = YEBOM91.units.length;
 /**
  * 진입 때 그룹 초대코드 창(GroupCodePrompt)의 기기 기억.
  *  - GROUP_PROMPT: 참여했거나("joined") 한 번 건너뛰었으면("skipped") 이 기기에서는 다시 묻지 않는다
- *  - PENDING_GROUP_CODE: 로그인하지 않은 채 코드를 넣었을 때 — 로그인하고 돌아와 말씀의삶에 들어오면 그 코드로 참여한다
+ *  - 로그인하지 않은 채 넣은 코드는 `lib/auth/device-owner` 가 맡는다 — 코드에는 누가 넣었는지가 없어서,
+ *    남아 있으면 **다음에 로그인한 사람이 남의 그룹에 자동 참여**한다. 그래서 30분만 유효하고
+ *    로그아웃·세션 만료 때 지운다
  */
 const LS_GROUP_PROMPT = "yebom_plan_group_prompt";
-const LS_PENDING_GROUP_CODE = "yebom_plan_pending_group_code";
 
 function lsGet(key: string): string | null {
   try {
@@ -66,12 +72,6 @@ function lsSet(key: string, value: string) {
     localStorage.setItem(key, value);
   } catch {}
 }
-function lsRemove(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {}
-}
-
 /** 행이 어떻게 보일지 — now 는 status 가 아니라 currentSeq 파생값이라 따로 판단한다 */
 type RowState = "now" | "done" | "partial" | "todo";
 
@@ -81,8 +81,7 @@ function rowState(u: UnitProgress, currentSeq: number): RowState {
 }
 
 export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
-  const { session, loading: sessionLoading } = useSession();
-  const isLoggedIn = !!session?.isLoggedIn;
+  const { loading: sessionLoading, isLoggedIn, deviceReady } = useSession();
 
   const [readByBook, setReadByBook] = useState<Record<string, Set<number>>>({});
   const [manualSeqs, setManualSeqs] = useState<Set<number>>(new Set());
@@ -139,12 +138,14 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
   // 참여) 묻지 않고 기억만 해 둔다. 로그인하지 않은 채 코드를 넣었다면, 로그인하고 돌아온 지금 참여한다.
   useEffect(() => {
     if (sessionLoading) return;
+    // 로그인했다면 기기 주인 판정이 끝난 뒤에 — 앞 사람이 넣어 둔 코드로 남의 그룹에 들어가지 않게
+    if (isLoggedIn && !deviceReady) return;
     let alive = true;
     (async () => {
-      const pending = lsGet(LS_PENDING_GROUP_CODE);
+      const pending = readPendingGroupCode();
       if (pending) {
         if (!isLoggedIn) return; // 로그인하러 간 사이 — 다시 묻지 않는다
-        lsRemove(LS_PENDING_GROUP_CODE);
+        clearPendingGroupCode();
         const res = await joinGroup(pending);
         if (!alive) return;
         if ("error" in res) {
@@ -168,13 +169,13 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
     return () => {
       alive = false;
     };
-  }, [sessionLoading, isLoggedIn]);
+  }, [sessionLoading, isLoggedIn, deviceReady]);
 
   const submitGroupCode = useCallback(
     async (code: string): Promise<string | null> => {
       if (!isLoggedIn) {
         // 참여는 로그인이 필요하다 — 코드를 적어 두고 로그인으로. 돌아와 말씀의삶에 들어오면 위 effect 가 참여한다
-        lsSet(LS_PENDING_GROUP_CODE, code);
+        writePendingGroupCode(code);
         setGroupPromptOpen(false);
         onLogin?.();
         return null;

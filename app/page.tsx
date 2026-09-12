@@ -45,7 +45,7 @@ const AUTOHIDE_TABBAR_KEY = "yebom_autohide_tabbar";
 const TABBAR_HIDE_MS = 3000;
 
 export default function Home() {
-  const { session, isLoggedIn, logout } = useSession();
+  const { session, isLoggedIn, logout, deviceReady } = useSession();
   const { ensureLogin } = useLoginGate();
   const adminMode = isAdmin(session);
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
@@ -433,14 +433,15 @@ export default function Home() {
   }, [isLoggedIn]);
 
   // 로그인 후 스크랩 카운트 + localStorage 마이그레이션
+  // 이관은 기기 주인 판정이 끝난 뒤에만 — 앞 사람이 비로그인으로 남긴 스크랩을 이 계정으로 올리지 않는다
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !deviceReady) return;
     (async () => {
       await migrateLocalScraps();
       const scraps = await fetchMyScraps();
       setScrapCount(scraps.length);
     })();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, deviceReady]);
 
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg);

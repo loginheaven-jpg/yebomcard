@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callImageEdit } from "@/lib/aiGateway";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  // 올린 사진의 글자 지우기도 유료 이미지 편집이다 — 한 주소에서 10분에 20장
+  const limited = rateLimit(request, "upload-clean", 20, 10 * 60_000);
+  if (limited) return limited;
   try {
     const { image, media_type } = await request.json();
 

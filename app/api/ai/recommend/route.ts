@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/aiGateway";
+import { rateLimit } from "@/lib/rateLimit";
 
 /**
  * AI 주제 추천 API
@@ -7,6 +8,8 @@ import { callAI } from "@/lib/aiGateway";
  * body: { topic: "감사", version: "nkrv" }
  */
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, "ai-recommend", 30, 10 * 60_000);
+  if (limited) return limited;
   try {
     const body = await request.json();
     const { topic } = body;

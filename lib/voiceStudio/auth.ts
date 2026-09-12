@@ -12,7 +12,7 @@ import { cookies } from "next/headers";
 import { unsealData } from "iron-session";
 import { NextResponse } from "next/server";
 import { sessionOptions, type SessionData } from "@/lib/auth/session";
-import { isAdmin } from "@/lib/admin";
+import { requireFreshAdmin } from "@/lib/auth/verifySession";
 import { verifyRequest, type StudioToken } from "./token";
 
 export async function getSession(): Promise<SessionData | null> {
@@ -29,18 +29,17 @@ export async function getSession(): Promise<SessionData | null> {
   }
 }
 
-/** 관리자면 세션, 아니면 403 응답 */
+/**
+ * 관리자면 세션, 아니면 거절 응답.
+ *
+ * 2026-09-12 부터 쿠키만 보지 않고 공유 DB 로 한 번 더 확인한다(`lib/auth/verifySession`). 이 관문에
+ * 달린 기능이 보이스 참조음 내려받기·보류 음원 영구 삭제·**180일 기기 토큰 발급**이라, 교적부에서 끊긴
+ * 세션이 낡은 쿠키 사본으로 계속 통하면 안 된다.
+ */
 export async function requireAdmin(): Promise<
   { ok: true; session: SessionData } | { ok: false; res: NextResponse }
 > {
-  const session = await getSession();
-  if (!isAdmin(session)) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "관리자 권한이 필요합니다" }, { status: 403 }),
-    };
-  }
-  return { ok: true, session: session! };
+  return requireFreshAdmin();
 }
 
 /** 유효한 기기 토큰이면 claims, 아니면 401 응답 */
