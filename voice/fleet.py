@@ -134,16 +134,20 @@ def snapshot():
     books = []
     cj = next((j for j in js if j["id"] == cur.get("job")), None)
     if cj:
-        for b in _book_rows(cj):
-            books.append(b)
+        books = _book_rows(cj)
+
+    # 보이스는 '전체 생성' 설정에서 오지만, 그것을 켜지 않고 작업만 거는 PC 도 있다 —
+    # 그럴 땐 지금(또는 가장 최근) 작업이 쓰는 보이스를 보여 준다. 화면에 빈칸이 뜨면
+    # 이 PC 가 무엇으로 만들고 있는지 알 수가 없다.
+    voice = st.get("voice") or (cj or (js[0] if js else {})).get("voice") or ""
 
     return {
         "label": st["label"],
         "host": socket.gethostname(),
         "gpu": _gpu(),
         "codeVersion": _code_version(),
-        "voice": st.get("voice") or "",
-        "voiceKey": engine.voice_upload_key(st["voice"]) if st.get("voice") else "",
+        "voice": voice,
+        "voiceKey": (engine.voice_upload_key(voice) or "") if voice else "",
         "running": jobs.worker_alive(),
         "note": cur.get("note", ""),
         "jobId": cur.get("job"),
