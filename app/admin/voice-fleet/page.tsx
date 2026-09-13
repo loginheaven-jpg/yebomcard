@@ -64,6 +64,24 @@ interface Command {
   status: string;
   result: string;
 }
+interface ProgressBook {
+  code: string;
+  name: string;
+  testament: "old" | "new";
+  total: number;
+  done: number;
+  legacy: number;
+}
+interface Progress {
+  voiceKey: string;
+  at: string;
+  tookMs: number;
+  total: number;
+  done: number;
+  legacy: number;
+  books: ProgressBook[];
+  cached?: boolean;
+}
 interface Total {
   pcs: number;
   livePcs: number;
@@ -110,6 +128,9 @@ export default function VoiceFleetPage() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [prog, setProg] = useState<Progress | null>(null);
+  const [progBusy, setProgBusy] = useState(false);
+  const [showBooks, setShowBooks] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -147,6 +168,23 @@ export default function VoiceFleetPage() {
     const t = setInterval(loadLog, REFRESH_MS);
     return () => clearInterval(t);
   }, [admin, showLog, loadLog]);
+
+  /**
+   * 성경 전체 진도를 **누를 때만** 잰다. 셈은 서버가 하므로 생성 PC 는 느려지지 않지만,
+   * 본문 3만 절을 훑는 일이라 몇 초가 걸린다 — 실시간으로 되풀이할 일이 아니다.
+   */
+  const measure = useCallback(async () => {
+    setProgBusy(true);
+    try {
+      const r = await fetch("/api/voice-studio/progress?fresh=1").then((x) => x.json());
+      if (r?.error) setMsg(r.error);
+      else setProg(r);
+    } catch {
+      setMsg("진도를 재지 못했습니다");
+    } finally {
+      setProgBusy(false);
+    }
+  }, []);
 
   const send = useCallback(
     async (op: string, target: string, args: Record<string, unknown> = {}) => {
@@ -255,6 +293,63 @@ export default function VoiceFleetPage() {
           ))}
         </section>
       )}
+
+      <section className="rounded-xl border border-[var(--line)] p-3 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-sm font-semibold">성경 전체 진도</h2>
+          <span className="text-xs text-[var(--ink-faint)]">
+            {prog ? `${new Date(prog.at).toLocaleString("ko-KR")} 기준` : "아직 재지 않았습니다"}
+          </span>
+          <span className="ml-auto flex gap-1.5">
+            <Btn onClick={measure} disabled={progBusy}>
+              {progBusy ? "재는 중…" : prog ? "다시 재기" : "진도 재기"}
+            </Btn>
+            {prog && (
+              <Btn onClick={() => setShowBooks((v) => !v)}>
+                {showBooks ? "책별 접기" : "책별로 보기"}
+              </Btn>
+            )}
+          </span>
+        </div>
+        {!prog && (
+          <p className="mt-1.5 text-xs text-[var(--ink-faint)]">
+            누를 때만 그 시점을 잽니다. 셈은 서버가 하므로 생성 PC 속도에는 영향이 없습니다.
+          </p>
+        )}
+        {prog && (
+          <>
+            <div className="mt-2 flex items-baseline gap-2">
+              <strong className="text-lg">
+                {Math.round((100 * prog.done) / Math.max(1, prog.total))}%
+              </strong>
+              <span className="text-sm text-[var(--ink-soft)]">
+                {prog.done.toLocaleString()} / {prog.total.toLocaleString()}절
+              </span>
+              <span className="text-xs text-[var(--ink-faint)] ml-auto">
+                남은 절 {(prog.total - prog.done).toLocaleString()}
+                {prog.legacy > 0 && ` · 다시 만들 구방식 ${prog.legacy.toLocaleString()}`}
+              </span>
+            </div>
+            <Bar done={prog.done} legacy={prog.legacy} total={prog.total} />
+            {showBooks && (
+              <div className="mt-3 space-y-1">
+                {prog.books.map((b) => (
+                  <div key={b.code}>
+                    <div className="flex justify-between text-xs">
+                      <span>{b.name}</span>
+                      <span className="text-[var(--ink-faint)]">
+                        {b.done}/{b.total}
+                        {b.legacy > 0 && ` · 구방식 ${b.legacy}`}
+                      </span>
+                    </div>
+                    <Bar done={b.done} legacy={b.legacy} total={b.total} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
       <h2 className="text-sm font-semibold mb-2">생성 PC</h2>
       {pcs.length === 0 && (
@@ -373,6 +468,20 @@ export default function VoiceFleetPage() {
         ))}
       </div>
     </main>
+  );
+}
+
+/**
+ * 진도 막대 — 만든 절 가운데 **구방식(다시 만들어야 할 것)** 은 옅게 그린다.
+ * 둘을 한 색으로 칠하면 100% 로 보이는데 실제로는 절반을 다시 만들어야 하는 상태가 숨는다.
+ */
+function Bar({ done, legacy, total }: { done: number; legacy: number; total: number }) {
+  const pct = (n: number) => `${Math.min(100, (100 * n) / Math.max(1, total))}%`;
+  return (
+    <div className="h-2 rounded bg-[var(--line)] overflow-hidden flex">
+      <div className="h-full bg-emerald-600" style={{ width: pct(done - legacy) }} />
+      <div className="h-full bg-emerald-600/35" style={{ width: pct(legacy) }} />
+    </div>
   );
 }
 
