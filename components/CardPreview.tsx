@@ -8,6 +8,7 @@ import { extractKeywords, getUnsplashQuery } from "@/lib/keywords";
 import { getBookByCode } from "@/lib/books";
 import { stripNotes, type BibleVerse, type BibleVersion } from "@/lib/types";
 import { addScrapToServer } from "@/lib/scrap";
+import { PromptToast } from "@/components/GroupCodePrompt";
 
 /**
  * 슬라이더 값(0~100) → 흰→주조색→검 그라데이션 상의 색상
@@ -108,6 +109,9 @@ const FONT_OPTIONS: { key: FontChoice; label: string; css: string }[] = [
   { key: "gowun-dodum", label: "돋움", css: "var(--font-gowun-dodum)" },
 ];
 
+/** 카메라를 여는 동안 남겨 두는 표시 — 앱이 죽었다 되살아난 것을 알아채는 데 쓴다 */
+const PHOTO_PENDING_KEY = "yebom_photo_pending";
+
 export default function CardPreview({ verses, mainVersion, subVersion, onBack }: CardPreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [activeCard, setActiveCard] = useState<CardType>("gradient");
@@ -132,7 +136,15 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   interface UploadImage { id: string; dataUrl: string; }
   const [uploads, setUploads] = useState<UploadImage[]>([]);
   const [selectedUploadIdx, setSelectedUploadIdx] = useState(0);
-  const [cleaningImage, setCleaningImage] = useState(false);
+  /**
+   * 사진을 올리는 중 어느 단계인가 — null 이면 쉬는 중.
+   * 예전에는 boolean 하나라 '그냥 사용' 으로 올릴 때도 화면에 "글자 제거 중..." 이 떴다.
+   * 저장 중이라는 말이 어디에도 없어, 지휘부가 "저장중 로딩창도 없다"고 느낀 원인이다.
+   */
+  const [uploadStage, setUploadStage] = useState<"clean" | "save" | null>(null);
+  const cleaningImage = uploadStage !== null;
+  /** 한 줄 알림 — 경고창을 띄울 만큼은 아니지만 말없이 지나가서는 안 되는 것 */
+  const [notice, setNotice] = useState<string | null>(null);
   const [showUploadPopup, setShowUploadPopup] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadMode = useRef<"as-is" | "remove-text">("as-is");
@@ -151,10 +163,66 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
     })();
   }, []);
 
-  // 이미지 리사이즈 (긴 변 1200px, JPEG 80%)
+  /**
+   * 사진을 고르는 동안 앱이 죽었는지 알아내는 표시. 카메라를 열 때 놓고, 사진이 오면 지운다.
+   * 사용자가 그냥 취소한 경우에도 지워야 하므로(화면이 다시 보이면) 아래 효과에서 치운다.
+   */
+  useEffect(() => {
+    let stamp = "";
+    try {
+      stamp = sessionStorage.getItem(PHOTO_PENDING_KEY) || "";
+    } catch {
+      return;
+    }
+    // 앱이 새로 떴는데 표시가 남아 있다 = 사진을 고르는 사이에 앱이 죽었다
+    if (stamp && Date.now() - Number(stamp) < 30 * 60 * 1000) {
+      setNotice("사진을 고르는 사이에 앱이 다시 시작되어 저장되지 않았습니다. 다시 시도해 주세요.");
+    }
+    try {
+      sessionStorage.removeItem(PHOTO_PENDING_KEY);
+    } catch { /* 무시 */ }
+  }, []);
+
+  /**
+   * 카메라에서 **취소**하고 돌아온 경우 표시를 치운다 — 안 그러면 다음에 앱을 켤 때
+   * 엉뚱한 안내가 뜬다. 사진이 왔다면 handleFileSelect 가 먼저 지운다.
+   */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      setTimeout(() => {
+        try {
+          sessionStorage.removeItem(PHOTO_PENDING_KEY);
+        } catch { /* 무시 */ }
+      }, 3000);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  /**
+   * 이미지 리사이즈 (긴 변 1200px, JPEG 80%).
+   *
+   * 시간 제한을 둔다 — onload 도 onerror 도 오지 않는 파일이 있으면(디코더가 모르는 형식 등)
+   * 약속이 영영 풀리지 않아 '저장 중' 이 끝나지 않는다. 실패하면 부르는 쪽이 원본을 쓴다.
+   * 만든 객체 URL 은 반드시 돌려준다(안 그러면 사진마다 메모리가 쌓인다).
+   */
   function resizeImage(file: File): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      const url = URL.createObjectURL(file);
+      let settled = false;
+      const done = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        URL.revokeObjectURL(url);
+        fn();
+      };
+      const timer = setTimeout(
+        () => done(() => reject(new Error("resize timeout"))),
+        15000,
+      );
       img.onload = () => {
         const MAX = 1200;
         let w = img.width, h = img.height;
@@ -165,15 +233,14 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext("2d");
-        if (!ctx) { reject(new Error("canvas fail")); return; }
+        if (!ctx) { done(() => reject(new Error("canvas fail"))); return; }
         ctx.drawImage(img, 0, 0, w, h);
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("toBlob fail"));
+          done(() => (blob ? resolve(blob) : reject(new Error("toBlob fail"))));
         }, "image/jpeg", 0.8);
       };
-      img.onerror = () => reject(new Error("image load fail"));
-      img.src = URL.createObjectURL(file);
+      img.onerror = () => done(() => reject(new Error("image load fail")));
+      img.src = url;
     });
   }
 
@@ -336,35 +403,61 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
   function triggerUpload(mode: "as-is" | "remove-text") {
     pendingUploadMode.current = mode;
     setShowUploadPopup(false);
+    // 카메라를 여는 동안 안드로이드가 메모리를 회수해 앱을 죽이는 일이 있다. 그러면 돌아왔을 때
+    // 페이지가 새로 뜨고 onChange 는 영영 오지 않는다 — 사용자에게는 '아무 일도 안 일어난' 것으로 보인다.
+    // 표시를 남겨 두었다가, 표시가 남은 채로 앱이 새로 뜨면 그때 알려 준다.
+    try {
+      sessionStorage.setItem(PHOTO_PENDING_KEY, String(Date.now()));
+    } catch { /* 저장이 막힌 브라우저 — 안내만 못 할 뿐 업로드는 그대로 된다 */ }
     fileInputRef.current?.click();
   }
 
+  /**
+   * 카메라·앨범에서 고른 사진을 받아 올린다.
+   *
+   * **어떤 경우에도 조용히 끝나지 않게** 한다(2026-09-13 지휘부 보고: 사진을 찍고 확인을 눌렀는데
+   * 아무 일도 일어나지 않은 적이 두 번). 예전에는 try 에 catch 가 없어서, 연결이 잠깐 끊겨
+   * fetch 가 거부되거나 응답이 JSON 이 아니면 예외가 아무에게도 알려지지 않고 사라졌다 —
+   * 스피너만 깜빡이고 화면은 그대로 돌아왔다. 전역 오류 수집도 없어 흔적조차 남지 않았다.
+   */
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert("5MB 이하의 사진을 선택해 주세요");
+    // 사진이 왔으니 '카메라 여는 중' 표시를 지운다. 저장소가 막힌 브라우저(사생활 보호 모드 등)에서는
+    // 여기서 예외가 나는데, 그 때문에 업로드 전체가 죽으면 본말이 뒤집힌다 — 반드시 삼킨다.
+    try {
+      sessionStorage.removeItem(PHOTO_PENDING_KEY);
+    } catch { /* 무시 */ }
+    // 카메라가 사진 없이 돌아오는 일이 있다 — 예전에는 여기서 말없이 끝났다
+    if (!file) {
       e.target.value = "";
+      setNotice("사진을 받지 못했습니다. 다시 한 번 찍어 주세요.");
       return;
     }
 
     // 같은 파일 재선택 허용
     e.target.value = "";
 
-    setCleaningImage(true);
+    setUploadStage(pendingUploadMode.current === "remove-text" ? "clean" : "save");
     try {
       // 1. 리사이즈 (긴 변 1200px, JPEG 80%)
+      //    용량 검사는 **리사이즈 뒤에** 한다 — 요즘 폰 사진은 원본이 8~12MB 라, 먼저 재면
+      //    줄이면 넉넉히 통과할 사진까지 거절했다(2026-09-13 고침).
       let blob: Blob = file;
       try {
         blob = await resizeImage(file);
       } catch { /* 리사이즈 실패 시 원본 사용 */ }
+      if (blob.size > 5 * 1024 * 1024) {
+        alert("사진이 너무 큽니다(5MB 넘음). 다른 사진을 골라 주세요.");
+        return;
+      }
 
       // 2. 글자지움 모드면 AI 편집 — 실패 시 명시적 알림 후 업로드 중단
       if (pendingUploadMode.current === "remove-text") {
         const reader = new FileReader();
         const dataUrl = await new Promise<string>((resolve, reject) => {
           reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(reader.error);
+          reader.onerror = () =>
+            reject(reader.error || new Error("사진을 읽지 못했습니다"));
           reader.readAsDataURL(blob);
         });
         try {
@@ -395,22 +488,40 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
       }
 
       // 3. 서버 업로드
+      setUploadStage("save");
       const form = new FormData();
       form.append("file", blob, `upload.${blob.type === "image/png" ? "png" : "jpg"}`);
       const res = await fetch("/api/photos", { method: "POST", body: form });
-      if (res.ok) {
-        const { photo } = await res.json();
-        setUploads((prev) => {
-          const next = [...prev, { id: photo.id, dataUrl: photo.public_url }];
-          setSelectedUploadIdx(next.length - 1);
-          return next;
-        });
-      } else {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "업로드 실패");
+        alert(err.error || `사진을 저장하지 못했습니다 (${res.status})`);
+        return;
       }
+      // 200 인데 JSON 이 아니거나 photo 가 없는 경우 — 예전에는 여기서 터져 조용히 사라졌다
+      const data = await res.json().catch(() => null);
+      const photo = data?.photo;
+      if (!photo?.id || !photo?.public_url) {
+        alert("사진을 저장했지만 서버 응답을 읽지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
+      setUploads((prev) => {
+        const next = [...prev, { id: photo.id, dataUrl: photo.public_url }];
+        setSelectedUploadIdx(next.length - 1);
+        return next;
+      });
+    } catch (err) {
+      // 연결이 끊겼거나 예상 못한 오류 — 반드시 사람에게 알린다
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[photo-upload]", msg);
+      alert(
+        navigator.onLine === false
+          ? "인터넷이 끊겨 사진을 저장하지 못했습니다. 연결을 확인하고 다시 시도해 주세요."
+          : `사진을 저장하지 못했습니다.
+
+${msg}`,
+      );
     } finally {
-      setCleaningImage(false);
+      setUploadStage(null);
     }
   }
 
@@ -642,6 +753,9 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
 
   return (
     <div className="w-full max-w-md mx-auto">
+      {/* 한 줄 알림 — 경고창을 띄울 만큼은 아니지만 말없이 지나가서는 안 되는 것 */}
+      {notice && <PromptToast text={notice} onDone={() => setNotice(null)} />}
+
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <button
@@ -960,13 +1074,13 @@ export default function CardPreview({ verses, mainVersion, subVersion, onBack }:
           )}
 
           {/* 사진 추가 버튼 / 글자 제거 중 표시 */}
-          {cleaningImage ? (
+          {uploadStage ? (
             <div className="flex items-center justify-center gap-2 py-3 text-sm text-gray-400">
               <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              글자 제거 중...
+              {uploadStage === "clean" ? "글자 제거 중..." : "사진 저장 중..."}
             </div>
           ) : (
             <div className="relative">
