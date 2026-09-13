@@ -380,18 +380,27 @@ def gen_kwargs(temp=0.75):
                 non_streaming_mode=NON_STREAMING)
 
 
-PIECE_END_TRIES = 3   # 조각 끝이 짧을 때 그 조각을 뽑는 최대 횟수(처음 포함)
+PIECE_END_TRIES = 3   # 끝이 짧을 때 그 조각(또는 그 절)을 다시 뽑는 최대 횟수(처음 포함)
 
 
-def _gen_piece(tts, text, prompt, kw):
-    """나눠 만드는 절의 조각 하나 — 끝 음절이 END_MIN_MS 보다 짧으면 그 조각만 다시 뽑고 가장 긴 것을 쓴다.
+def _gen_piece(tts, text, prompt, kw, first=None):
+    """만들어 낸 소리 한 덩이 — 끝 음절이 END_MIN_MS 보다 짧으면 그것만 다시 뽑고 가장 긴 것을 쓴다.
 
     나눠 만들면 조각 끝마다 '절 끝'이 생긴다(모델에게는 조각 하나가 한 절이다). 새 방식에서도 끝이 짧게
     나오는 일이 있는데, 절 단위 끝 검사(jobs._judge)는 음원 전체의 마지막만, 받아쓰기 합격 때만 본다 —
     그래서 절 중간 문장끝이 잘린 채 남았다(2026-09-11 욥 39:8 30ms, 마 18:18 90ms). 조각은 짧아 다시
-    뽑는 비용이 작다."""
+    뽑는 비용이 작다.
+
+    2026-09-13부터 **쪼개지 않고 통째로 만드는 절도 여기를 거친다**. 끝 길이는 같은 본문을 다시 넣어도
+    매번 달라지는(실험 42회: 150ms 이상이 11회) 뽑기라, 되는 방법은 '짧으면 다시 뽑기' 뿐이다.
+    전에는 통째 절이 이 검사를 건너뛰어 작업 단계 재시도(받아쓰기까지 다시 하는 비싼 길)로만 걸러졌다."""
     best, best_end, sr = None, -1.0, SR_TARGET
-    for _ in range(PIECE_END_TRIES):
+    tries = PIECE_END_TRIES
+    if first is not None:                 # 이미 한 번 만들어 본 것이 있다(묶음으로 만든 절)
+        best, sr = first
+        best_end = final_syllable_ms(best, sr)
+        tries -= 1
+    for _ in range(tries):
         wavs, sr = tts.generate_voice_clone(
             text=text, language="Korean", voice_clone_prompt=prompt, **kw)
         w = np.asarray(wavs[0], dtype=np.float32)
@@ -462,6 +471,14 @@ def synth_batch(texts, voice, temp=0.75, punct=True, max_len=MAX_LEN, force=Fals
                     voice_clone_prompt=prompt * len(bt), **kw)
             for i, w in zip(single, wavs):
                 results[i] = np.asarray(w, dtype=np.float32)
+            # 묶음으로 만든 것 중 끝이 짧은 절만 따로 다시 뽑는다(조각과 같은 규칙).
+            # 묶음은 처리량을 위해 한 번에 만들므로, 다시 뽑을 때는 한 절씩 간다.
+            for i in single:
+                if final_syllable_ms(results[i], sr) >= END_MIN_MS:
+                    continue
+                w, sr2 = _gen_piece(tts, prepared[i][0], prompt, kw,
+                                    first=(results[i], sr))
+                results[i], sr = w, sr2
 
         for i in multi:
             parts = []

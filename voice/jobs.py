@@ -600,7 +600,16 @@ def _flag_note_residue(job):
 
 
 # ───────────────────────── 워커 ─────────────────────────
-_BEST_KEYS = ("best_end_ms", "best_ratio", "best_asr", "best_audio_sec", "end_retry")
+_BEST_KEYS = ("best_end_ms", "best_ratio", "best_asr", "best_audio_sec", "end_retry", "end_tries")
+
+# 받아쓰기는 합격했는데 **절 끝만 짧을 때** 다시 만드는 최대 횟수(처음 포함).
+# 받아쓰기 불합격의 재시도(job["retry_max"], 기본 3)와 따로 센다 — 성격이 다르기 때문이다.
+#   · 받아쓰기 불합격은 회차마다 본문을 더 잘게 쪼개 조건을 바꾼다 → 몇 번 안에 붙거나 사람이 봐야 한다.
+#   · 끝 길이는 조건을 바꿔도 나아지지 않는 뽑기다(2026-09-13 실험: 온도·끝 공백·줄바꿈·강제 쪼개기·
+#     문장부호 끄기 — 어느 것도 효과 없음. 한 번에 150ms 이상 나올 확률 약 59%).
+#     그래서 답은 '더 뽑아 보기' 뿐이고, 3회면 6.9%가 짧은 채 남는다(실측 구약 교체 5,545절 중 6.8%).
+#     6회로 올리면 0.5%로 떨어지고 전체 생성 시간은 약 5% 는다(기대 시도 1.58회 → 1.69회).
+END_RETRY_MAX = 6
 
 
 def _best_path(p):
@@ -629,14 +638,24 @@ def _accept_best(it, p):
     it["reason"] = f"절 끝 짧음({it.get('end_ms', 0):.0f}ms) — 가장 나은 시도 사용"
 
 
+def asr_round(it):
+    """받아쓰기 때문에 다시 만든 횟수 — 끝만 짧아 다시 만든 횟수는 뺀다.
+
+    본문을 얼마나 잘게 쪼갤지가 이 값으로 정해진다(_process). 끝 재시도는 본문을 쪼개지 않으므로
+    여기 섞이면 안 된다 — 섞이면 끝을 여섯 번 뽑은 절이 받아쓰기 한 번 실패했을 때 곧바로
+    '마지막 회차' 대접을 받아 지나치게 잘게 쪼개지거나 보류로 떨어진다."""
+    return it["tries"] - it.get("end_tries", 0)
+
+
 def _judge(job, it, p, w, sr, ok):
     """받아쓰기 결과와 절 끝 길이로 절의 다음 상태를 정한다.
 
     절 끝 검사: 받아쓰기는 통과했는데 끝 음절이 짧게 잘렸으면(engine.END_MIN_MS 미만) 다시
-    만든다. 끝이 가장 긴 시도는 따로 보관해 두었다가, 상한에 닿으면 그것을 쓴다 —
-    **보류하지 않는다.** 내용은 맞고 끝맺음만 아쉬운 것이라 사람이 판단할 일이 아니다.
+    만든다 — 최대 END_RETRY_MAX 회, 받아쓰기 재시도와 따로 센다. 끝이 가장 긴 시도는 따로
+    보관해 두었다가, 상한에 닿으면 그것을 쓴다 — **보류하지 않는다.** 내용은 맞고 끝맺음만
+    아쉬운 것이라 사람이 판단할 일이 아니다.
     """
-    last = it["tries"] >= job["retry_max"]
+    last = asr_round(it) >= job["retry_max"]
     if ok:
         end_ms = engine.final_syllable_ms(w, sr)
         it["end_ms"] = round(end_ms)
@@ -650,11 +669,13 @@ def _judge(job, it, p, w, sr, ok):
             it["best_ratio"] = it.get("ratio")
             it["best_asr"] = it.get("asr", "")
             it["best_audio_sec"] = it.get("audio_sec")
-        if last:
+        it["end_tries"] = it.get("end_tries", 0) + 1
+        if it["end_tries"] >= END_RETRY_MAX:
             _accept_best(it, p)
         else:
             it["end_retry"] = True
-            it["reason"] = f"절 끝 짧음({end_ms:.0f}ms<{engine.END_MIN_MS}) — 다시 만듦"
+            it["reason"] = (f"절 끝 짧음({end_ms:.0f}ms<{engine.END_MIN_MS}) — 다시 만듦"
+                            f" ({it['end_tries']}/{END_RETRY_MAX})")
             it["status"] = "pending"
         return
     # 받아쓰기 불합격 — 다음 재시도는 본문을 더 잘게 쪼개는 기존 경로로 간다
@@ -710,8 +731,8 @@ def _process(job):
         # 같은 재시도 회차끼리 묶는다 — 회차가 오를수록 더 잘게 쪼개 잘림을 피한다
         # 단 '절 끝만 짧아서' 다시 만드는 절은 본문을 더 쪼개지 않는다 — 쪼개면 절 중간에 쉼이
         # 끼어 호흡이 달라진다. 끝만 다시 뽑으면 되므로 처음과 같은 조건으로 만든다.
-        key0 = (pend[0]["tries"], bool(pend[0].get("end_retry")))
-        group = [i for i in pend if (i["tries"], bool(i.get("end_retry"))) == key0][:batch]
+        key0 = (asr_round(pend[0]), bool(pend[0].get("end_retry")))
+        group = [i for i in pend if (asr_round(i), bool(i.get("end_retry"))) == key0][:batch]
         tries0, end_retry = key0
         if end_retry:
             max_len, force, fine = engine.MAX_LEN, False, False
