@@ -99,7 +99,21 @@ def counts(job):
 
 
 # ───────────────────────── 작업 생성 ─────────────────────────
-def new_job(voice, title, items, temp=0.75, punct=True, batch=4, retry_max=3, seq=9999,
+# 한 번에 몇 절을 함께 만드는가 — 짧은 절(120자 이하)에만 효과가 있다. 긴 절과 재시도는
+# 조각마다 하나씩 만든다.
+#
+# 2026-09-14 지휘부 제안으로 4 → 8. 근거: 실측 3060 +8% · 3080 Ti +63%(README '새 방식 속도'),
+# 그래픽 메모리 최대 9.5GB(12GB 카드에서 여유 있음), 그리고 **이 저장소에서 메모리 부족이 난 적이
+# 한 번도 없다**(작업 45건에 batch_note 기록 0). 모자라면 워커가 그 묶음만 반으로 줄여 다시 만들고,
+# 세 번 걸리면 그 작업의 배치를 아예 낮춘다 — 작업이 멈추지 않는다(_process 의 OOM 처리).
+#
+# **다만 자동 회복은 깨끗한 메모리 부족 예외에만 걸린다.** 윈도우 드라이버가 예외 대신 시스템
+# 메모리로 흘려보내면 오류 없이 느려지기만 하고 배치도 안 낮아진다. 그때는 무리 현황의
+# '시간당 절 수' 가 뚝 떨어지므로, 그 PC 만 배치 4 로 내린다(화면 버튼 또는 fleet_cli batch 4 --pc).
+DEFAULT_BATCH = 8
+
+
+def new_job(voice, title, items, temp=0.75, punct=True, batch=DEFAULT_BATCH, retry_max=3, seq=9999,
             upload_key=None, replace=False):
     """items: [{key, ref, text, out}] — out 은 절별 wav 절대경로(str)
 
@@ -357,7 +371,8 @@ def _take_verse_regen(job):
     if not items:
         return 0
     jid = new_job(job["voice"], f"음원 다시 만들기 요청 {time.strftime('%m-%d %H:%M')} ({len(items)}절)", items,
-                  temp=job.get("temp", 0.75), punct=job.get("punct", True), batch=job.get("batch", 4),
+                  temp=job.get("temp", 0.75), punct=job.get("punct", True),
+                  batch=job.get("batch", DEFAULT_BATCH),
                   retry_max=job.get("retry_max", 3), seq=0, upload_key=key)
     nj = load(jid)
     for it, src in zip(nj["items"], items):

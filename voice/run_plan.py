@@ -146,7 +146,7 @@ def main():
     ap.add_argument("--version", default="새번역")
     ap.add_argument("--start", default="욥기", help="시작 책(진도표 기준)")
     ap.add_argument("--books", type=int, default=0, help="처리할 권 수(0=끝까지)")
-    ap.add_argument("--batch", type=int, default=4)
+    ap.add_argument("--batch", type=int, default=jobs.DEFAULT_BATCH)
     ap.add_argument("--retry", type=int, default=3)
     # ── 여러 PC 분담용 ──
     ap.add_argument("--testament", choices=["old", "new"], default=None,

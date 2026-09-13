@@ -22,7 +22,7 @@ def main():
     ap.add_argument("--voice", required=True)
     ap.add_argument("--version", default="새번역")
     ap.add_argument("--book", required=True)
-    ap.add_argument("--batch", type=int, default=4)
+    ap.add_argument("--batch", type=int, default=jobs.DEFAULT_BATCH)
     ap.add_argument("--retry", type=int, default=3)
     ap.add_argument("--resume", default=None, help="이어할 작업 ID")
     ap.add_argument("--upload-key", default=None,

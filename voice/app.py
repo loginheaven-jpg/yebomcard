@@ -461,7 +461,8 @@ def ui_resume(jid):
 REPLACE_SEQ_BASE = 10000
 
 
-def enqueue_replacement(voice, version, books, upload_key, batch=4, retry_max=3, temp=0.75, punct=True):
+def enqueue_replacement(voice, version, books, upload_key, batch=jobs.DEFAULT_BATCH,
+                        retry_max=3, temp=0.75, punct=True):
     """구방식 음원 교체 작업을 책마다 건다 — 그 책에서 **아직 구방식인 절만** 담는다.
 
     2026-09-10 까지의 영희 음원은 음성 복제 기본값인 '본문 흘려 넣기' 모드로 만들어 절 끝 음절이
@@ -667,7 +668,8 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
         b_text = gr.Textbox(label="직접 입력 (한 줄 = 한 항목)", lines=5)
         b_file = gr.File(label="텍스트 파일(.txt)", type="filepath")
         with gr.Row():
-            b_batch = gr.Slider(1, 8, value=4, step=1, label="배치 (VRAM 부족하면 낮추세요)")
+            b_batch = gr.Slider(1, 8, value=jobs.DEFAULT_BATCH, step=1,
+                                label="배치 (모자라면 워커가 알아서 줄입니다)")
             b_temp = gr.Slider(0.5, 1.0, value=0.75, step=0.05, label="temperature")
             b_retry = gr.Slider(1, 5, value=3, step=1, label="재시도 상한")
             b_punct = gr.Checkbox(value=True, label="구두점 주입(개역 등 구두점 없는 본문에 유효)")

@@ -60,7 +60,7 @@ def state():
     d.setdefault("auto", False)          # 전체 생성(자동 배분) — 기본은 꺼 둔다
     d.setdefault("voice", "")
     d.setdefault("version", "새번역")
-    d.setdefault("batch", 4)
+    d.setdefault("batch", jobs.DEFAULT_BATCH)
     d.setdefault("plan", "새번역")       # 임대를 나누는 단위 — 역본이 다르면 따로 센다
     return d
 
@@ -222,7 +222,8 @@ def _do_command(c):
         return "워커를 다시 켰습니다"
 
     if op == "set_batch":
-        n = jobs.set_batch(a.get("jobId") or (jobs.current().get("job") or ""), a.get("batch", 4))
+        n = jobs.set_batch(a.get("jobId") or (jobs.current().get("job") or ""),
+                           a.get("batch", jobs.DEFAULT_BATCH))
         return f"배치 {n}"
 
     if op == "delete_job":
