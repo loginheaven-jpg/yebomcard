@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
 import { studioR2Enabled } from "@/lib/voiceStudio/r2";
 import {
+  CLAIM_WINDOW_MS,
   commandId,
   listCommands,
   pruneCommands,
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
     createdAt: new Date().toISOString(),
     status: "pending",
     takenBy: [],
+    doneBy: [],
     result: "",
   };
   const ok = await putCommand(cmd);
@@ -109,12 +111,21 @@ export async function GET(req: Request) {
   const all = await pruneCommands(await listCommands());
   if (!mine) return NextResponse.json({ commands: all });
 
-  // 내게 온 미처리 명령을 집어 간다 — 집었다는 표시를 먼저 남긴다(두 번 처리 방지)
+  // 내게 온 미처리 명령을 집어 간다 — 집었다는 표시를 먼저 남긴다(두 번 처리 방지).
+  //
+  // 두 번 처리하지 않게 막는 것은 **takenBy** 다(PC 마다 한 번). status 로 막지 않는다 —
+  // 모든 PC 대상("*") 명령은 먼저 끝낸 한 대가 status 를 done 으로 바꾸면 나머지가 영영
+  // 못 집는다(2026-09-14: 두 대에 건 '다시 켜기' 가 한 대에서만 돌았다).
+  const now = Date.now();
   const taken: FleetCommand[] = [];
   for (const c of all) {
-    if (c.status !== "pending") continue;
+    if (c.status === "cancelled") continue;
+    if (c.target === "*" ? false : c.status !== "pending") continue;
     if (c.target !== "*" && c.target !== myId) continue;
     if (c.takenBy.includes(myId)) continue;
+    // 묵은 지시는 집지 않는다 — 며칠 뒤 켜진 PC 가 옛 '멈춤' 을 뒤늦게 실행하면 안 된다
+    const age = now - Date.parse(c.createdAt);
+    if (!Number.isFinite(age) || age > CLAIM_WINDOW_MS) continue;
     c.takenBy = [...c.takenBy, myId];
     if (await putCommand(c)) taken.push(c);
   }
@@ -152,7 +163,11 @@ export async function PATCH(req: Request) {
   const cmd = all.find((c) => c.id === id);
   if (!cmd) return NextResponse.json({ error: "그 명령이 없습니다" }, { status: 404 });
 
-  cmd.status = status;
+  // 모든 PC 대상 명령은 한 대가 끝냈다고 통째로 끝난 것이 아니다 — 몇 대가 받을지 서버는 모른다.
+  // 그래서 status 는 pending 그대로 두고(취소만 예외) 보고한 PC 를 doneBy 에 쌓는다.
+  // 다시 집히는 것은 takenBy 가 막고, 묵은 명령은 CLAIM_WINDOW_MS 가 막는다.
+  if (cmd.target !== "*" || status === "cancelled") cmd.status = status;
+  if (myId && !cmd.doneBy.includes(myId)) cmd.doneBy = [...(cmd.doneBy || []), myId];
   cmd.doneAt = new Date().toISOString();
   const who = myId ? myId.slice(0, 8) : "관리자";
   const detail = typeof body.result === "string" ? body.result.slice(0, 300) : "";

@@ -142,7 +142,13 @@ def cmd_books(a):
 
 def cmd_log(a):
     for c in server.fleet_command_list()[:a.n]:
-        print(f"  {c['createdAt'][5:16]} {c['op']:<14} → {c['target'][:8]:<8} {c['status']:<9}"
+        # 모든 PC 대상 지시는 몇 대가 받을지 서버가 모르므로 끝나도 pending 으로 남는다 —
+        # 대신 몇 대가 집었고 몇 대가 마쳤는지 보여 준다.
+        if c["target"] == "*":
+            state = f"{len(c.get('doneBy') or [])}/{len(c.get('takenBy') or [])}대 완료"
+        else:
+            state = c["status"]
+        print(f"  {c['createdAt'][5:16]} {c['op']:<14} → {c['target'][:8]:<8} {state:<12}"
               f" {c.get('result','')[:80]}")
     return 0
 

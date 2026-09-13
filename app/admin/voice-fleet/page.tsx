@@ -62,6 +62,8 @@ interface Command {
   by: string;
   createdAt: string;
   status: string;
+  takenBy?: string[];
+  doneBy?: string[];
   result: string;
 }
 interface ProgressBook {
@@ -294,7 +296,12 @@ export default function VoiceFleetPage() {
             <div key={c.id} className="flex gap-2 py-0.5 border-b border-[var(--line)] last:border-0">
               <span className="text-[var(--ink-faint)] w-20 shrink-0">{ago(c.createdAt)}</span>
               <span className="font-medium w-24 shrink-0">{c.op}</span>
-              <span className="w-16 shrink-0">{c.status}</span>
+              <span className="w-20 shrink-0">
+                {/* 모든 PC 대상 지시는 몇 대가 받을지 서버가 모르므로 끝나도 pending 으로 남는다 */}
+                {c.target === "*"
+                  ? `${c.doneBy?.length ?? 0}/${c.takenBy?.length ?? 0}대`
+                  : c.status}
+              </span>
               <span className="text-[var(--ink-faint)] truncate">{c.result}</span>
             </div>
           ))}
