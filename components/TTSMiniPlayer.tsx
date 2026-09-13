@@ -52,6 +52,18 @@ export default function TTSMiniPlayer({
   const [voiceOpen, setVoiceOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 접힌 손잡이를 눌러 펼친 직후에는 이 줄이 손가락 밑에 새로 놓인다 — 손을 뗄 때 오는 클릭이
+   * 진행 막대나 속도 칩으로 떨어져 **재생 위치가 튀거나 팝오버가 열린다**(하단 탭바와 같은 유령 클릭).
+   * 인라인은 펼칠 때 새로 붙으므로, 붙고 나서 잠깐은 아무 것도 받지 않는다.
+   */
+  const [tapGuard, setTapGuard] = useState(inline);
+  useEffect(() => {
+    if (!inline) return;
+    const t = setTimeout(() => setTapGuard(false), 500);
+    return () => clearTimeout(t);
+  }, [inline]);
+
   // 인라인이 떠 있으면 떠다니는 쪽은 물러난다
   const { registerInlinePlayer, subscribeAudio } = tts;
   useEffect(() => (inline ? registerInlinePlayer() : undefined), [inline, registerInlinePlayer]);
@@ -217,7 +229,7 @@ export default function TTSMiniPlayer({
       }
       style={
         inline
-          ? undefined
+          ? { pointerEvents: tapGuard ? "none" : undefined }
           : dockBottom
             ? { bottom: "calc(env(safe-area-inset-bottom, 0px) + 70px)" }
             : { top: "calc(env(safe-area-inset-top, 0px) + 10px)", right: "12px" }

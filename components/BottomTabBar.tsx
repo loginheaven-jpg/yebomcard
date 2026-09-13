@@ -13,7 +13,18 @@
  * 사용자는 양쪽 어디서든 진입 가능. Phase 2b 에서 상단 탭 제거 + 시트 통합 완료.
  */
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
+
+/**
+ * 손잡이를 눌러 탭바가 올라온 직후 이만큼은 탭을 받지 않는다.
+ *
+ * 손잡이는 화면 맨 아래 가로 전체(28px)이고 알약은 한가운데다. `pointerdown` 에서 곧바로 탭바가
+ * 올라오는데, 손가락을 뗄 때 브라우저는 **그 자리에 지금 있는 요소**로 클릭을 보낸다 — 그 사이 올라온
+ * 탭이 그 클릭을 받는다. 6칸 가운데는 본문과 찬송가의 경계라 찬송가가 열려 버렸다(2026-09-13 지휘부 보고).
+ * 한 번 누른 것이 두 곳에 전달되는 것이라, 짧게 무시하는 것으로 막는다. 바가 올라온 것을 보고 조준해
+ * 누르기까지는 이보다 오래 걸리므로 정상 사용에는 걸리지 않는다.
+ */
+const REVEAL_TAP_GUARD_MS = 500;
 
 export type ActiveTab = "toc" | "search" | "read" | "hymn" | "bookmark" | "settings";
 
@@ -107,6 +118,8 @@ export default function BottomTabBar({
   onReveal,
   onInteract,
 }: Props) {
+  /** 손잡이를 눌러 펼친 시각 — 그 직후의 유령 클릭을 걸러낸다 */
+  const revealedAt = useRef(0);
   return (
     <>
     <nav
@@ -132,7 +145,10 @@ export default function BottomTabBar({
               aria-selected={isActive}
               aria-label={t.label}
               data-bookmark-tab={t.id === "bookmark" ? "true" : undefined}
-              onClick={() => onTabChange(t.id)}
+              onClick={() => {
+                if (Date.now() - revealedAt.current < REVEAL_TAP_GUARD_MS) return;  // 유령 클릭
+                onTabChange(t.id);
+              }}
               className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] transition-colors ${
                 isActive
                   ? "text-[var(--amber-deep)]"
@@ -177,6 +193,7 @@ export default function BottomTabBar({
         aria-label="메뉴 표시"
         onPointerDown={(e) => {
           e.preventDefault();
+          revealedAt.current = Date.now();
           onReveal?.();
         }}
         className="fixed inset-x-0 z-30 flex items-start justify-center bg-transparent border-0 p-0 cursor-pointer"
