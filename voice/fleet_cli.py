@@ -79,6 +79,10 @@ def cmd_status(a):
     print(f"남은 절 {t.get('pending', 0):,} · 합격 누계 {t.get('ok', 0):,}"
           f" · 보류 {t.get('held', 0):,} · 업로드 {t.get('uploaded', 0):,}")
     print(f"책 배분 — 끝남 {t.get('booksDone', 0)} · 맡은 중 {t.get('booksTaken', 0)}")
+    codes = {p.get("codeVersion") for p in st.get("pcs", []) if not p.get("stale") and p.get("codeVersion")}
+    if len(codes) > 1:
+        print(f"! PC 마다 스튜디오 코드가 다릅니다({' / '.join(sorted(codes))}) —"
+              " 검수 기준과 재시도 규칙이 코드에 있습니다. 옛 코드를 물고 있는 PC 는 다시 켜세요.")
     print()
     for p in st.get("pcs", []):
         mark = "■" if p.get("running") and not p.get("stale") else ("·" if not p.get("stale") else "×")
@@ -86,7 +90,7 @@ def cmd_status(a):
               f"{'  — 응답 없음' if p.get('stale') else ''}")
         print(f"    {p.get('gpu','?')} · 보이스 {p.get('voice') or '—'}"
               f"({p.get('voiceKey') or '—'}) · 배치 {p.get('batch') or '—'}"
-              f" · 시간당 {p.get('versesPerHour', 0):,}절")
+              f" · 시간당 {p.get('versesPerHour', 0):,}절 · 코드 {p.get('codeVersion') or '?'}")
         print(f"    지금: {p.get('note') or '(쉬는 중)'}")
         if p.get("jobTitle"):
             print(f"    작업: {p['jobTitle']} · 남은 절 {p.get('pending', 0):,}"
@@ -95,10 +99,20 @@ def cmd_status(a):
             print(f"    맡은 책: {', '.join(p['leases'])}")
         if p.get("lastError"):
             print(f"    ! {p['lastError']}")
-        for b in (p.get("books") or [])[:6]:
+        # 앞에서 여섯 권만 찍으면 앞쪽은 대개 이미 끝난 책이라 **다 끝난 것처럼 보인다**
+        # (2026-09-13 지휘부 지적). 지금 움직이는 책만 진행률로 쓰고 나머지는 이름만 적는다.
+        bs = p.get("books") or []
+        run = [b for b in bs if 0 < b["done"] < b["total"]]
+        fin = [b for b in bs if b["done"] >= b["total"]]
+        wait = [b for b in bs if b["done"] == 0 and b["total"]]
+        for b in run:
             pct = 100 * b["done"] / max(1, b["total"])
             print(f"      {b['book']} {b['done']}/{b['total']} ({pct:.0f}%)"
-                  f" · 보류 {b['held']} · 업로드 {b['uploaded']}")
+                  + (f" · 보류 {b['held']}" if b["held"] else ""))
+        if fin:
+            print(f"      끝남 {len(fin)}권: " + " · ".join(b["book"] for b in fin))
+        if wait:
+            print(f"      대기 {len(wait)}권: " + " · ".join(b["book"] for b in wait))
         print()
     return 0
 
