@@ -240,6 +240,10 @@ export default function VoiceFleetPage() {
     );
   }
 
+  // 살아 있는 PC 들이 서로 다른 코드를 물고 있으면 알려 준다 — 결과물만 봐서는 알 수 없다
+  const codes = [...new Set(pcs.filter((p) => !p.stale && p.codeVersion).map((p) => p.codeVersion))];
+  const mixedCode = codes.length > 1 ? codes.join(" / ") : "";
+
   const taken = leases.filter((l) => l.state === "taken");
   const done = leases.filter((l) => l.state === "done");
 
@@ -352,6 +356,13 @@ export default function VoiceFleetPage() {
       </section>
 
       <h2 className="text-sm font-semibold mb-2">생성 PC</h2>
+      {mixedCode && (
+        <p className="text-xs text-amber-700 dark:text-amber-500 mb-2">
+          PC 마다 스튜디오 코드가 다릅니다({mixedCode}). 검수 기준과 재시도 규칙이 코드에 있어,
+          한 대만 옛 코드를 물고 있으면 그 PC 의 음원만 다른 규칙으로 만들어집니다 —
+          그 PC 의 스튜디오를 껐다 켜면 서버와 맞춰집니다.
+        </p>
+      )}
       {pcs.length === 0 && (
         <p className="text-sm text-[var(--ink-faint)] mb-4">
           아직 보고한 PC 가 없습니다. 생성 PC 에서 스튜디오를 켜면 10초 안에 나타납니다.
@@ -374,7 +385,7 @@ export default function VoiceFleetPage() {
               <span className="text-xs text-[var(--ink-faint)] ml-auto">
                 {p.voice || "보이스 없음"}
                 {p.voiceKey ? ` (${p.voiceKey})` : ""} · 배치 {p.batch || "—"} ·{" "}
-                {p.versesPerHour.toLocaleString()}절/시간
+                {p.versesPerHour.toLocaleString()}절/시간 · 코드 {p.codeVersion || "?"}
               </span>
             </div>
             <p className="mt-1.5 text-sm">{p.note || (p.jobTitle ? p.jobTitle : "쉬는 중")}</p>
@@ -386,22 +397,7 @@ export default function VoiceFleetPage() {
               <p className="text-xs text-[var(--ink-faint)]">맡은 책: {p.leases.join(", ")}</p>
             )}
             {p.lastError && <p className="text-xs text-red-600 mt-1">! {p.lastError}</p>}
-            {p.books.slice(0, 6).map((b) => (
-              <div key={b.book} className="mt-1.5">
-                <div className="flex justify-between text-xs">
-                  <span>{b.book}</span>
-                  <span className="text-[var(--ink-faint)]">
-                    {b.done}/{b.total} · 보류 {b.held}
-                  </span>
-                </div>
-                <div className="h-1.5 rounded bg-[var(--line)] overflow-hidden">
-                  <div
-                    className="h-full bg-[var(--amber-600,#b45309)]"
-                    style={{ width: `${Math.min(100, (100 * b.done) / Math.max(1, b.total))}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+            <PcBooks books={p.books} />
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Btn onClick={() => send("stop", p.tokenId)} disabled={busy} tone="stop">
                 멈춤
@@ -482,6 +478,66 @@ function Bar({ done, legacy, total }: { done: number; legacy: number; total: num
       <div className="h-full bg-emerald-600" style={{ width: pct(done - legacy) }} />
       <div className="h-full bg-emerald-600/35" style={{ width: pct(legacy) }} />
     </div>
+  );
+}
+
+/**
+ * 그 PC 가 맡은 책 — **진행중인 것만 막대로** 보여 주고, 끝난 책과 아직 시작 안 한 책은 이름만 줄지어 둔다.
+ *
+ * 예전엔 앞에서 여섯 권만 막대로 그렸는데 앞쪽은 대개 이미 끝난 책이라 **다 끝난 것처럼 보였다**
+ * (2026-09-13 지휘부 지적 — 실제로는 37권 중 27권이 아직 시작도 안 한 상태였다).
+ * 눈길이 가야 할 곳은 지금 움직이는 책이고, 나머지는 이름만 있으면 족하다.
+ */
+function PcBooks({ books }: { books: BookProgress[] }) {
+  if (!books.length) return null;
+  const running = books.filter((b) => b.done > 0 && b.done < b.total);
+  const finished = books.filter((b) => b.done >= b.total);
+  const waiting = books.filter((b) => b.done === 0 && b.total > 0);
+  return (
+    <div className="mt-2">
+      {running.map((b) => (
+        <div key={b.book} className="mt-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="font-medium">{b.book}</span>
+            <span className="text-[var(--ink-faint)]">
+              {b.done}/{b.total}
+              {b.held > 0 && ` · 보류 ${b.held}`}
+            </span>
+          </div>
+          <div className="h-1.5 rounded bg-[var(--line)] overflow-hidden">
+            <div
+              className="h-full bg-[var(--amber-600,#b45309)]"
+              style={{ width: `${Math.min(100, (100 * b.done) / Math.max(1, b.total))}%` }}
+            />
+          </div>
+        </div>
+      ))}
+      <BookNames label="끝남" tone="done" books={finished} />
+      <BookNames label="대기" tone="wait" books={waiting} />
+    </div>
+  );
+}
+
+function BookNames({
+  label,
+  tone,
+  books,
+}: {
+  label: string;
+  tone: "done" | "wait";
+  books: BookProgress[];
+}) {
+  if (!books.length) return null;
+  return (
+    <p className="mt-1.5 text-xs leading-5">
+      <span className="text-[var(--ink-faint)]">
+        {label} {books.length}권{" "}
+      </span>
+      <span className={tone === "done" ? "text-[var(--ink-soft)]" : "text-[var(--ink-faint)]"}>
+        {tone === "done" ? "✓ " : ""}
+        {books.map((b) => b.book).join(" · ")}
+      </span>
+    </p>
   );
 }
 

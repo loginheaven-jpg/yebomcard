@@ -12,6 +12,7 @@
 #                  겹치지 않게 서버가 나눠 주므로, PC 를 몇 대 붙이든 같은 절을 두 번 만들지 않는다.
 #
 # 서버가 잠깐 안 되어도 생성은 계속되어야 한다 — 여기서 나는 오류는 모두 삼키고 다음 차례에 다시 한다.
+import hashlib
 import json
 import os
 import platform
@@ -83,15 +84,28 @@ def _gpu():
     return platform.processor()[:60] or "?"
 
 
-def _code_version():
-    """스튜디오 소스 버전 — 서버가 내려준 동기화 표지. 없으면 engine 의 방식 이름."""
-    for p in (HERE / "code.json", HERE / ".code_version"):
+# 이 PC 가 돌리는 스튜디오 소스의 지문. **PC 마다 같아야 한다** — 한 대만 옛 코드를 물고 있으면
+# 그 PC 의 음원만 다른 규칙으로 만들어지는데, 결과물만 봐서는 알아채기 어렵다(검수 기준·절 끝
+# 재시도 한도가 코드에 있다). 켤 때 서버와 소스를 맞추므로, 지문이 다르면 '껐다 켜지 않은 PC' 다.
+_CODE_FILES = ("engine.py", "jobs.py", "app.py", "server.py", "fleet.py", "prosody.py", "plan.py")
+
+
+def _compute_code_version():
+    h = hashlib.sha1()
+    for name in _CODE_FILES:
         try:
-            d = p.read_text(encoding="utf-8").strip()
-            return (json.loads(d).get("version") if d.startswith("{") else d)[:40]
+            h.update((HERE / name).read_bytes())
         except Exception:
-            continue
-    return getattr(engine, "METHOD", "")
+            h.update(b"?")
+    return h.hexdigest()[:8]
+
+
+_CODE_VERSION = _compute_code_version()
+
+
+def _code_version():
+    """스튜디오 소스 지문 — 프로세스를 켠 시점의 코드다(도중에 파일이 바뀌어도 돌고 있는 것은 옛 코드)."""
+    return _CODE_VERSION
 
 
 def _rate_per_hour(ok_total):
