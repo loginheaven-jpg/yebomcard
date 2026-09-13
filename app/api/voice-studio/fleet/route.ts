@@ -117,7 +117,7 @@ export async function GET(req: Request) {
     uploaded: pcs.reduce((s, p) => s + p.uploadedTotal, 0),
     versesPerHour: live.reduce((s, p) => s + p.versesPerHour, 0),
     booksDone: leases.filter((l) => l.state === "done").length,
-    booksTaken: leases.filter((l) => l.state === "taken").length,
+    booksTaken: leases.filter((l) => l.state === "taken" && l.tokenId).length,
   };
 
   return NextResponse.json({

@@ -131,9 +131,13 @@ export async function GET(req: Request) {
   if (!studioR2Enabled()) {
     return NextResponse.json({ error: "서버 보관소가 설정되지 않았습니다" }, { status: 503 });
   }
-  const leases = await listLeases();
   const pcs = await pcMap();
   const now = Date.now();
+  // 회수·반납된 임대는 '주인 없는 빈 기록'으로 남는다 — 아무 뜻도 없으므로 목록에서 뺀다.
+  // (기록 자체를 지우지 않는 것은, 같은 책을 다시 빌릴 때 그 자리에 덮어쓰면 그만이기 때문이다)
+  const leases = (await listLeases()).filter(
+    (l) => l.tokenId || l.pinned || l.blocked || l.state === "done",
+  );
   return NextResponse.json({
     leases: leases.map((l) => ({
       ...l,

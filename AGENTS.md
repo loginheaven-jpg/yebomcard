@@ -68,6 +68,26 @@
 - **고른 절부터 읽기**: 본문에서 절을 고른 채 읽기를 누르면 고른 절(여럿이면 읽는 순서로 맨 앞)부터 — 절 단위 음원일 때만(장 통째 녹음은 처음부터, `tts.start()` 가 절 단위 여부를 돌려줌). 시작하면 선택을 푼다(다른 장 절까지 모아 둔 중이면 유지). 2초 동안 `N절부터 읽습니다` 아래 `처음부터 │ 확인`(기본 = 고른 절부터, 처음부터 = 장 처음부터 다시)
 - 상세: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
 
+### 음원 생성 PC 무리 (여러 대 · 며칠짜리 작업)
+
+**진행 상황을 물으면 추측하지 말고 이 한 줄을 실행한다** — 모든 PC 의 현황이 서버에 모여 있다:
+
+```bash
+python C:\dev\yebomcard\voice\fleet_cli.py status      # --json 으로 기계가 읽을 형태
+python C:\dev\yebomcard\voice\fleet_cli.py books       # 책 배분
+python C:\dev\yebomcard\voice\fleet_cli.py log         # 최근 지시와 결과
+```
+
+지시도 같은 도구로 보낸다(`stop` · `resume` · `batch N` · `queue 책,책` · `replace 구약|신약` ·
+`regen "창세기 1:1,…"`, `--pc 이름` 으로 한 대만). 각 PC 가 **10초 안에** 가져가 실행하고 결과를
+`log` 에 적는다 — 즉시 반영되지 않는 것이 정상이다. 사람은 `설정 → 관리자 → 음원 생성 현황`
+에서 같은 것을 보고, 책 배분을 고정·차단·회수로 조정한다.
+
+- 각 PC 는 스튜디오(`voice/app.py`)를 켜면 `fleet.py` 가 함께 돌며 보고·수신·임대를 맡는다
+- **전체 생성**을 켠 PC 는 진도표(`voice/plan.py`) 순서로 책을 하나씩 빌려 혼자 진행한다.
+  여러 대가 붙어도 서버가 겹치지 않게 나눠 준다
+- 절차·설계는 [voice/README.md](voice/README.md) '새 성우로 성경 전체를 만들 때'
+
 ### 데이터 (Supabase)
 - `bible_verses` 7개 version (nkrv/rnksv/easy/kjv/nirv/gnt/web)
 - `bible_audio` 3개 version (easy/nkrv/web — WEB 은 R2 호스팅)
