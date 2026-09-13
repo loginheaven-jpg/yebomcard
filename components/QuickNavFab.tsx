@@ -16,12 +16,17 @@ interface QuickNavFabProps {
   onJump: (bookCode: string, chapter: number, verse: number) => void;
 }
 
-// FAB 위치 — 우측 상단 구석(기본) / 우측 하단 (BottomTabBar 위)
-// 사용자 요청: 더블탭·길게 누르기로 두 위치 사이 토글
+// FAB 위치 — 우측 하단(기본) / 우측 상단. 더블탭·길게 누르기로 토글한다.
+// 2026-09-13 지휘부 지시로 **기본을 아래로** 바꿨다. 위 자리는 본문 상단이 한 줄로 바뀌면서
+// ⋮ 버튼과 겹치게 됐다(옛 3열 헤더의 우측 빈 칸을 쓰던 자리다). 위로 올려도 바 아래에 놓이도록 내렸다.
 const FAB_POS: Record<FabPos, React.CSSProperties> = {
-  tr: { top: "12px", right: "12px" },     // 헤더 우측 빈 자리 (3열 grid 우측 column)
+  tr: { top: "64px", right: "12px" },     // 상단 바(52px + 여백) 아래
   br: { bottom: "80px", right: "12px" },  // BottomTabBar(~60px) 위
 };
+
+/** 기억한 자리. 옛 키(`yebom_quicknav_pos`)는 **기본값이 저절로 저장된 것**이라 새 키로 갈아탄다 */
+const POS_KEY = "yebom_quicknav_pos2";
+const OLD_POS_KEY = "yebom_quicknav_pos";
 
 // 패널은 FAB 위치와 무관하게 항상 같은 자리 (헤더 아래)
 const PANEL_POS: React.CSSProperties = {
@@ -38,7 +43,7 @@ export default function QuickNavFab({
   mainVersion,
   onJump,
 }: QuickNavFabProps) {
-  const [pos, setPos] = useState<FabPos>("tr");
+  const [pos, setPos] = useState<FabPos>("br");
   const [open, setOpen] = useState(false);
   const [testament, setTestament] = useState<"old" | "new">("old");
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
@@ -58,15 +63,23 @@ export default function QuickNavFab({
   const chapterScrollRef = useRef<HTMLDivElement>(null);
   const verseScrollRef = useRef<HTMLDivElement>(null);
 
-  // localStorage 위치 로드/저장
+  // 자리 기억 — **사용자가 옮겼을 때만** 저장한다.
+  // 전에는 마운트할 때마다 지금 값을 저장해서 기본값이 곧바로 기기에 박혔다. 그래서 기본을 바꿔도
+  // 이미 앱을 열어 본 기기에서는 아무 변화가 없었다. 옛 키는 그렇게 저절로 저장된 값이라 지운다.
+  const posLoaded = useRef(false);
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("yebom_quicknav_pos");
+      const stored = localStorage.getItem(POS_KEY);
       if (stored === "tr" || stored === "br") setPos(stored);
+      localStorage.removeItem(OLD_POS_KEY);
     } catch {}
   }, []);
   useEffect(() => {
-    try { localStorage.setItem("yebom_quicknav_pos", pos); } catch {}
+    if (!posLoaded.current) {
+      posLoaded.current = true;   // 첫 렌더(기본값)는 저장하지 않는다
+      return;
+    }
+    try { localStorage.setItem(POS_KEY, pos); } catch {}
   }, [pos]);
 
   // 최근 위치 모음

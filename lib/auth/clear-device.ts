@@ -48,7 +48,7 @@ const DEVICE_PREF_KEYS = [
   "fullscreenTheme",
   "yebom_main_version",
   "yebom_sub_version",
-  "yebom_quicknav_pos",
+  "yebom_quicknav_pos2",
   "yebom_autohide_tabbar",
   "pwa-installed",
   "yebom_returning",
