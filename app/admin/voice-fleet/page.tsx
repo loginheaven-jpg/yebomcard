@@ -275,6 +275,9 @@ export default function VoiceFleetPage() {
             <Btn onClick={() => send("resume", "*")} disabled={busy}>
               모두 다시 켬
             </Btn>
+            <Btn onClick={() => send("restart", "*")} disabled={busy}>
+              모두 스튜디오 다시 켜기
+            </Btn>
             <Btn onClick={() => setShowLog((v) => !v)} disabled={busy}>
               {showLog ? "지시 기록 접기" : "지시 기록"}
             </Btn>
@@ -410,6 +413,9 @@ export default function VoiceFleetPage() {
                   배치 {n}
                 </Btn>
               ))}
+              <Btn onClick={() => send("restart", p.tokenId)} disabled={busy}>
+                다시 켜기
+              </Btn>
             </div>
           </article>
         ))}

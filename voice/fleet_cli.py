@@ -13,6 +13,7 @@
     python fleet_cli.py queue 창세기,출애굽기 [--pc 이름] [--voice 이름]
     python fleet_cli.py replace 구약 [--pc 이름]    구방식 교체 작업 걸기
     python fleet_cli.py regen "창세기 1:1,창세기 1:2" [--pc 이름]
+    python fleet_cli.py restart [--pc 이름]         스튜디오 다시 켜기 (코드 변경 반영)
 
 `--pc` 는 PC 이름의 일부만 써도 된다(앞부분 일치). 생략하면 모든 PC 에 간다.
 지시는 각 PC 가 10초 안에 가져간다 — 바로 반영되지 않아도 정상이다. `log` 로 결과를 본다.
@@ -159,6 +160,13 @@ def main():
         s = sub.add_parser(op, help=help_)
         s.add_argument("--pc", default="")
         s.set_defaults(fn=lambda a, op=op: _send(op, _resolve(a.pc)))
+
+    s = sub.add_parser("restart", help="스튜디오를 다시 켠다 (코드 변경을 반영)")
+    s.add_argument("--pc", default="")
+    s.add_argument("--worker-only", action="store_true",
+                   help="프로세스는 그대로 두고 워커만 다시 시작(코드는 반영되지 않음)")
+    s.set_defaults(fn=lambda a: _send("restart", _resolve(a.pc),
+                                      {"worker_only": bool(a.worker_only)}))
 
     s = sub.add_parser("batch", help="지금 도는 작업의 배치 바꾸기")
     s.add_argument("n", type=int)

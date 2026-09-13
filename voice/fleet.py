@@ -17,6 +17,8 @@ import json
 import os
 import platform
 import socket
+import subprocess  # noqa: F401  (다시 켤 때 쓴다)
+import sys
 import threading
 import time
 import traceback
@@ -258,14 +260,62 @@ def _do_command(c):
         return f"{n}절을 다시 만들기로 했습니다"
 
     if op == "restart":
-        # 스튜디오를 껐다 켜는 것은 사람 몫이다 — 여기서는 워커만 새로 띄운다.
-        # (엔진 코드가 바뀌었으면 프로세스를 다시 켜야 반영된다)
-        jobs.stop_worker()
-        time.sleep(1.0)
-        jobs.start_worker()
-        return "워커를 다시 시작했습니다(코드 변경은 스튜디오를 껐다 켜야 반영됩니다)"
+        # 코드가 바뀌면 **프로세스를 다시 켜야** 반영된다 — 돌고 있는 파이썬은 옛 코드를 물고 있다.
+        # 사람이 PC 앞에 가서 창을 닫고 배치 파일을 다시 누르는 일을 여기서 대신한다.
+        if a.get("worker_only"):
+            jobs.stop_worker()
+            time.sleep(1.0)
+            jobs.start_worker()
+            return "워커만 다시 시작했습니다(코드는 그대로입니다)"
+        return _restart_studio()
 
     return f"모르는 명령: {op}"
+
+
+def _restart_studio():
+    """서버와 소스를 맞춘 뒤 스튜디오를 새 프로세스로 다시 켜고, 이 프로세스는 물러난다.
+
+    왜 이렇게까지 하는가
+      검수 기준·절 끝 재시도 한도 같은 규칙이 코드에 있다. 한 PC 가 옛 코드를 물고 있으면 그 PC 의
+      음원만 다른 규칙으로 만들어지는데 결과물만 봐서는 알아채기 어렵다. 그런데 고칠 때마다 PC 마다
+      찾아가 창을 닫고 배치 파일을 다시 눌러야 했다 — 여러 대가 되면 그것부터 빠뜨린다.
+
+    잃는 것은 **지금 만들던 묶음 하나**(최대 8절)뿐이다. 작업 상태는 묶음마다 파일에 저장되므로
+    다시 켜면 그 자리에서 이어간다.
+
+    새 프로세스는 **떼어 내어** 띄운다 — 이 프로세스가 곧 사라지므로 자식으로 두면 함께 죽는다.
+    """
+    import subprocess
+
+    synced = ""
+    try:
+        # 설치본이면 bootstrap 이 서버에서 소스를 받아 온다(개발 PC 는 git 이 소스라 건너뛴다)
+        if (HERE / "실행.bat").exists() or (HERE / "bootstrap.py").exists():
+            import bootstrap
+            if getattr(bootstrap, "BASE", "") and getattr(bootstrap, "TOKEN", ""):
+                bootstrap.sync_code()
+                synced = " · 소스를 서버와 맞췄습니다"
+    except Exception as e:
+        synced = f" · 소스 맞추기는 건너뜀({str(e)[:60]})"
+
+    jobs.stop_worker()
+    try:
+        flags = 0
+        if os.name == "nt":
+            # 새 콘솔 + 부모와 끊어 두기 — 이 프로세스가 사라져도 살아 있어야 한다
+            flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
+                         creationflags=flags, close_fds=True)
+    except Exception as e:
+        jobs.start_worker()
+        return f"다시 켜지 못했습니다: {e}"
+
+    def _bye():
+        time.sleep(2.0)      # 결과를 서버에 적을 틈을 준다
+        os._exit(0)
+
+    threading.Thread(target=_bye, daemon=True).start()
+    return f"스튜디오를 다시 켭니다{synced} — 만들던 묶음 하나만 다시 만듭니다"
 
 
 def _ensure_book_job(voice, version, book, batch):
