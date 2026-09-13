@@ -299,16 +299,22 @@ def _restart_studio():
         synced = f" · 소스 맞추기는 건너뜀({str(e)[:60]})"
 
     jobs.stop_worker()
-    try:
-        flags = 0
-        if os.name == "nt":
-            # 새 콘솔 + 부모와 끊어 두기 — 이 프로세스가 사라져도 살아 있어야 한다
-            flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-        subprocess.Popen([sys.executable, str(HERE / "app.py")], cwd=str(HERE),
-                         creationflags=flags, close_fds=True)
-    except Exception as e:
+    # 창을 새로 띄운다(CREATE_NEW_CONSOLE). DETACHED_PROCESS 와 **함께 쓸 수 없다** — 윈도우가
+    # 인자 오류로 거절한다. 새 콘솔이면 부모 콘솔과 이미 끊어지고, CREATE_BREAKAWAY_FROM_JOB 을
+    # 더하면 부모를 묶은 작업 개체(터미널·설치 스크립트)가 죽을 때 딸려 죽지 않는다. 그 권한이
+    # 없는 환경도 있어 실패하면 그것만 빼고 다시 해 본다.
+    argv = [sys.executable, str(HERE / "app.py")]
+    base = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if os.name == "nt" else 0
+    away = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0) if os.name == "nt" else 0
+    for flags in (base | away, base):
+        try:
+            subprocess.Popen(argv, cwd=str(HERE), creationflags=flags, close_fds=True)
+            break
+        except OSError as e:
+            last = e
+    else:
         jobs.start_worker()
-        return f"다시 켜지 못했습니다: {e}"
+        return f"다시 켜지 못했습니다: {last}"
 
     def _bye():
         time.sleep(2.0)      # 결과를 서버에 적을 틈을 준다
