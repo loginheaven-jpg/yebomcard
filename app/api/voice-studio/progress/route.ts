@@ -33,8 +33,12 @@ export const dynamic = "force-dynamic";
 const VERSION = "rnksv";
 /** 한 번 잰 값을 이만큼 돌려 쓴다. 그 사이 다시 부르면 같은 스냅샷이 온다 */
 const CACHE_MS = 60_000;
-/** Supabase 한 번에 가져오는 행 수 — 기본 상한(1000)에 걸리지 않게 직접 나눠 읽는다 */
-const PAGE = 2000;
+/**
+ * 한 번에 가져오는 행 수. **1000 을 넘기면 안 된다** — Supabase 는 한 응답에 1000행까지만 주는데,
+ * 더 큰 값으로 range 를 잡으면 1000행만 오고 "받은 수 < 요청 수" 가 되어 **거기서 다 읽은 줄 알고
+ * 멈춘다**(2026-09-13: 2000 으로 두어 3만 절 중 1000절만 세었다).
+ */
+const PAGE = 1000;
 
 interface BookRow {
   code: string;
