@@ -277,3 +277,99 @@ def cache_index(voice_key, legacy=False, timeout=120):
         return {h for h in r.text.split() if h}
     except Exception:
         return None
+
+
+# ───────────────────────── 무리(fleet) ─────────────────────────
+# 이 PC 의 현황을 서버에 올리고, 서버에 걸린 지시를 가져오고, 책을 빌린다.
+# 어느 것도 생성을 멈춰서는 안 되므로 호출자(fleet.py)가 예외를 삼킨다 — 여기서는 그대로 던진다.
+def fleet_report(snap, timeout=30):
+    """현황 보고. 서버가 PC 를 알아보는 것은 기기 토큰이므로 이름은 참고용이다."""
+    if not enabled():
+        return None
+    r = requests.post(f"{config()['base']}/api/voice-studio/fleet",
+                      headers={**_headers(), "Content-Type": "application/json"},
+                      data=json.dumps(snap, ensure_ascii=False).encode("utf-8"), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def fleet_status(timeout=30):
+    """모든 PC 의 현황 — 명령줄 도구와 화면이 쓴다."""
+    if not enabled():
+        return None
+    r = requests.get(f"{config()['base']}/api/voice-studio/fleet", headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def fleet_commands(timeout=30):
+    """내게 온 미처리 지시를 가져온다(가져간 표시가 남아 두 번 오지 않는다)."""
+    if not enabled():
+        return []
+    r = requests.get(f"{config()['base']}/api/voice-studio/commands?mine=1",
+                     headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json().get("commands", [])
+
+
+def fleet_command(op, target="*", args=None, timeout=30):
+    """지시를 건다 — 명령줄 도구에서 쓴다."""
+    if not enabled():
+        raise ServerError("서버 연동이 설정되지 않았습니다")
+    r = requests.post(f"{config()['base']}/api/voice-studio/commands",
+                      headers={**_headers(), "Content-Type": "application/json"},
+                      data=json.dumps({"op": op, "target": target, "args": args or {}},
+                                      ensure_ascii=False).encode("utf-8"), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def fleet_command_list(timeout=30):
+    if not enabled():
+        return []
+    r = requests.get(f"{config()['base']}/api/voice-studio/commands?all=1",
+                     headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json().get("commands", [])
+
+
+def fleet_command_done(cid, status, result="", timeout=30):
+    if not enabled():
+        return None
+    r = requests.patch(f"{config()['base']}/api/voice-studio/commands",
+                       headers={**_headers(), "Content-Type": "application/json"},
+                       data=json.dumps({"id": cid, "status": status, "result": result},
+                                       ensure_ascii=False).encode("utf-8"), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def lease(plan_name, books, want=1, done=None, release=None, label="", timeout=60):
+    """책을 빌린다. books 는 **원하는 순서**로 보낸다 — 서버는 겹치지 않게 나눠 줄 뿐이다.
+
+    반환: {'granted': [새로 받은 책], 'held': [이미 쥐고 있는 책], 'released': [...]}"""
+    if not enabled():
+        return None
+    body = {"plan": plan_name, "books": list(books), "want": int(want),
+            "done": list(done or []), "release": list(release or []), "label": label}
+    r = requests.post(f"{config()['base']}/api/voice-studio/lease",
+                      headers={**_headers(), "Content-Type": "application/json"},
+                      data=json.dumps(body, ensure_ascii=False).encode("utf-8"), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
+def lease_status(timeout=30):
+    if not enabled():
+        return None
+    r = requests.get(f"{config()['base']}/api/voice-studio/lease", headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()

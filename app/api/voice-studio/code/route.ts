@@ -29,6 +29,8 @@ const FILES = [
   "plan.py",
   "app.py",
   "server.py",
+  "fleet.py",
+  "fleet_cli.py",
   "run_book.py",
   "run_plan.py",
   "recheck_held.py",

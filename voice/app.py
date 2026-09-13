@@ -23,6 +23,7 @@ import numpy as np
 import soundfile as sf
 
 import engine
+import fleet
 import jobs
 import server
 
@@ -369,6 +370,51 @@ def ui_book_rows():
     return jobs.book_rows(job)
 
 
+def ui_fleet_load():
+    """이 PC 의 분담 설정을 화면에 올린다."""
+    st = fleet.state()
+    return gr.update(value=st["label"]), gr.update(value=bool(st.get("auto")))
+
+
+def ui_fleet_save(label, auto, voice, ver_label, batch):
+    """분담 설정을 저장한다. 켜면 곧바로 첫 책을 빌리러 간다."""
+    if auto and not voice:
+        return "보이스를 먼저 고르세요 — 어떤 목소리로 만들지 모르면 책을 맡을 수 없습니다"
+    fleet.set_state(label=(label or "").strip() or None, auto=bool(auto),
+                    voice=voice or None, version=ver_label or None,
+                    plan=ver_label or None, batch=int(batch or 4))
+    if not server.enabled():
+        return "저장했습니다. 다만 서버 연동 정보(studio.json)가 없어 분담은 동작하지 않습니다."
+    if not fleet.alive():
+        fleet.start()
+    if auto:
+        try:
+            fleet._lease_round()
+        except Exception as e:
+            return f"저장했습니다. 다만 책을 빌리지 못했습니다: {e}"
+        got = fleet.state().get("leases") or []
+        return ("저장했습니다. 전체 생성을 켰습니다 — 맡은 책: "
+                + (", ".join(got) if got else "(아직 없음 — 곧 다시 시도합니다)"))
+    return "저장했습니다. 전체 생성은 꺼 두었습니다 — 이 PC 는 직접 건 작업만 합니다."
+
+
+def ui_fleet_rows():
+    """모든 PC 현황 표. 서버가 안 되면 빈 표를 준다 — 화면이 멈추면 안 된다."""
+    try:
+        st = server.fleet_status()
+    except Exception:
+        return []
+    if not st:
+        return []
+    out = []
+    for p in st.get("pcs", []):
+        state = "응답 없음" if p.get("stale") else ("가동중" if p.get("running") else "정지")
+        out.append([p.get("label", "?"), state, p.get("note") or (p.get("jobTitle") or "—"),
+                    f"{p.get('versesPerHour', 0):,}", f"{p.get('pending', 0):,}",
+                    p.get("heldTotal", 0), ", ".join(p.get("leases") or [])])
+    return out
+
+
 def ui_progress():
     cur = jobs.current()
     alive = "가동중" if jobs.worker_alive() else "정지"
@@ -595,47 +641,8 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                 "내 목소리를 등록하고, 성경 범위를 골라 **절 단위** 음원을 만듭니다. "
                 "생성된 절은 자동 검수(ASR 역대조)를 거치고, 불합격은 자동 재시도 후 **보류**로 분리됩니다.")
 
-    # ── 1. 보이스 ──
-    with gr.Tab("1. 보이스"):
-        with gr.Row():
-            with gr.Column(scale=3):
-                a_audio = gr.Audio(label="샘플 음원 업로드", type="filepath")
-                a_btn_tr = gr.Button("자동 전사 (구간 찾기)", variant="secondary")
-                a_segs = gr.Dataframe(headers=["시작(초)", "끝(초)", "전사"],
-                                      label="전사 구간 — 인트로를 건너뛰고 절 경계를 고르세요",
-                                      interactive=False, wrap=True)
-                with gr.Row():
-                    a_start = gr.Number(label="시작(초)", value=0)
-                    a_end = gr.Number(label="끝(초)", value=25)
-                    a_btn_prev = gr.Button("구간 미리듣기")
-                a_prev = gr.Audio(label="선택 구간", type="filepath")
-            with gr.Column(scale=2):
-                gr.Markdown("**참조 텍스트** — 구간에서 실제로 읽은 문장.\n"
-                            "성경 녹음이면 **원문 넣기**가 정확합니다(ASR 오인식 방지).")
-                with gr.Row():
-                    a_ver = gr.Dropdown(VER_LABELS, value="개역개정", label="역본")
-                    a_book = gr.Dropdown([], label="책")
-                with gr.Row():
-                    a_ch = gr.Number(label="장", value=1, precision=0)
-                    a_vf = gr.Number(label="시작절", value=1, precision=0)
-                    a_vt = gr.Number(label="끝절", value=2, precision=0)
-                with gr.Row():
-                    a_btn_src = gr.Button("원문 넣기", variant="secondary")
-                    a_btn_asr = gr.Button("ASR 전사 넣기")
-                a_ref = gr.Textbox(label="참조 텍스트", lines=4)
-                a_name = gr.Textbox(label="보이스 이름", placeholder="예: 리딩지저스")
-                a_btn_reg = gr.Button("보이스 등록", variant="primary")
-                a_msg = gr.Textbox(label="결과", lines=3)
-        gr.Markdown("### 등록된 보이스")
-        with gr.Row():
-            a_list = gr.Dropdown([], label="보이스", scale=2)
-            a_btn_ref = gr.Button("새로고침")
-            a_btn_del = gr.Button("삭제", variant="stop")
-        a_vprev = gr.Audio(label="참조 음원", type="filepath")
-        a_vinfo = gr.Textbox(label="정보", lines=2)
-
-    # ── 2. 생성 ──
-    with gr.Tab("2. 생성"):
+    # ── 1. 생성 ──
+    with gr.Tab("1. 생성"):
         with gr.Row():
             b_voice = gr.Dropdown([], label="보이스", scale=2)
             b_btn_ref = gr.Button("보이스 새로고침")
@@ -696,10 +703,27 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             b_rep_which = gr.Radio(["구약", "신약"], value="구약", label="교체할 쪽")
             b_btn_rep = gr.Button("구방식 교체 작업 걸기", variant="secondary")
             b_btn_rep_del = gr.Button("교체 작업 걷기")
-        b_timer = gr.Timer(3.0)
 
-    # ── 3. 검수 ──
-    with gr.Tab("3. 검수"):
+        gr.Markdown("### 전체 생성 — PC 여러 대가 나눠서")
+        gr.Markdown(
+            "켜 두면 이 PC 가 **진도표 순서로 다음 책을 서버에서 빌려 와** 혼자 알아서 만듭니다. "
+            "PC 를 몇 대 붙이든 서버가 겹치지 않게 나눠 주므로 같은 절을 두 번 만들지 않고, "
+            "한 대가 꺼지면 그 책은 풀려 다른 PC 가 이어받습니다. "
+            "배분은 예봄성경 **설정 → 관리자 → 음원 생성 현황**에서 보고 고칠 수 있습니다.")
+        with gr.Row():
+            f_label = gr.Textbox(label="이 PC 이름", scale=2)
+            f_auto = gr.Checkbox(value=False, label="전체 생성 켜기 (자동 분담)")
+            f_btn_save = gr.Button("저장", variant="primary")
+        f_msg = gr.Textbox(label="분담 상태", lines=2)
+        gr.Markdown("### 모든 PC 현황")
+        f_fleet = gr.Dataframe(
+            headers=["PC", "상태", "지금 하는 일", "시간당 절", "남은 절", "보류", "맡은 책"],
+            label="무리", interactive=False, wrap=True)
+        b_timer = gr.Timer(3.0)
+        f_timer = gr.Timer(15.0)
+
+    # ── 2. 검수 ──
+    with gr.Tab("2. 검수"):
         gr.Markdown(
             "이 PC 작업 파일의 절별 결과입니다. **행을 클릭하면 그 절을 들을 수 있습니다.**  \n"
             "보류 절의 판단(이대로 사용 · 재생성 요청 · 비워 둠)은 예봄성경 **설정 → 음원보류절 검수**에서 합니다. "
@@ -720,6 +744,45 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             c_btn_merge = gr.Button("합본 만들기")
         c_msg = gr.Textbox(label="결과", lines=2)
         c_merged = gr.Audio(label="합본", type="filepath")
+
+    # ── 3. 음원(성우 목소리 등록) ──
+    with gr.Tab("3. 음원"):
+        with gr.Row():
+            with gr.Column(scale=3):
+                a_audio = gr.Audio(label="샘플 음원 업로드", type="filepath")
+                a_btn_tr = gr.Button("자동 전사 (구간 찾기)", variant="secondary")
+                a_segs = gr.Dataframe(headers=["시작(초)", "끝(초)", "전사"],
+                                      label="전사 구간 — 인트로를 건너뛰고 절 경계를 고르세요",
+                                      interactive=False, wrap=True)
+                with gr.Row():
+                    a_start = gr.Number(label="시작(초)", value=0)
+                    a_end = gr.Number(label="끝(초)", value=25)
+                    a_btn_prev = gr.Button("구간 미리듣기")
+                a_prev = gr.Audio(label="선택 구간", type="filepath")
+            with gr.Column(scale=2):
+                gr.Markdown("**참조 텍스트** — 구간에서 실제로 읽은 문장.\n"
+                            "성경 녹음이면 **원문 넣기**가 정확합니다(ASR 오인식 방지).")
+                with gr.Row():
+                    a_ver = gr.Dropdown(VER_LABELS, value="개역개정", label="역본")
+                    a_book = gr.Dropdown([], label="책")
+                with gr.Row():
+                    a_ch = gr.Number(label="장", value=1, precision=0)
+                    a_vf = gr.Number(label="시작절", value=1, precision=0)
+                    a_vt = gr.Number(label="끝절", value=2, precision=0)
+                with gr.Row():
+                    a_btn_src = gr.Button("원문 넣기", variant="secondary")
+                    a_btn_asr = gr.Button("ASR 전사 넣기")
+                a_ref = gr.Textbox(label="참조 텍스트", lines=4)
+                a_name = gr.Textbox(label="보이스 이름", placeholder="예: 리딩지저스")
+                a_btn_reg = gr.Button("보이스 등록", variant="primary")
+                a_msg = gr.Textbox(label="결과", lines=3)
+        gr.Markdown("### 등록된 보이스")
+        with gr.Row():
+            a_list = gr.Dropdown([], label="보이스", scale=2)
+            a_btn_ref = gr.Button("새로고침")
+            a_btn_del = gr.Button("삭제", variant="stop")
+        a_vprev = gr.Audio(label="참조 음원", type="filepath")
+        a_vinfo = gr.Textbox(label="정보", lines=2)
 
     # ── 이벤트 ──
     a_btn_tr.click(ui_transcribe, [a_audio], [a_segs, a_msg])
@@ -754,6 +817,9 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     b_btn_rep_del.click(ui_withdraw_replacement, [b_ver, b_rep_which], [b_msg, b_jobs])
     b_timer.tick(ui_progress, None, [b_status, b_jobs])
     b_timer.tick(ui_book_rows, None, b_bookprog)
+    f_btn_save.click(ui_fleet_save, [f_label, f_auto, b_voice, b_ver, b_batch], f_msg)
+    # 무리 현황은 서버를 한 번 다녀오므로 작업 표(3초)보다 드물게 본다
+    f_timer.tick(ui_fleet_rows, None, f_fleet)
 
     c_btn_ref.click(ui_job_choices, None, c_jid)
     c_btn_ref.click(ui_job_choices, None, b_jid)
@@ -785,6 +851,8 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     # 왜 안 되는지 알 수 없었다
     demo.load(_boot_diag, None, b_diag)
     demo.load(ui_book_rows, None, b_bookprog)
+    demo.load(ui_fleet_load, None, [f_label, f_auto])
+    demo.load(ui_fleet_rows, None, f_fleet)
 
 
 if __name__ == "__main__":
@@ -798,4 +866,8 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[실행 파일] 고치기 건너뜀: {e}", flush=True)
     jobs.start_worker()
+    # 서버에 현황을 보고하고 지시를 받는다 — 이 PC 앞에 앉지 않아도 어디까지 왔는지 보이게.
+    # 서버 연동 정보가 없으면 조용히 건너뛴다(혼자 쓰는 PC 도 그대로 돌아야 한다).
+    if fleet.start():
+        print("[무리] 서버에 현황을 보고합니다 — 예봄성경 설정 → 관리자 → 음원 생성 현황", flush=True)
     demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=True)

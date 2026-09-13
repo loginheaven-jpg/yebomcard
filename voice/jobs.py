@@ -1072,6 +1072,47 @@ def refresh_job_text(job):
     return changed
 
 
+def requeue_refs(refs, voice=None):
+    """절 참조("창세기 1:1")로 그 절만 다시 만들기로 한다 — 어느 작업에 들어 있든 찾아낸다.
+
+    같은 절이 여러 작업에 있으면 **가장 최근 작업의 것**만 되살린다. 옛 작업까지 되살리면 같은 절을
+    두 번 만들고, 나중에 만든 쪽이 먼저 올라가면 옛 음원이 새 음원을 덮어쓴다.
+    반환: 다시 만들기로 한 절 수."""
+    want = {r.strip() for r in refs if r and r.strip()}
+    if not want:
+        return 0
+    picked = {}          # ref -> (작업 id, item)
+    for j in sorted(list_jobs(), key=lambda x: x["id"]):
+        if voice and j.get("voice") != voice:
+            continue
+        for it in j.get("items") or []:
+            if it.get("ref") in want:
+                picked[it["ref"]] = (j["id"], it)
+    by_job = {}
+    for jid, it in picked.values():
+        by_job.setdefault(jid, []).append(it["ref"])
+    n = 0
+    for jid, rs in by_job.items():
+        job = load(jid)
+        if not job:
+            continue
+        hit = {r for r in rs}
+        for it in job["items"]:
+            if it.get("ref") in hit:
+                it["status"], it["tries"], it["reason"] = "pending", 0, "다시 만들기 지시"
+                it.pop("uploaded", None)
+                for k in _BEST_KEYS:
+                    it.pop(k, None)
+                n += 1
+        if job["status"] in ("done", "stopped", "error"):
+            job["status"] = "queued"
+        save(job)
+    if n:
+        _stop.clear()
+        start_worker()
+    return n
+
+
 def requeue(jid):
     """중단된 작업을 이어서 진행. 이어가기 전에 본문을 최신 DB 로 맞춘다."""
     job = load(jid)
