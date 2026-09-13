@@ -93,10 +93,15 @@ _CODE_FILES = ("engine.py", "jobs.py", "app.py", "server.py", "fleet.py", "proso
 
 
 def _compute_code_version():
+    """소스의 내용 지문. **줄 끝을 통일해서** 센다.
+
+    서버가 내려주는 사본은 줄 끝이 LF 이고(bootstrap.sync_code 가 newline 을 LF 로 고정해 쓴다),
+    git 으로 받는 개발 PC 는 CRLF 인 파일이 섞인다. 바이트를 그대로 세면 **같은 코드인데 지문이
+    달라져** 헛경고가 뜬다 — 2026-09-14 에 prosody.py 하나 때문에 두 PC 가 다른 것으로 보였다."""
     h = hashlib.sha1()
     for name in _CODE_FILES:
         try:
-            h.update((HERE / name).read_bytes())
+            h.update((HERE / name).read_bytes().replace(b"\r\n", b"\n"))
         except Exception:
             h.update(b"?")
     return h.hexdigest()[:8]
