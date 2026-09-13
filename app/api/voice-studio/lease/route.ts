@@ -87,15 +87,18 @@ export async function POST(req: Request) {
   const granted: string[] = [];
   const held: string[] = [];
 
+  // 이미 쥐고 있는 책을 **먼저** 센다. want 는 '모두 합쳐 이만큼 쥐고 싶다' 는 뜻이라,
+  // 순서대로 훑으며 세면 뒤쪽에 있는 내 책이 아직 안 세어져 매번 새 책을 더 받게 된다.
+  for (const [book, l] of mine) {
+    if (l.tokenId === me && l.state !== "done") held.push(book);
+  }
+
   for (const raw of order) {
     const book = typeof raw === "string" ? raw.slice(0, 40) : "";
     if (!book) continue;
     const l = mine.get(book);
-    if (l?.tokenId === me && l.state !== "done") {
-      held.push(book); // 이미 내가 쥐고 있다
-      continue;
-    }
-    if (granted.length >= want) continue;
+    if (l?.tokenId === me && l.state !== "done") continue; // 이미 내가 쥐고 있다
+    if (held.length + granted.length >= want) continue;
     if (l && (l.state === "done" || l.blocked)) continue;
     if (l && l.tokenId && leaseLive(l, pcs, now)) continue; // 살아 있는 남의 임대
     const next: BookLease = {
