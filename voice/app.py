@@ -832,14 +832,8 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
     c_btn_merge.click(ui_merge, [c_jid], [c_merged, c_msg])
 
     def _boot():
-        # PC 가 꺼졌다 켜졌으면 중단된 작업을 자동으로 이어간다.
-        # 예전엔 사람이 '이어하기' 를 누르기 전까지 아무 일도 일어나지 않았다.
-        try:
-            n = jobs.resume_all()
-            if n:
-                print(f"[재개] 중단된 작업 {n}개를 이어서 진행합니다", flush=True)
-        except Exception as e:
-            print(f"[재개] 실패: {e}", flush=True)
+        # 작업 이어가기는 아래 __main__ 에서 **화면과 무관하게** 한다 — 여기서만 하면
+        # 브라우저가 열려야 이어졌다(2026-09-14). 여기서는 화면 값만 채운다.
         v = _voices()
         return (gr.update(choices=v, value=(v[0] if v else None)),
                 gr.update(choices=v, value=(v[0] if v else None)),
@@ -867,6 +861,15 @@ if __name__ == "__main__":
                 print(f"[실행 파일] 새 방식으로 고쳤습니다: {p.name}", flush=True)
         except Exception as e:
             print(f"[실행 파일] 고치기 건너뜀: {e}", flush=True)
+    # 중단·오류로 멈춘 작업을 이어간다. **브라우저를 열기 전에, 화면과 무관하게** 한다 —
+    # 예전에는 화면이 열릴 때(demo.load)만 해서, 창을 닫아 두거나 브라우저가 안 뜨면 이어지지
+    # 않았다. 오류로 멈춘 작업도 여기서 다시 큐에 올라간다(jobs.unfinished 가 error 를 포함).
+    try:
+        n = jobs.resume_all()
+        if n:
+            print(f"[재개] 멈춰 있던 작업 {n}개를 이어서 진행합니다", flush=True)
+    except Exception as e:
+        print(f"[재개] 실패: {e}", flush=True)
     jobs.start_worker()
     # 서버에 현황을 보고하고 지시를 받는다 — 이 PC 앞에 앉지 않아도 어디까지 왔는지 보이게.
     # 서버 연동 정보가 없으면 조용히 건너뛴다(혼자 쓰는 PC 도 그대로 돌아야 한다).

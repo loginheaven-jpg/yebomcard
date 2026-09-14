@@ -864,11 +864,18 @@ def start_worker():
 
 
 def unfinished():
-    """아직 안 끝난 작업들. PC 가 꺼졌다 켜졌을 때 이어갈 대상."""
+    """아직 안 끝난 작업들. PC 가 꺼졌다 켜졌을 때 이어갈 대상.
+
+    **"error" 도 포함한다**(2026-09-14). 예전에는 빠져 있어서, 그래픽 드라이버가 잠깐 응답을
+    잃는 것 같은 일시적 사고로 작업이 한 번 error 로 세워지면 **다시 켜도 영영 이어지지 않았다** —
+    워커는 queued·running 만 집으므로 사람이 '이어하기' 를 누를 때까지 PC 가 놀았다
+    (지휘부 보고: 엔비디아 드라이버를 올리고 재부팅한 사이 432절이 멈춘 채 남았다).
+    다시 켜는 것은 프로세스를 새로 띄우는 일이라, 망가진 CUDA 문맥 같은 원인은 그 자체로 사라진다.
+    그래도 안 되면 같은 자리에서 다시 error 가 되므로 무한히 반복되지는 않는다."""
     out = []
     for j in list_jobs():
         _ok, _held, pend = counts(j)
-        if pend and j.get("status") in ("queued", "running", "stopped"):
+        if pend and j.get("status") in ("queued", "running", "stopped", "error"):
             out.append(j)
     return out
 
@@ -907,7 +914,12 @@ def resume_all():
 
     jobs_ = unfinished()
     for j in jobs_:
-        if j.get("status") == "stopped":
+        if j.get("status") in ("stopped", "error"):
+            if j.get("status") == "error":
+                # 무엇 때문에 멈췄는지는 남겨 둔다 — 되풀이되면 사람이 봐야 한다
+                j["last_error"] = j.pop("error", "")
+                print(f"[재개] '{j.get('title','')}' 는 오류로 멈춰 있었습니다 — 다시 시도합니다: "
+                      f"{str(j['last_error'])[:80]}", flush=True)
             j["status"] = "queued"
             save(j)
     if jobs_:
@@ -1135,6 +1147,8 @@ def requeue(jid):
         return False
     changed = refresh_job_text(job)
     if job["status"] in ("stopped", "error", "done"):
+        if job["status"] == "error":
+            job["last_error"] = job.pop("error", "")
         job["status"] = "queued"
         save(job)
     elif changed:

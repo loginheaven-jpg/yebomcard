@@ -384,6 +384,71 @@ def _lease_round():
         jobs.start_worker()
 
 
+# ───────────────────────── 오류 회복 ─────────────────────────
+# 작업이 error 로 세워지면 워커가 집지 않아 PC 가 논다. 사람이 알아채기 전까지 몇 시간이 그냥 간다
+# (2026-09-14: 드라이버를 올리고 재부팅한 사이 432절이 멈춘 채 남았다). 스스로 일으켜 세운다.
+#
+# 두 갈래로 나눈다.
+#   · CUDA·그래픽 드라이버 쪽 오류 → **프로세스를 다시 켠다.** 한 번 망가진 CUDA 문맥은 같은
+#     프로세스 안에서 되살릴 수 없어, 그 자리에서 다시 시도해 봐야 같은 오류만 되풀이한다.
+#   · 그 밖(일시적 통신 오류 등)   → 그 자리에서 다시 큐에 올린다. 프로세스를 껐다 켤 일이 아니다.
+#
+# 되풀이 사고를 막는 한도: 같은 작업을 ERROR_REQUEUE_MAX 번까지만 다시 올리고,
+# 다시 켜기는 RESTART_WINDOW_SEC 안에 RESTART_MAX 번까지만 한다. 넘으면 사람이 봐야 한다.
+ERROR_REQUEUE_MAX = 3
+RESTART_MAX = 3
+RESTART_WINDOW_SEC = 3600
+_CUDA_WORDS = ("cuda", "cudnn", "nvml", "device-side", "no kernel image", "driver")
+
+
+def _is_gpu_error(msg):
+    m = (msg or "").lower()
+    return any(w in m for w in _CUDA_WORDS)
+
+
+def _recover_errors():
+    """오류로 멈춘 작업을 일으켜 세운다. 다시 켜야 하면 True."""
+    global _last_error
+    for j in jobs.list_jobs():
+        if j.get("status") != "error":
+            continue
+        _ok, _held, pend = jobs.counts(j)
+        if not pend:
+            continue
+        err = str(j.get("error") or "")
+        n = int(j.get("error_retries") or 0)
+        if n >= ERROR_REQUEUE_MAX:
+            _last_error = (f"'{j.get('title','')}' 가 {n}번 다시 시도해도 오류로 멈춥니다 — "
+                           f"사람이 봐야 합니다: {err[:100]}")
+            continue
+
+        job = jobs.load(j["id"])
+        if not job:
+            continue
+        job["error_retries"] = n + 1
+        job["last_error"] = job.pop("error", err)
+        job["status"] = "queued"
+        jobs.save(job)
+        print(f"[회복] '{job.get('title','')}' 오류로 멈춰 있어 다시 올립니다({n + 1}/{ERROR_REQUEUE_MAX}): "
+              f"{err[:80]}", flush=True)
+
+        if _is_gpu_error(err):
+            st = state()
+            now = time.time()
+            hist = [x for x in (st.get("restarts") or []) if now - x < RESTART_WINDOW_SEC]
+            if len(hist) >= RESTART_MAX:
+                _last_error = (f"그래픽 쪽 오류로 {len(hist)}번 다시 켰는데도 되풀이됩니다 — "
+                               f"사람이 봐야 합니다: {err[:100]}")
+                print(f"[회복] {_last_error}", flush=True)
+                continue
+            set_state(restarts=hist + [now])
+            print("[회복] 그래픽 쪽 오류입니다 — 스튜디오를 다시 켭니다"
+                  "(같은 프로세스에서는 되살릴 수 없습니다)", flush=True)
+            return True
+        jobs.start_worker()
+    return False
+
+
 # ───────────────────────── 루프 ─────────────────────────
 def _loop():
     global _last_error
@@ -403,7 +468,12 @@ def _loop():
                 if time.time() >= next_lease:
                     next_lease = time.time() + LEASE_EVERY_SEC
                     _lease_round()
-            _last_error = ""
+            _last_error = ""      # 여기까지 왔으면 지난 차례의 사고는 지나간 것이다
+            # 서버가 안 되어도 이것은 해야 한다 — 오류로 멈춘 작업은 서버와 무관하다.
+            # **_last_error 를 지운 뒤에** 부른다 — 여기서 적는 '사람이 봐야 한다' 를 지우면 안 된다.
+            if _recover_errors():
+                _restart_studio()
+                return
         except Exception as e:
             _last_error = f"{type(e).__name__}: {e}"[:300]
             if os.environ.get("YEBOM_DEBUG"):
