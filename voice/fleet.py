@@ -131,6 +131,21 @@ def _rate_per_hour(ok_total):
     return max(0, round((ok_total - n0) * 3600 / el))
 
 
+def current_voice():
+    """이 PC 가 쓰는 보이스.
+
+    '전체 생성' 설정에서 오지만, 그것을 켜지 않고 작업만 거는 PC 도 있다 — 그럴 땐 지금(또는 가장
+    최근) 작업이 쓰는 보이스를 쓴다. 예전에는 화면 표시에만 이 대비가 있어서, 지시로 책을 걸면
+    '보이스가 정해지지 않았습니다' 로 거절됐다(2026-09-15)."""
+    st = state()
+    if st.get("voice"):
+        return st["voice"]
+    cur = jobs.current()
+    js = jobs.list_jobs()
+    cj = next((j for j in js if j["id"] == cur.get("job")), None)
+    return (cj or (js[0] if js else {})).get("voice") or ""
+
+
 def snapshot():
     """서버에 보낼 지금 상태. 화면에서도 같은 값을 쓴다."""
     st = state()
@@ -157,10 +172,7 @@ def snapshot():
     if cj:
         books = _book_rows(cj)
 
-    # 보이스는 '전체 생성' 설정에서 오지만, 그것을 켜지 않고 작업만 거는 PC 도 있다 —
-    # 그럴 땐 지금(또는 가장 최근) 작업이 쓰는 보이스를 보여 준다. 화면에 빈칸이 뜨면
-    # 이 PC 가 무엇으로 만들고 있는지 알 수가 없다.
-    voice = st.get("voice") or (cj or (js[0] if js else {})).get("voice") or ""
+    voice = current_voice()
 
     return {
         "label": st["label"],
@@ -231,9 +243,9 @@ def _do_command(c):
         return "지웠습니다" if jobs.delete_job(jid) else "지우지 못했습니다(도는 작업이거나 없음)"
 
     if op == "queue_books":
-        voice = a.get("voice") or st.get("voice")
+        voice = a.get("voice") or current_voice()
         if not voice:
-            return "보이스가 정해지지 않았습니다"
+            return "보이스가 정해지지 않았습니다 — 스튜디오 '전체 생성'에서 고르거나 --voice 로 주세요"
         version = a.get("version") or st.get("version") or "새번역"
         books = a.get("books") or []
         if not books:
@@ -247,9 +259,9 @@ def _do_command(c):
         return f"{len(books)}권 중 {n}권을 큐에 올렸습니다"
 
     if op == "queue_replace":
-        voice = a.get("voice") or st.get("voice")
+        voice = a.get("voice") or current_voice()
         if not voice:
-            return "보이스가 정해지지 않았습니다"
+            return "보이스가 정해지지 않았습니다 — 스튜디오 '전체 생성'에서 고르거나 --voice 로 주세요"
         version = a.get("version") or st.get("version") or "새번역"
         which = a.get("which") or "구약"
         msg, _rows = ui.ui_replace_legacy(voice, version, which,
@@ -353,7 +365,8 @@ def _ensure_book_job(voice, version, book, batch):
 def _lease_round():
     """전체 생성이 켜져 있으면 진도표 순서로 다음 책을 빌려 와 작업을 건다."""
     st = state()
-    if not st.get("auto") or not st.get("voice"):
+    voice = current_voice()
+    if not st.get("auto") or not voice:
         return
     version = st.get("version") or "새번역"
     order = [p[2] for p in plan.PLAN_ORDER]
@@ -376,7 +389,7 @@ def _lease_round():
     set_state(leases=holding)
     for b in r.get("granted") or []:
         try:
-            _ensure_book_job(st["voice"], version, b, int(st.get("batch") or 4))
+            _ensure_book_job(voice, version, b, int(st.get("batch") or jobs.DEFAULT_BATCH))
             print(f"[분담] '{b}' 를 맡았습니다 — 작업을 걸었습니다", flush=True)
         except Exception as e:
             print(f"[분담] '{b}' 작업을 걸지 못했습니다: {e}", flush=True)
