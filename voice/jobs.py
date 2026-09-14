@@ -528,12 +528,18 @@ def upload_counts(job):
     return done, left
 
 
-def _skip_already_made(job):
+def _book_of(item):
+    """절 참조에서 책 이름 — "창세기 3:14" → "창세기" (책 이름에는 띄어쓰기가 없다)"""
+    ref = item.get("ref") or ""
+    return ref[: ref.rfind(" ")] if " " in ref else ref
+
+
+def _skip_already_made(job, only_book=None):
     """다른 PC 가 이미 만든 절은 건너뛴다.
 
-    책 하나를 시작할 때 서버에 "이미 있는 절 목록" 을 한 번만 물어본다.
-    절마다 물으면 왕복이 수만 번이고, 작업을 걸 때 미리 물어보면 며칠 뒤 만들 책까지
-    그 시점 기준으로 판정해 그 사이 다른 PC 가 만든 것을 놓친다.
+    서버에 "이미 있는 절 목록" 을 한 번 물어본다. 절마다 물으면 왕복이 수만 번이다.
+    `only_book` 을 주면 그 책의 절만 판정한다 — 여러 권이 든 작업에서 **책이 바뀔 때마다**
+    다시 물어 그 사이 다른 PC 가 만든 것을 놓치지 않는다(_process).
 
     서버가 안 되면 아무것도 건너뛰지 않는다 — **절대 멈추지 않는다**."""
     key = job.get("upload_key")
@@ -552,6 +558,8 @@ def _skip_already_made(job):
     for it in job["items"]:
         if it["status"] != "pending" or it.get("request_id"):
             continue                        # 음원 다시 만들기 요청 절은 서버에 있어도 새로 만든다
+        if only_book and _book_of(it) != only_book:
+            continue
         if engine.text_hash(it["text"]) in have:
             it["status"] = "ok"
             it["uploaded"] = True          # 서버에 이미 있으니 올릴 것도 없다
@@ -734,6 +742,7 @@ def _process(job):
     # 긴 절이 몰린 묶음에서만 모자라는 일이 많아, 한 번 모자랐다고 끝까지 줄이면 큰 배치의 이득을 잃는다
     # (새 PC 3080 Ti 실측: 배치 4 → 8 이 시간당 305 → 498절).
     oom_cap, oom_hits = None, 0
+    book_checked = None
     while not _stop.is_set():
         if _apply_batch_request(job):       # 화면·명령줄에서 배치를 바꿨으면 이 묶음부터
             oom_cap, oom_hits = None, 0
@@ -743,6 +752,18 @@ def _process(job):
         pend = [i for i in job["items"] if i["status"] == "pending"]
         if not pend:
             break
+        # **책이 바뀔 때마다** 다른 PC 가 그 사이 만든 절을 다시 확인한다.
+        # 작업을 집을 때 한 번만 물으면, 여러 권이 든 작업에서 며칠 뒤 만들 책은 시작 시점 기준으로
+        # 판정된다 — 그 사이 다른 PC 가 그 책을 다 만들어도 모르고 통째로 다시 만든다
+        # (2026-09-15: 새 PC 의 구약 작업 한 덩이에 37권이 들어 있어, 이 PC 가 나눠 맡을 수가 없었다).
+        book_now = _book_of(pend[0])
+        if book_now != book_checked:
+            book_checked = book_now
+            n = _skip_already_made(job, only_book=book_now)
+            if n:
+                _cur["note"] = f"{book_now}: 이미 있는 절 {n}개 건너뜀"
+                save(job)
+                continue                     # 건너뛴 뒤 남은 절로 다시 고른다
         # 같은 재시도 회차끼리 묶는다 — 회차가 오를수록 더 잘게 쪼개 잘림을 피한다
         # 단 '절 끝만 짧아서' 다시 만드는 절은 본문을 더 쪼개지 않는다 — 쪼개면 절 중간에 쉼이
         # 끼어 호흡이 달라진다. 끝만 다시 뽑으면 되므로 처음과 같은 조건으로 만든다.
