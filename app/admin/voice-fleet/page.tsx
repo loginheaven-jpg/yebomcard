@@ -3,9 +3,20 @@
 /**
  * 음원 생성 현황 — PC 여러 대가 며칠씩 도는 일을 한 화면에서 본다.
  *
- * 각 PC 는 10초마다 자기 상태를 서버에 올린다(`voice/fleet.py`). 여기서는 그것을 모아 보여주고,
- * 지시를 걸고, 책 배분을 사람이 고친다 — **자동으로 나누되 최종 결정권은 사람에게** 둔다.
+ * 각 PC 는 10초마다 자기 상태를 서버에 올린다(`voice/fleet.py`). 여기서 그것을 모아 보여주고
+ * 지시를 건다 — **자동으로 하되 최종 결정권은 사람에게** 둔다.
  * 지시는 즉시 반영되지 않는다(각 PC 가 10초 안에 가져간다) — 그래서 결과 줄을 함께 보여준다.
+ *
+ * 화면 순서는 **볼 일이 잦은 것부터**다:
+ *   손봐야 할 것(있을 때만) → 전체 진도 → 요약·전체 조작 → PC 카드 → 책 배분(쓸 때만) → 지시 기록
+ *
+ * 2026-09-16 정리 — 쌓이기만 한 것을 걷어냈다:
+ *   · 요약 8칸 → 4칸. '합격 누계' 와 '업로드' 가 사실상 같은 수였고, '책 끝남·맡은 중' 은
+ *     임대를 쓸 때만 뜻이 있어 늘 0 이었다
+ *   · 버튼 이름을 '무엇이 일어나는가' 로. '다시 켬'(생성 재개)과 '스튜디오 다시 켜기'
+ *     (프로세스 재시작)는 말이 거의 같은데 전혀 다른 일이었다
+ *   · '책 배분' 은 임대를 쓸 때만 보인다 — 실제 운영은 '책 맡기기' 로 직접 배정해 왔다
+ *   · 명령줄에만 있던 것(책 맡기기·구방식 교체·PC 단위 배치·양보 모드)을 PC 카드로 올렸다
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -157,6 +168,9 @@ export default function VoiceFleetPage() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [progBusy, setProgBusy] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
+  /** 지금 '책 맡기기' 를 펼친 PC — 한 번에 한 대만 연다 */
+  const [assignTo, setAssignTo] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
@@ -271,6 +285,42 @@ export default function VoiceFleetPage() {
     [],
   );
 
+  /**
+   * 고른 책을 그 PC 에 맡긴다.
+   *
+   * 실제 운영은 임대(lease)가 아니라 이렇게 **직접 맡기는 방식**으로 해 왔다. 그런데 그 길이
+   * 명령줄에만 있어서, 한 PC 가 자기 몫을 끝내면 지휘부가 화면에서 다음 일을 줄 수 없었다
+   * (2026-09-16 정리). 책마다 작업 하나가 만들어지고, 워커가 진도표 순번이 앞선 것부터 집는다.
+   */
+  const assignBooks = useCallback(
+    async (tokenId: string, label: string, books: string[]) => {
+      if (books.length === 0) return;
+      if (!confirm(`${label} 에 ${books.length}권을 맡길까요?
+
+${books.join(" · ")}`)) return;
+      setBusy(true);
+      try {
+        const r = await fetch("/api/voice-studio/commands", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: "queue_books", target: tokenId, args: { books } }),
+        });
+        const d = await r.json();
+        setMsg(d.ok ? `${label} 에 ${books.length}권을 맡겼습니다 — 10초 안에 시작합니다` : d.error || "실패");
+        if (d.ok) {
+          setAssignTo(null);
+          setPicked(new Set());
+          setShowLog(true);
+        }
+      } catch {
+        setMsg("맡기지 못했습니다");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
   const leaseAction = useCallback(
     async (book: string, plan: string, action: string, tokenId?: string) => {
       setBusy(true);
@@ -365,28 +415,30 @@ export default function VoiceFleetPage() {
 
       {total && (
         <section className="rounded-xl border border-[var(--line)] p-3 mb-4 text-sm">
+          {/*
+            칸을 넷으로 줄였다. 예전에는 여덟이었는데 '합격 누계' 와 '업로드' 가 사실상 같은 수였고,
+            '책 끝남·맡은 중' 은 임대를 쓸 때만 뜻이 있어 늘 0 이었다(2026-09-16 정리).
+          */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Stat label="살아 있는 PC" value={`${total.livePcs}/${total.pcs}`} />
-            <Stat label="시간당" value={`${total.versesPerHour.toLocaleString()}절`} />
-            <Stat label="남은 절" value={total.pending.toLocaleString()} />
-            <Stat label="끝날 때까지" value={eta(total.pending, total.versesPerHour)} />
-            <Stat label="합격 누계" value={total.ok.toLocaleString()} />
-            <Stat label="업로드" value={total.uploaded.toLocaleString()} />
-            <Stat label="보류" value={total.held.toLocaleString()} />
-            <Stat label="책" value={`끝남 ${total.booksDone} · 맡은 중 ${total.booksTaken}`} />
+            <Stat label="일하는 PC" value={`${total.running}/${total.pcs}대`} />
+            <Stat label="만드는 속도" value={`시간당 ${total.versesPerHour.toLocaleString()}절`} />
+            <Stat label="맡은 일 중 남은 절" value={total.pending.toLocaleString()} />
+            <Stat label="이 속도면" value={eta(total.pending, total.versesPerHour)} />
           </div>
+          {/* 버튼 이름은 '무엇이 일어나는가' 로 적는다 — '다시 켬'(생성 재개)과
+              '스튜디오 다시 켜기'(프로세스 재시작)는 말이 거의 같은데 전혀 다른 일이었다 */}
           <div className="mt-3 flex flex-wrap gap-2">
             <Btn onClick={() => send("stop", "*")} disabled={busy} tone="stop">
-              모두 멈춤
+              모두 생성 멈춤
             </Btn>
             <Btn onClick={() => send("resume", "*")} disabled={busy}>
-              모두 다시 켬
+              모두 생성 이어가기
             </Btn>
             <Btn onClick={() => send("restart", "*")} disabled={busy}>
-              모두 스튜디오 다시 켜기
+              모두 스튜디오 다시 시작
             </Btn>
             <Btn onClick={() => setShowLog((v) => !v)} disabled={busy}>
-              {showLog ? "지시 기록 접기" : "지시 기록"}
+              {showLog ? "지시 기록 접기" : "지시 기록 보기"}
             </Btn>
           </div>
           {msg && <p className="mt-2 text-xs text-[var(--ink-faint)]">{msg}</p>}
@@ -514,36 +566,94 @@ export default function VoiceFleetPage() {
             )}
             {p.lastError && <p className="text-xs text-red-600 mt-1">! {p.lastError}</p>}
             <PcBooks books={p.books} />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <Btn onClick={() => send("stop", p.tokenId)} disabled={busy} tone="stop">
-                멈춤
+            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+              <Btn onClick={() => send(p.running ? "stop" : "resume", p.tokenId)} disabled={busy}
+                   tone={p.running ? "stop" : undefined}>
+                {p.running ? "생성 멈춤" : "생성 이어가기"}
               </Btn>
-              <Btn onClick={() => send("resume", p.tokenId)} disabled={busy}>
-                다시 켬
+              <Btn onClick={() => send("restart", p.tokenId)} disabled={busy}>
+                스튜디오 다시 시작
               </Btn>
-              {[4, 8].map((n) => (
-                <Btn key={n} onClick={() => send("set_batch", p.tokenId, { batch: n })} disabled={busy}>
-                  배치 {n}
+              <span className="text-xs text-[var(--ink-faint)] ml-1">한 번에</span>
+              {[2, 4, 8].map((n) => (
+                <Btn
+                  key={n}
+                  onClick={() => send("set_batch", p.tokenId, { batch: n, pc_wide: true })}
+                  disabled={busy || p.batch === n}
+                >
+                  {n}절씩
                 </Btn>
               ))}
-              <Btn onClick={() => send("restart", p.tokenId)} disabled={busy}>
-                다시 켜기
+              <Btn onClick={() => send("polite", p.tokenId, { on: !p.polite })} disabled={busy}>
+                {p.polite ? "양보 모드 끄기" : "양보 모드 켜기"}
               </Btn>
             </div>
+            <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
+              한 번에 만드는 절 수 — 그래픽 메모리가 모자라면 워커가 알아서 줄입니다.
+              양보 모드는 사람이 함께 쓰는 PC 용(생성이 뒷자리로 물러납니다).
+            </p>
             <Rework pc={p} busy={busy} onSend={sendRework} />
+
+            <div className="mt-2 pt-2 border-t border-[var(--line)] flex flex-wrap gap-1.5 items-center">
+              <Btn
+                onClick={() => {
+                  setPicked(new Set());
+                  setAssignTo(assignTo === p.tokenId ? null : p.tokenId);
+                  if (!prog) measure();
+                }}
+                disabled={busy}
+              >
+                {assignTo === p.tokenId ? "책 맡기기 닫기" : "책 맡기기"}
+              </Btn>
+              {(["구약", "신약"] as const).map((w) => (
+                <Btn
+                  key={w}
+                  onClick={() => {
+                    if (!confirm(`${p.label} 에 ${w} 구방식 교체를 맡길까요?
+
+아직 옛 방식으로 남은 절만 다시 만들어 덮어씁니다.`)) return;
+                    send("queue_replace", p.tokenId, { which: w });
+                  }}
+                  disabled={busy}
+                >
+                  {w} 구방식 교체
+                </Btn>
+              ))}
+            </div>
+
+            {assignTo === p.tokenId && (
+              <BookPicker
+                prog={prog}
+                busy={busy || progBusy}
+                picked={picked}
+                onToggle={(name) =>
+                  setPicked((s) => {
+                    const n = new Set(s);
+                    if (n.has(name)) n.delete(name);
+                    else n.add(name);
+                    return n;
+                  })
+                }
+                onAssign={() => assignBooks(p.tokenId, p.label, [...picked])}
+              />
+            )}
           </article>
         ))}
       </div>
 
-      <h2 className="text-sm font-semibold mb-1">책 배분</h2>
+      {/*
+        임대(lease) 배분 — **쓰고 있을 때만** 보여 준다. 실제 운영은 위의 '책 맡기기' 로 직접
+        배정해 왔고, 그래서 이 자리는 늘 "아직 배분된 책이 없습니다" 만 떠 있었다(2026-09-16 정리).
+        스튜디오에서 '전체 생성' 을 켜면 그때부터 여기에 나타난다.
+      */}
+      {leases.length > 0 && (
+      <>
+      <h2 className="text-sm font-semibold mb-1">책 배분 (자동 분담)</h2>
       <p className="text-xs text-[var(--ink-faint)] mb-2">
         진도표 순서로 PC 가 알아서 빌려 갑니다. <strong>고정</strong>하면 그 PC 가 계속 맡고(꺼져도
         풀리지 않음), <strong>차단</strong>하면 아무도 가져가지 않습니다. <strong>회수</strong>는 지금
         임대를 풀어 다른 PC 가 가져가게 합니다.
       </p>
-      {taken.length === 0 && done.length === 0 && (
-        <p className="text-sm text-[var(--ink-faint)]">아직 배분된 책이 없습니다.</p>
-      )}
       <div className="rounded-xl border border-[var(--line)] divide-y divide-[var(--line)] text-sm">
         {[...taken, ...done].map((l) => (
           <div key={`${l.plan}/${l.book}`} className="flex items-center gap-2 px-3 py-1.5 flex-wrap">
@@ -583,6 +693,8 @@ export default function VoiceFleetPage() {
           </div>
         ))}
       </div>
+      </>
+      )}
     </main>
   );
 }
@@ -615,6 +727,72 @@ function Bar({ done, legacy, total }: { done: number; legacy: number; total: num
  * 그래서 조건 하나짜리 화면이 아니라 **조건 목록**으로 둔다 — 나중에 다른 이유가 생겨도
  * `jobs.REWORK_KINDS` 에 한 줄만 더하면 여기에 저절로 나타난다.
  */
+/**
+ * 아직 안 만든 책을 골라 한 PC 에 맡긴다.
+ *
+ * 목록은 '성경 전체 진도' 측정값에서 온다 — 서버가 본문과 보관소를 맞춰 센 것이라 어느 PC 가
+ * 무엇을 했든 정확하다. 아직 재지 않았으면 열 때 한 번 잰다(몇 초 걸린다).
+ * 이미 다른 PC 가 맡고 있는 책을 또 줘도 사고는 아니다 — 책이 바뀔 때마다 서버에 다시 물어
+ * 이미 만들어진 절은 건너뛴다. 다만 헛일이므로 지금 누가 무엇을 하는지 함께 보여 준다.
+ */
+function BookPicker({
+  prog,
+  busy,
+  picked,
+  onToggle,
+  onAssign,
+}: {
+  prog: Progress | null;
+  busy: boolean;
+  picked: Set<string>;
+  onToggle: (name: string) => void;
+  onAssign: () => void;
+}) {
+  if (!prog) {
+    return (
+      <p className="mt-2 text-xs text-[var(--ink-faint)]">
+        남은 책을 세는 중입니다… (몇 초 걸립니다)
+      </p>
+    );
+  }
+  const rest = prog.books.filter((b) => b.done < b.total);
+  if (rest.length === 0) {
+    return <p className="mt-2 text-xs text-[var(--ink-faint)]">남은 책이 없습니다.</p>;
+  }
+  const total = [...picked].reduce(
+    (s, n) => s + (rest.find((b) => b.name === n)?.total ?? 0) - (rest.find((b) => b.name === n)?.done ?? 0),
+    0,
+  );
+  return (
+    <div className="mt-2 rounded-lg border border-[var(--line)] p-2">
+      <p className="text-xs text-[var(--ink-faint)] mb-1.5">
+        아직 안 만든 책 {rest.length}권 — 맡길 책을 고르세요
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {rest.map((b) => (
+          <button
+            key={b.code}
+            type="button"
+            onClick={() => onToggle(b.name)}
+            className={`px-2 py-1 rounded-md text-xs border ${
+              picked.has(b.name)
+                ? "border-[var(--ink-soft)] bg-[var(--line)] font-medium"
+                : "border-[var(--line)] text-[var(--ink-faint)]"
+            }`}
+          >
+            {b.name} {(b.total - b.done).toLocaleString()}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <Btn onClick={onAssign} disabled={busy || picked.size === 0}>
+          {picked.size > 0 ? `${picked.size}권 (${total.toLocaleString()}절) 맡기기` : "책을 고르세요"}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 function Rework({
   pc,
   busy,
