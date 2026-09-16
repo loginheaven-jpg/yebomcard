@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
 
@@ -146,7 +147,14 @@ export default function VoiceHeldPage() {
 
   if (loading) return <div className="p-6 text-sm text-gray-500">확인 중…</div>;
   if (!admin)
-    return <div className="p-6 text-sm text-red-600">관리자(운영자·수퍼어드민) 전용 페이지입니다.</div>;
+    return (
+      <div className="p-6 text-sm">
+        <p className="text-red-600 mb-3">관리자(운영자·수퍼어드민) 전용 페이지입니다.</p>
+        <Link href="/" className="underline text-gray-500">
+          예봄성경으로 돌아가기
+        </Link>
+      </div>
+    );
 
   const pending = items.filter((i) => !actions[i.id]);
   const done = items.filter((i) => actions[i.id]);
@@ -154,7 +162,16 @@ export default function VoiceHeldPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 pb-24">
-      <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">보류 절 검수</h1>
+      {/* 나가는 길 — 이 화면은 설정에서 들어오므로 돌아갈 곳이 있어야 한다(2026-09-16) */}
+      <div className="flex items-start justify-between gap-3 mb-1">
+        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">보류 절 검수</h1>
+        <Link
+          href="/"
+          className="shrink-0 mt-0.5 px-2.5 py-1 rounded-lg text-xs border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800"
+        >
+          닫기
+        </Link>
+      </div>
       <p className="text-xs text-gray-400 mb-4 leading-relaxed">
         생성 PC 들이 검수에서 걸러낸 절입니다. <b>여기 있는 절은 예봄성경에 올라가지 않았습니다</b> —
         판단하실 때까지 그 절만 다른 목소리로 읽힙니다.
