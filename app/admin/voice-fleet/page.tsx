@@ -40,6 +40,7 @@ interface Pc {
   uploadedTotal: number;
   books: BookProgress[];
   leases: string[];
+  polite: boolean;
   lastError: string;
   at: string;
 }
@@ -396,6 +397,7 @@ export default function VoiceFleetPage() {
                 {p.voice || "보이스 없음"}
                 {p.voiceKey ? ` (${p.voiceKey})` : ""} · 배치 {p.batch || "—"} ·{" "}
                 {p.versesPerHour.toLocaleString()}절/시간 · 코드 {p.codeVersion || "?"}
+                {p.polite ? " · 양보 모드" : ""}
               </span>
             </div>
             <p className="mt-1.5 text-sm">{p.note || (p.jobTitle ? p.jobTitle : "쉬는 중")}</p>

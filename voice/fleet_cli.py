@@ -91,7 +91,8 @@ def cmd_status(a):
               f"{'  — 응답 없음' if p.get('stale') else ''}")
         print(f"    {p.get('gpu','?')} · 보이스 {p.get('voice') or '—'}"
               f"({p.get('voiceKey') or '—'}) · 배치 {p.get('batch') or '—'}"
-              f" · 시간당 {p.get('versesPerHour', 0):,}절 · 코드 {p.get('codeVersion') or '?'}")
+              f" · 시간당 {p.get('versesPerHour', 0):,}절 · 코드 {p.get('codeVersion') or '?'}"
+              + (" · 양보 모드" if p.get("polite") else ""))
         print(f"    지금: {p.get('note') or '(쉬는 중)'}")
         if p.get("jobTitle"):
             print(f"    작업: {p['jobTitle']} · 남은 절 {p.get('pending', 0):,}"

@@ -80,6 +80,7 @@ export async function POST(req: Request) {
     heldTotal: num(body.heldTotal),
     uploadedTotal: num(body.uploadedTotal),
     books,
+    polite: !!body.polite,
     leases: Array.isArray(body.leases)
       ? (body.leases as unknown[]).slice(0, MAX_BOOKS).map((b) => str(b, 40))
       : [],
