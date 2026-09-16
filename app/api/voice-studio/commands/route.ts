@@ -40,6 +40,7 @@ const OPS: CommandOp[] = [
   "set_batch",
   "delete_job",
   "regen_refs",
+  "polite",
   "restart",
 ];
 

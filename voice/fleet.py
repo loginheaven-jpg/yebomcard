@@ -62,6 +62,7 @@ def state():
     d.setdefault("version", "새번역")
     d.setdefault("batch", jobs.DEFAULT_BATCH)
     d.setdefault("plan", "새번역")       # 임대를 나누는 단위 — 역본이 다르면 따로 센다
+    d.setdefault("polite", False)        # 사람이 쓰는 PC — 생성이 앞자리를 차지하지 않게
     return d
 
 
@@ -73,6 +74,47 @@ def set_state(**kw):
     except Exception:
         pass
     return d
+
+
+# ───────────────────────── 양보 모드 ─────────────────────────
+def apply_polite(on=None):
+    """사람이 함께 쓰는 PC 에서 생성이 앞자리를 차지하지 않게 한다.
+
+    **배치를 낮추는 것은 이 목적에 거의 쓸모가 없다** — 생성은 CPU 코어 하나가 정하는 일이라
+    묶음 크기를 줄여도 그 코어는 그대로 붙잡힌다(배치를 낮추면 줄어드는 것은 그래픽 메모리다).
+    실제로 듣는 약은 두 가지다.
+
+      1. **프로세스 우선순위를 낮춘다**(BELOW_NORMAL). 놀고 있을 때는 전속력으로 쓰고,
+         사람이 뭔가를 하면 곧바로 양보한다 — 총량을 깎지 않고 체감만 없앤다.
+      2. **torch 가 쓰는 CPU 스레드를 줄인다**. 기본은 코어의 절반이라 배경 작업치고는 과하다.
+
+    무인 PC 에서는 켜지 않는다 — 느려질 이유가 없다."""
+    st = state()
+    if on is None:
+        on = bool(st.get("polite"))
+    else:
+        set_state(polite=bool(on))
+        on = bool(on)
+    done = []
+    try:
+        import psutil
+        pr = psutil.Process()
+        want = psutil.BELOW_NORMAL_PRIORITY_CLASS if on else psutil.NORMAL_PRIORITY_CLASS
+        if pr.nice() != want:
+            pr.nice(want)
+        done.append("우선순위 " + ("낮춤" if on else "보통"))
+    except Exception as e:
+        done.append(f"우선순위 못 바꿈({str(e)[:40]})")
+    try:
+        import torch
+        n = max(1, (os.cpu_count() or 4) // 4) if on else max(1, (os.cpu_count() or 4) // 2)
+        torch.set_num_threads(n)
+        done.append(f"CPU 스레드 {n}")
+    except Exception as e:
+        done.append(f"스레드 못 바꿈({str(e)[:40]})")
+    msg = ("양보 모드 켬 — " if on else "양보 모드 끔 — ") + " · ".join(done)
+    print(f"[양보] {msg}", flush=True)
+    return msg
 
 
 # ───────────────────────── 현황 ─────────────────────────
@@ -194,6 +236,7 @@ def snapshot():
         "uploadedTotal": up_total,
         "books": books,
         "leases": st.get("leases", []),
+        "polite": bool(st.get("polite")),
         "lastError": _last_error,
     }
 
@@ -276,6 +319,9 @@ def _do_command(c):
         n = jobs.requeue_refs(refs)
         jobs.start_worker()
         return f"{n}절을 다시 만들기로 했습니다"
+
+    if op == "polite":
+        return apply_polite(bool(a.get("on", True)))
 
     if op == "restart":
         # 코드가 바뀌면 **프로세스를 다시 켜야** 반영된다 — 돌고 있는 파이썬은 옛 코드를 물고 있다.
@@ -508,6 +554,12 @@ def start():
         return False
     if not server.enabled():
         return False
+    # 저장해 둔 양보 모드를 되살린다 — 다시 켤 때마다 사람이 다시 켜 줄 일이 아니다
+    try:
+        if state().get("polite"):
+            apply_polite(True)
+    except Exception:
+        pass
     _stop.clear()
     _thread = threading.Thread(target=_loop, daemon=True, name="fleet")
     _thread.start()

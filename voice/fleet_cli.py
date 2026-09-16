@@ -14,6 +14,7 @@
     python fleet_cli.py replace 구약 [--pc 이름]    구방식 교체 작업 걸기
     python fleet_cli.py regen "창세기 1:1,창세기 1:2" [--pc 이름]
     python fleet_cli.py restart [--pc 이름]         스튜디오 다시 켜기 (코드 변경 반영)
+    python fleet_cli.py polite on [--pc 이름]       사람이 함께 쓰는 PC — 생성이 양보하게
 
 `--pc` 는 PC 이름의 일부만 써도 된다(앞부분 일치). 생략하면 모든 PC 에 간다.
 지시는 각 PC 가 10초 안에 가져간다 — 바로 반영되지 않아도 정상이다. `log` 로 결과를 본다.
@@ -187,6 +188,11 @@ def main():
                    help="프로세스는 그대로 두고 워커만 다시 시작(코드는 반영되지 않음)")
     s.set_defaults(fn=lambda a: _send("restart", _resolve(a.pc),
                                       {"worker_only": bool(a.worker_only)}))
+
+    s = sub.add_parser("polite", help="사람이 함께 쓰는 PC — 생성이 앞자리를 차지하지 않게")
+    s.add_argument("on", choices=["on", "off"])
+    s.add_argument("--pc", default="")
+    s.set_defaults(fn=lambda a: _send("polite", _resolve(a.pc), {"on": a.on == "on"}))
 
     s = sub.add_parser("batch", help="지금 도는 작업의 배치 바꾸기")
     s.add_argument("n", type=int)
