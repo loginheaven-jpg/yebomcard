@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
 
@@ -245,9 +246,9 @@ export default function VoiceFleetPage() {
     return (
       <main className="p-6">
         <p className="text-sm text-[var(--ink-soft)]">관리자만 볼 수 있습니다.</p>
-        <a href="/" className="text-sm underline">
+        <Link href="/" className="text-sm underline">
           돌아가기
-        </a>
+        </Link>
       </main>
     );
   }
@@ -263,9 +264,9 @@ export default function VoiceFleetPage() {
     <main className="max-w-4xl mx-auto px-4 py-5 pb-24">
       <header className="flex items-center justify-between gap-3 mb-4">
         <h1 className="text-lg font-bold">음원 생성 현황</h1>
-        <a href="/" className="text-sm text-[var(--ink-faint)] underline">
+        <Link href="/" className="text-sm text-[var(--ink-faint)] underline">
           닫기
-        </a>
+        </Link>
       </header>
 
       {attn && attn.count > 0 && (
