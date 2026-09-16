@@ -118,6 +118,41 @@ def apply_polite(on=None):
     return msg
 
 
+# ───────────────────────── 다시 만들 후보 ─────────────────────────
+# 끝음절 값·일치율은 **이 PC 의 작업 파일에만** 있다(서버는 모른다). 그래서 PC 가 후보를 세어
+# 보고하고, 사람이 화면에서 보고 눌러야 다시 만들기 요청이 나간다 — 자동이되 최종 결정권은 사람에게.
+#
+# 한 번에 보내는 절 수는 서버가 50으로 막는다(verseRegen.MAX_VERSES_PER_REQUEST). 그래서 가장
+# 나쁜 것부터 그만큼만 싣는다. 세는 데 0.3초쯤 걸리니 10초마다 하지 않고 10분에 한 번만 한다.
+REWORK_SCAN_EVERY_SEC = 600
+REWORK_SEND_MAX = 50
+_rework = {"at": 0.0, "data": {}}
+
+
+def _rework_report():
+    """조건마다 {개수, 가장 나쁜 것 몇 절}. 10분에 한 번만 다시 센다."""
+    if time.time() - _rework["at"] < REWORK_SCAN_EVERY_SEC and _rework["data"]:
+        return _rework["data"]
+    out = {}
+    try:
+        for kind in jobs.REWORK_KINDS:
+            cands = jobs.rework_candidates(kind, voice=current_voice() or None)
+            items = []
+            for c in cands[:REWORK_SEND_MAX]:
+                # key 는 "rnksv_1ch_027_021" 꼴 — 다시 만들기 요청은 책코드·장·절로 보낸다
+                parts = (c.get("key") or "").split("_")
+                items.append({"ref": c["ref"], "why": c["why"]})
+                if len(parts) == 4:
+                    items[-1].update({"code": parts[1], "chapter": int(parts[2]), "verse": int(parts[3])})
+            out[kind] = {"count": len(cands), "label": jobs.REWORK_KINDS[kind], "items": items}
+    except Exception as e:
+        print(f"[다시 만들기] 후보를 세지 못했습니다: {str(e)[:80]}", flush=True)
+        return _rework["data"]
+    _rework["at"] = time.time()
+    _rework["data"] = out
+    return out
+
+
 # ───────────────────────── 현황 ─────────────────────────
 def _gpu():
     try:
@@ -234,6 +269,7 @@ def snapshot():
         "versesPerHour": _rate_per_hour(ok_total),
         "queued": queued,
         "errorJobs": error_jobs,
+        "rework": _rework_report(),
         "pending": pending,
         "okTotal": ok_total,
         "heldTotal": held_total,

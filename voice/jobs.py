@@ -1170,6 +1170,63 @@ def refresh_job_text(job):
     return changed
 
 
+# 다시 만들 절을 고르는 조건 — 화면의 '다시 만들기' 가 쓰는 목록.
+#
+# 왜 조건으로 고르나: 끝음절 잘림은 전용 도구를 둘 만한 일이었지만 이제 아니다
+# (2026-09-16 실측: 고치기 전 14.16% → 고친 뒤 1.23%). 1%대를 위해 전용 화면을 둘 이유가 없고,
+# 앞으로 다른 이유로 다시 만들 일이 생겨도 여기 한 줄만 더하면 된다.
+#
+# 이 값들은 **각 PC 의 작업 파일에만** 있다(서버는 모른다). 그래서 PC 가 후보 수를 보고하고,
+# 지시를 받으면 자기 데이터로 골라 작업을 건다.
+REWORK_KINDS = {
+    "short_end": "절 끝이 짧게 잘림",
+    "weak_qc": "검수 기준에 못 미치는데 합격 처리됨",
+}
+
+
+def rework_candidates(kind="short_end", voice=None, limit=None):
+    """다시 만들 후보 절. 같은 절이 여러 작업에 있으면 **가장 최근 것**만 본다.
+
+    반환: [{'ref','text','out','why','jid'}] — 끝이 짧은 순(또는 일치율이 낮은 순)."""
+    latest = {}
+    for j in sorted(list_jobs(), key=lambda x: x["id"]):
+        if voice and j.get("voice") != voice:
+            continue
+        for it in j.get("items") or []:
+            if it.get("method") != engine.METHOD or it["status"] != "ok":
+                continue
+            latest[it.get("ref")] = (j["id"], it)
+
+    out = []
+    for ref, (jid, it) in latest.items():
+        if kind == "short_end":
+            e = it.get("end_ms")
+            if not isinstance(e, (int, float)) or e < 0 or e >= engine.END_MIN_MS:
+                continue
+            out.append({"ref": ref, "text": it["text"], "out": it["out"], "jid": jid,
+                        "key": it.get("key", ""), "why": f"절 끝 {e:.0f}ms", "sort": e})
+        elif kind == "weak_qc":
+            # 재시도 상한에 닿아 '가장 나은 시도' 를 쓴 절 — 자기 길이 기준에도 못 미치는데
+            # 합격으로 올라가 있다. '일치율 90% 미만' 같은 헐거운 조건은 쓰지 않는다:
+            # 검수 기준이 길이별 60~85% 라 멀쩡한 절이 1,600개 넘게 딸려 온다(2026-09-16 실측).
+            r = it.get("ratio")
+            if not isinstance(r, (int, float)):
+                continue
+            th = engine.qc_threshold(len(it.get("text") or ""))
+            if r >= th:
+                continue
+            out.append({"ref": ref, "text": it["text"], "out": it["out"], "jid": jid,
+                        "key": it.get("key", ""),
+                        "why": f"일치율 {r*100:.0f}% (기준 {th*100:.0f}%)", "sort": r})
+    out.sort(key=lambda x: x["sort"])
+    return out[:limit] if limit else out
+
+
+def rework_counts(voice=None):
+    """조건마다 후보가 몇 절인가 — 현황 보고에 싣는다."""
+    return {k: len(rework_candidates(k, voice)) for k in REWORK_KINDS}
+
+
 def requeue_refs(refs, voice=None):
     """절 참조("창세기 1:1")로 그 절만 다시 만들기로 한다 — 어느 작업에 들어 있든 찾아낸다.
 

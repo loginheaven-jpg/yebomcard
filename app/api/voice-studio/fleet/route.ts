@@ -21,6 +21,7 @@ import {
   putPc,
   type FleetPc,
   type FleetBookProgress,
+  type ReworkKind,
 } from "@/lib/voiceStudio/fleet";
 
 export const runtime = "nodejs";
@@ -60,6 +61,29 @@ export async function POST(req: Request) {
       }))
     : [];
 
+  // 다시 만들 후보 — PC 가 보낸 것을 그대로 믿지 않고 모양과 개수를 맞춰 받는다
+  const rework: Record<string, ReworkKind> = {};
+  const rawRework = body.rework;
+  if (rawRework && typeof rawRework === "object") {
+    for (const [kind, v] of Object.entries(rawRework as Record<string, unknown>).slice(0, 8)) {
+      const o = (v || {}) as Record<string, unknown>;
+      rework[kind.slice(0, 32)] = {
+        count: num(o.count),
+        label: str(o.label, 60),
+        items: (Array.isArray(o.items) ? o.items : []).slice(0, 50).map((x) => {
+          const i = (x || {}) as Record<string, unknown>;
+          return {
+            ref: str(i.ref, 40),
+            why: str(i.why, 60),
+            code: str(i.code, 8),
+            chapter: num(i.chapter),
+            verse: num(i.verse),
+          };
+        }),
+      };
+    }
+  }
+
   const pc: FleetPc = {
     // 토큰 id 는 **서버가 정한다** — PC 가 보낸 값을 믿으면 남의 자리를 덮어쓸 수 있다
     tokenId: gate.claims.id,
@@ -77,6 +101,7 @@ export async function POST(req: Request) {
     versesPerHour: num(body.versesPerHour),
     queued: num(body.queued),
     errorJobs: num(body.errorJobs),
+    rework,
     pending: num(body.pending),
     okTotal: num(body.okTotal),
     heldTotal: num(body.heldTotal),

@@ -68,6 +68,13 @@ export interface FleetPc {
   queued: number;
   /** 오류로 멈춘 채 남은 작업 수 — 자동 회복이 세 번 해 보고 손을 뗀 것이 여기 남는다 */
   errorJobs: number;
+  /**
+   * 다시 만들 후보 — 조건별로 {개수, 가장 나쁜 것 몇 절}.
+   *
+   * 끝음절 값·일치율은 그 PC 의 작업 파일에만 있어 서버가 직접 셀 수 없다. PC 가 세어 보고하고,
+   * 사람이 화면에서 보고 눌러야 다시 만들기 요청이 나간다(덮어쓰기는 verse-regen 한 길뿐이다).
+   */
+  rework: Record<string, ReworkKind>;
   pending: number;
   okTotal: number;
   heldTotal: number;
@@ -80,6 +87,19 @@ export interface FleetPc {
   lastError: string;
   /** PC 가 찍은 시각(ISO) */
   at: string;
+}
+
+export interface ReworkItem {
+  ref: string;
+  why: string;
+  code?: string;
+  chapter?: number;
+  verse?: number;
+}
+export interface ReworkKind {
+  count: number;
+  label: string;
+  items: ReworkItem[];
 }
 
 export type CommandOp =

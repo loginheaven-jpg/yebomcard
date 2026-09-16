@@ -20,6 +20,18 @@ interface BookProgress {
   held: number;
   uploaded: number;
 }
+interface ReworkItem {
+  ref: string;
+  why: string;
+  code?: string;
+  chapter?: number;
+  verse?: number;
+}
+interface ReworkKind {
+  count: number;
+  label: string;
+  items: ReworkItem[];
+}
 interface Pc {
   tokenId: string;
   label: string;
@@ -35,11 +47,13 @@ interface Pc {
   batch: number;
   versesPerHour: number;
   queued: number;
+  errorJobs: number;
   pending: number;
   okTotal: number;
   heldTotal: number;
   uploadedTotal: number;
   books: BookProgress[];
+  rework: Record<string, ReworkKind>;
   leases: string[];
   polite: boolean;
   lastError: string;
@@ -213,6 +227,43 @@ export default function VoiceFleetPage() {
         if (d.ok) setShowLog(true);
       } catch {
         setMsg("지시를 걸지 못했습니다");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
+  /**
+   * 조건으로 고른 절을 다시 만들라고 요청한다.
+   *
+   * 새 방식 음원을 덮어쓰는 길은 **'음원 다시 만들기' 요청 하나뿐**이다(upload 라우트가 그렇게 막는다).
+   * 그래서 여기서도 그 길을 쓴다 — 생성 PC 가 10분 안에 가져가 먼저 만들고 기존 음원을 덮어쓴다.
+   * 서버가 한 번에 50절까지만 받으므로, 가장 나쁜 것부터 그만큼씩 나눠 보낸다.
+   */
+  const sendRework = useCallback(
+    async (label: string, items: ReworkItem[]) => {
+      const verses = items
+        .filter((i) => i.code && i.chapter && i.verse)
+        .map((i) => ({ bookCode: i.code, chapter: i.chapter, verse: i.verse }));
+      if (verses.length === 0) {
+        setMsg("보낼 절이 없습니다");
+        return;
+      }
+      if (!confirm(`${label} ${verses.length}절을 다시 만들까요?
+
+생성 PC 가 10분 안에 가져가 먼저 만들고 기존 음원을 덮어씁니다.`)) return;
+      setBusy(true);
+      try {
+        const r = await fetch("/api/voice-studio/verse-regen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verses }),
+        });
+        const d = await r.json();
+        setMsg(d.ok ? `${d.created}절을 다시 만들기로 했습니다 — 10분 안에 시작합니다` : d.error || "실패");
+      } catch {
+        setMsg("요청을 보내지 못했습니다");
       } finally {
         setBusy(false);
       }
@@ -479,6 +530,7 @@ export default function VoiceFleetPage() {
                 다시 켜기
               </Btn>
             </div>
+            <Rework pc={p} busy={busy} onSend={sendRework} />
           </article>
         ))}
       </div>
@@ -556,6 +608,48 @@ function Bar({ done, legacy, total }: { done: number; legacy: number; total: num
  * (2026-09-13 지휘부 지적 — 실제로는 37권 중 27권이 아직 시작도 안 한 상태였다).
  * 눈길이 가야 할 곳은 지금 움직이는 책이고, 나머지는 이름만 있으면 족하다.
  */
+/**
+ * 다시 만들 후보 — 조건마다 몇 절인지 보여 주고, 눌러서 요청을 보낸다.
+ *
+ * 끝음절 잘림은 한때 전용 도구를 둘 만한 일이었지만 이제 아니다(고치기 전 14.16% → 1.23%).
+ * 그래서 조건 하나짜리 화면이 아니라 **조건 목록**으로 둔다 — 나중에 다른 이유가 생겨도
+ * `jobs.REWORK_KINDS` 에 한 줄만 더하면 여기에 저절로 나타난다.
+ */
+function Rework({
+  pc,
+  busy,
+  onSend,
+}: {
+  pc: Pc;
+  busy: boolean;
+  onSend: (label: string, items: ReworkItem[]) => void;
+}) {
+  const kinds = Object.entries(pc.rework || {}).filter(([, v]) => v.count > 0);
+  if (kinds.length === 0) return null;
+  return (
+    <div className="mt-2 pt-2 border-t border-[var(--line)]">
+      <p className="text-xs text-[var(--ink-faint)] mb-1">다시 만들 후보</p>
+      {kinds.map(([kind, v]) => (
+        <div key={kind} className="flex items-center gap-2 flex-wrap text-sm py-0.5">
+          <span>
+            {v.label} <strong>{v.count.toLocaleString()}절</strong>
+          </span>
+          {v.items[0] && (
+            <span className="text-xs text-[var(--ink-faint)]">
+              가장 나쁜 것: {v.items[0].ref} ({v.items[0].why})
+            </span>
+          )}
+          <Btn onClick={() => onSend(v.label, v.items)} disabled={busy}>
+            {v.count > v.items.length
+              ? `가장 나쁜 ${v.items.length}절 다시 만들기`
+              : `${v.count}절 다시 만들기`}
+          </Btn>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PcBooks({ books }: { books: BookProgress[] }) {
   if (!books.length) return null;
   const running = books.filter((b) => b.done > 0 && b.done < b.total);
