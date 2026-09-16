@@ -112,6 +112,18 @@ def counts(job):
 # '시간당 절 수' 가 뚝 떨어지므로, 그 PC 만 배치 4 로 내린다(화면 버튼 또는 fleet_cli batch 4 --pc).
 DEFAULT_BATCH = 8
 
+# 한 절을 만드는 데 이보다 오래 걸리면 '기어가는 중' 으로 보고 배치를 반으로 줄인다.
+#
+# 왜 필요한가(2026-09-16 실측): 그래픽 메모리가 꽉 차면 윈도우 드라이버는 **예외를 내지 않고**
+# 시스템 메모리로 흘려보낸다. GPU 사용률은 100% 인데 산출물이 나오지 않는다 — 3060(12GB)이
+# 배치 8 로 역대하를 만들다 **39분 동안 한 절도 못 냈다**(VRAM 12,071/12,288 = 98%).
+# 메모리 부족 예외가 없으니 기존 자동 줄이기(_process 의 OOM 처리)는 돌지 않는다.
+# 배치 4 로 내리자 곧바로 시간당 60절로 돌아왔다(GPU 사용률도 100% → 30%).
+#
+# 기준값은 넉넉히 둔다 — 긴 절에 재시도까지 붙으면 절당 60~90초는 정상이다.
+# 기어갈 때는 절당 300초쯤 되므로 180초면 정상과 사고를 가른다.
+STALL_SEC_PER_VERSE = 180
+
 
 def new_job(voice, title, items, temp=0.75, punct=True, batch=DEFAULT_BATCH, retry_max=3, seq=9999,
             upload_key=None, replace=False):
@@ -778,6 +790,7 @@ def _process(job):
             fine = tries0 >= 2
         _cur["note"] = (f"{group[0]['ref']} 외 {len(group)-1}건" if len(group) > 1
                         else group[0]["ref"]) + (f" (재시도{tries0})" if tries0 else "")
+        t_batch = time.time()
         try:
             wavs, sr = engine.synth_batch([g["text"] for g in group], voice,
                                           job["temp"], job["punct"], max_len=max_len,
@@ -823,6 +836,16 @@ def _process(job):
         if oom_cap and oom_hits < 3:
             oom_cap = None                  # 줄인 묶음이 됐다 — 다음 묶음은 원래 배치로
             job.pop("batch_note", None)
+
+        # 오류 없이 기어가는가 — 그래픽 메모리가 넘쳐 시스템 메모리로 흘러가면 이렇게 된다.
+        # 예외가 없어 위의 메모리 부족 처리가 걸리지 않으므로 여기서 시간을 보고 판단한다.
+        per = (time.time() - t_batch) / max(1, len(group))
+        if per > STALL_SEC_PER_VERSE and batch > 1:
+            job["batch"] = max(1, batch // 2)
+            job["batch_note"] = (f"절당 {per:.0f}초로 기어갑니다(그래픽 메모리 넘침으로 보임) — "
+                                 f"배치를 {job['batch']}(으)로 줄임")
+            print(f"[배치] {job['title']}: {job['batch_note']}", flush=True)
+            save(job)
 
         for it, w in zip(group, wavs):
             it["tries"] += 1
