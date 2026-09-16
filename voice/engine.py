@@ -644,6 +644,12 @@ def text_gap(src_norm, hyp_norm):
     return e - s, src_norm[s:e]
 
 
+# 이 속도 안쪽이면 "말한 분량이 본문과 맞다" 고 본다 — 내용이 빠지면 자/초가 올라간다.
+# 실측(새 방식 합격 절 11,076개): 중앙 6.74 · 99% 8.01 · 99.9% 9.23 자/초.
+# 9 로 두면 정상 절의 0.14% 만 이 문을 못 지나고, 그 절들은 일치율까지 낮아야 걸린다.
+CPS_TRUST_MAX = 9.0
+
+
 def qc(wav_path, src_text, min_ratio=0.85):
     """생성음을 ASR 로 되받아 원문과 대조. (ok, ratio, reason, asr_text)"""
     import difflib
@@ -670,13 +676,31 @@ def qc(wav_path, src_text, min_ratio=0.85):
     ]
     ratio, best = max(scored, key=lambda x: x[0])
     thr = qc_threshold(len(a), min_ratio)
-    if ratio < thr:
-        return False, ratio, f"본문 불일치({ratio*100:.0f}%<{thr*100:.0f}%)", hyp
-    # 3) 통째로 빠진 자리 — 일치율이 기준을 넘어도 한 자리에서 GAP_MAX 자 이상 빠졌으면 불합격.
-    #    재시도는 본문을 조각으로 나눠 만들므로(tries 1 부터 force) 빠진 문장이 자기 조각을 갖게 된다.
     gap, piece = text_gap(a, best)
+
+    # 3) 통째로 빠진 자리 — 한 자리에서 GAP_MAX 자 이상 빠졌으면 불합격.
+    #    일치율보다 **먼저** 본다. 이것이 '내용이 정말 빠졌는가' 를 가리는 잣대이고,
+    #    일치율은 '받아쓰기가 얼마나 닮았는가' 일 뿐이다.
+    #    재시도는 본문을 조각으로 나눠 만들므로(tries 1 부터 force) 빠진 문장이 자기 조각을 갖게 된다.
     if gap >= GAP_MAX:
         return False, ratio, f"본문 일부 빠짐(연속 {gap}자: {piece[:14]})", hyp
+
+    # 4) 일치율 — 다만 **길이가 맞고 빠진 자리도 없으면 받아쓰기가 틀린 것이지 음원이 틀린 것이 아니다.**
+    #
+    #    성경에는 ASR 이 못 알아듣는 고유명사가 많다(아담·셋·에노스 → Adam, Seth, Enos /
+    #    에녹·므두셀라 → 앤옥·무두샐라). 음원은 멀쩡한데 일치율만 떨어져 보류로 쌓였고,
+    #    사람이 수백 번 '이대로 사용' 을 눌러야 했다 — 2026-09-16 지휘부 지적.
+    #
+    #    가려내는 잣대는 **길이**다. 내용이 빠지면 말하는 시간이 줄어 자/초가 올라간다.
+    #    실측 11,076절: 중앙 6.74 · 99% 8.01 · 99.9% 9.23 자/초로 매우 좁다.
+    #    반대로 실제 누락 절은 10.8 자/초였다(눅 10:27, 마지막 문장이 통째로 빠짐).
+    #    그래서 자/초가 정상 범위 안이고 빠진 자리도 없으면 일치율이 낮아도 통과시킨다.
+    #    과거 자료로 확인: 일치율로 걸렸던 120건 중 115건(96%)이 이 기준으로 풀리고 전부
+    #    족보 같은 이름 절이며, 연속 빠짐으로 걸린 진짜 결함은 **하나도 풀리지 않는다.**
+    if ratio < thr:
+        if cps <= CPS_TRUST_MAX:
+            return True, ratio, f"이름 오인식으로 보임(일치율 {ratio*100:.0f}%·길이 정상)", hyp
+        return False, ratio, f"본문 불일치({ratio*100:.0f}%<{thr*100:.0f}%·{cps:.1f}자/초)", hyp
     return True, ratio, "", hyp
 
 
