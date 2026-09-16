@@ -343,6 +343,29 @@ def _do_command(c):
     return f"모르는 명령: {op}"
 
 
+def _code_update_round():
+    """서버에 새 코드가 올라왔으면 받아 두고 '다시 켜야 한다' 고 알린다.
+
+    받기만 해서는 소용이 없다 — 돌고 있는 파이썬은 이미 읽어 들인 옛 코드를 물고 있다.
+    그래서 실제로 바뀐 파일이 있을 때만 다시 켠다."""
+    try:
+        import bootstrap
+    except Exception:
+        return False
+    if not (getattr(bootstrap, "BASE", "") and getattr(bootstrap, "TOKEN", "")):
+        return False            # 서버에서 소스를 받지 않는 PC(개발 PC) — 사람이 git 으로 맞춘다
+    try:
+        changed = bootstrap.sync_code()
+    except Exception as e:
+        print(f"[코드] 서버와 맞추지 못했습니다(다음에 다시 합니다): {str(e)[:80]}", flush=True)
+        return False
+    if not changed:
+        return False
+    print(f"[코드] 서버에 새 코드가 있어 {changed}개를 받았습니다 — 반영하려면 다시 켜야 합니다",
+          flush=True)
+    return True
+
+
 def _restart_studio():
     """서버와 소스를 맞춘 뒤 스튜디오를 새 프로세스로 다시 켜고, 이 프로세스는 물러난다.
 
@@ -475,6 +498,18 @@ RESTART_WINDOW_SEC = 3600
 # 얹는다고 달라질 것이 없다. 켠 직후에는 다시 큐에 올리기만 하고, 정말 도는 중에 사고가 났을 때만
 # 다시 켠다.
 RESTART_GRACE_SEC = 600
+
+# 서버에 새 코드가 올라왔는지 이 간격으로 확인한다.
+#
+# 왜 필요한가(2026-09-16): 스튜디오는 **켤 때만** 서버와 소스를 맞춘다. 며칠씩 도는 일이라
+# 그동안 고친 것이 한 대에만 닿지 않은 채 남는다 — 새 PC 가 '기어가는 배치 자동 감지' 없이
+# 12GB·배치 8 로 돌고 있었다. 검수 기준과 재시도 규칙이 코드에 있어서, 한 대만 옛 코드를 물면
+# 그 PC 의 음원만 다른 규칙으로 만들어지는데 결과물만 봐서는 알 수 없다.
+# 사람이 현황 화면의 경고를 보고 손으로 다시 켜 주기를 기다릴 일이 아니다.
+#
+# 소스가 실제로 바뀌었을 때만 다시 켜므로 맴돌지 않는다(안 바뀌면 아무 일도 없다).
+# 서버에서 소스를 받지 않는 개발 PC 는 저절로 건너뛴다(bootstrap 에 접속 정보가 없다).
+CODE_SYNC_EVERY_SEC = 1800
 _CUDA_WORDS = ("cuda", "cudnn", "nvml", "device-side", "no kernel image", "driver")
 
 
@@ -537,6 +572,7 @@ def _recover_errors():
 def _loop():
     global _last_error
     next_lease = 0.0
+    next_code = time.time() + CODE_SYNC_EVERY_SEC
     while not _stop.is_set():
         try:
             if server.enabled():
@@ -558,6 +594,13 @@ def _loop():
             if _recover_errors():
                 _restart_studio()
                 return
+            # 서버에 새 코드가 올라왔으면 받아서 반영한다 — 켤 때만 맞추면 며칠짜리 작업 중에
+            # 고친 것이 그 PC 에만 영영 닿지 않는다
+            if time.time() >= next_code and time.time() - _started_at[0] >= RESTART_GRACE_SEC:
+                next_code = time.time() + CODE_SYNC_EVERY_SEC
+                if _code_update_round():
+                    _restart_studio()
+                    return
         except Exception as e:
             _last_error = f"{type(e).__name__}: {e}"[:300]
             if os.environ.get("YEBOM_DEBUG"):

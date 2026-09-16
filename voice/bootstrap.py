@@ -208,6 +208,8 @@ def sync_code():
     print(f"  파일 {len(files)}개 · 갱신 {changed}개", flush=True)
     if data.get("missing"):
         print(f"  (서버에 없는 파일: {', '.join(data['missing'])})", flush=True)
+    # 몇 개가 바뀌었는지 돌려준다 — 도는 중에 갱신을 확인하는 fleet 이 이 값으로 판단한다
+    return changed
 
 
 # ── 4. 보이스 ────────────────────────────────────────────────
