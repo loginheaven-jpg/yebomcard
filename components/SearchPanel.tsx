@@ -2954,25 +2954,30 @@ export default function SearchPanel({
                   본문이 그만큼 좁았고, 재생을 시작하면 떠 있는 플레이어가 위를 덮어 역본·글자크기를 숨겨야 했다.
                   장 이동 화살표는 뺐다(지휘부 결정) — 390px 한 줄에 제목까지 들어갈 폭이 없었다.
                   장 이동은 본문 스와이프·제목 탭(목차)·하단 목차 탭·PC 좌우 여백 클릭으로 한다. */}
-              <div className="flex items-center gap-1 mb-2">
+              {/* 2026-09-17 균형 맞춤(지휘부): 역본 칩 36px·모서리 8 과 읽기 44px·모서리 12 가 위아래로 어긋났다 →
+                  조작은 모두 40px·모서리 10. 제목과 칩 사이 빈칸이 허전해 제목을 키웠다(18/24px).
+                  줄 높이는 ⋮(44px)가 정하므로 그대로다 — 본문 높이 상수(browseMaxHClass)를 건드리지 않는다.
+                  360px 미만 폰은 제목 폭이 모자라 '시편' 이 '시··' 로 잘려, 칩 폭·간격·제목 크기를 전 값 가까이 둔다. */}
+              <div className="flex items-center gap-1 min-[360px]:gap-1.5 mb-2">
                 {/* 제목 — 누르면 장 목록으로. 두 줄로 세워 44px 안에 들어간다.
-                    책 이름은 세 글자까지 그대로, 길면 약어(bookBarName) */}
+                    책 이름은 세 글자까지 그대로, 길면 약어(bookBarName).
+                    아래 줄은 그 책의 전체 장 수 — '150장' 만으로는 '150장째' 로 읽혀 '총' 을 붙였다 */}
                 <button
                   type="button"
                   onClick={() => setBrowseStep("chapter")}
                   title="장 선택으로"
-                  className="flex-1 min-w-0 flex flex-col items-start justify-center px-1 py-1 rounded-lg active:bg-gray-100 dark:active:bg-gray-800 transition-colors"
+                  className="flex-1 min-w-0 flex flex-col items-start justify-center px-1 rounded-lg active:bg-gray-100 dark:active:bg-gray-800 transition-colors"
                 >
                   <span className="flex items-baseline gap-1 max-w-full">
-                    <span className="truncate text-[15.5px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
+                    <span className="truncate text-[16px] min-[360px]:text-[18px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
                       {bookBarName(bookCode)}
                     </span>
-                    <span className="shrink-0 text-[19px] font-bold leading-none text-gray-900 dark:text-gray-100">
+                    <span className="shrink-0 text-[21px] min-[360px]:text-[24px] font-bold leading-none text-gray-900 dark:text-gray-100">
                       {chapter}
                     </span>
                   </span>
-                  <span className="text-[10.5px] leading-tight text-gray-400 dark:text-gray-500">
-                    {chapters.length}장
+                  <span className="text-[12.5px] leading-tight text-gray-500 dark:text-gray-400">
+                    총 {chapters.length}장
                   </span>
                 </button>
 
@@ -2982,13 +2987,12 @@ export default function SearchPanel({
                   value={mainVersion}
                   onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
                   aria-label="주 역본"
-                  className="shrink-0 text-[11.5px] font-bold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
+                  className="shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
                   style={{
-                    height: "36px",
-                    width: "64px",
+                    height: "40px",
                     paddingLeft: "8px",
                     paddingRight: "16px",
-                    borderRadius: "8px",
+                    borderRadius: "10px",
                     backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
                     backgroundRepeat: "no-repeat",
                     backgroundPosition: "right 6px center",
@@ -3003,17 +3007,16 @@ export default function SearchPanel({
                   value={subVersion}
                   onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
                   aria-label="대역(대조할 역본)"
-                  className={`shrink-0 text-[11.5px] font-bold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
+                  className={`shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
                     subVersion === "none"
                       ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
                       : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
                   }`}
                   style={{
-                    height: "36px",
-                    width: "64px",
+                    height: "40px",
                     paddingLeft: "8px",
                     paddingRight: "16px",
-                    borderRadius: "8px",
+                    borderRadius: "10px",
                     backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
                     backgroundRepeat: "no-repeat",
                     backgroundPosition: "right 6px center",
