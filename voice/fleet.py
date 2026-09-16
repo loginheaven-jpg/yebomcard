@@ -44,6 +44,7 @@ RATE_WINDOW_SEC = 3600
 _thread = None
 _stop = threading.Event()
 _last_error = ""
+_started_at = [0.0]      # 이 프로세스를 켠 때 — 켠 직후의 헛된 다시 켜기를 막는다
 _rate = []          # [(시각, 합격 누계)] — 최근 것만 남긴다
 _lock = threading.Lock()
 
@@ -463,6 +464,17 @@ def _lease_round():
 ERROR_REQUEUE_MAX = 3
 RESTART_MAX = 3
 RESTART_WINDOW_SEC = 3600
+# 켠 지 이만큼 안에는 **다시 켜지 않는다.**
+#
+# 2026-09-16 지휘부 보고: PC3 에서 배치 파일을 누르면 '서버에 보고합니다' 까지 나오고 **창이 저절로
+# 닫히는** 일이 두 번 있었다. 원인은 여기였다 — 앞서 오류로 세워진 작업이 남아 있으면, 막 켜진
+# 스튜디오가 그것을 보고 '그래픽 쪽 사고' 로 판단해 곧바로 다시 켰다. 다시 켜기는 새 창을 띄우고
+# 스스로 물러나므로, 사람 눈에는 방금 연 창이 그냥 닫힌 것으로 보인다.
+#
+# 게다가 **소용도 없다.** 사람이 배치 파일을 누른 것이 이미 새 프로세스다 — 그 위에 또 새 프로세스를
+# 얹는다고 달라질 것이 없다. 켠 직후에는 다시 큐에 올리기만 하고, 정말 도는 중에 사고가 났을 때만
+# 다시 켠다.
+RESTART_GRACE_SEC = 600
 _CUDA_WORDS = ("cuda", "cudnn", "nvml", "device-side", "no kernel image", "driver")
 
 
@@ -504,7 +516,7 @@ def _recover_errors():
         print(f"[회복] '{job.get('title','')}' 오류로 멈춰 있어 다시 올립니다({n + 1}/{ERROR_REQUEUE_MAX}): "
               f"{err[:80]}", flush=True)
 
-        if _is_gpu_error(err):
+        if _is_gpu_error(err) and time.time() - _started_at[0] >= RESTART_GRACE_SEC:
             st = state()
             now = time.time()
             hist = [x for x in (st.get("restarts") or []) if now - x < RESTART_WINDOW_SEC]
@@ -569,6 +581,7 @@ def start():
             jobs.pc_batch[0] = int(st["batch"])
     except Exception:
         pass
+    _started_at[0] = time.time()
     _stop.clear()
     _thread = threading.Thread(target=_loop, daemon=True, name="fleet")
     _thread.start()
