@@ -203,6 +203,7 @@ export default function VoiceFleetPage() {
     return () => clearInterval(t);
   }, [admin, load]);
 
+
   useEffect(() => {
     if (!admin || !showLog) return;
     loadLog();
@@ -214,10 +215,10 @@ export default function VoiceFleetPage() {
    * 성경 전체 진도를 **누를 때만** 잰다. 셈은 서버가 하므로 생성 PC 는 느려지지 않지만,
    * 본문 3만 절을 훑는 일이라 몇 초가 걸린다 — 실시간으로 되풀이할 일이 아니다.
    */
-  const measure = useCallback(async () => {
+  const measure = useCallback(async (fresh = true) => {
     setProgBusy(true);
     try {
-      const r = await fetch("/api/voice-studio/progress?fresh=1").then((x) => x.json());
+      const r = await fetch(`/api/voice-studio/progress${fresh ? "?fresh=1" : ""}`).then((x) => x.json());
       if (r?.error) setMsg(r.error);
       else setProg(r);
     } catch {
@@ -226,6 +227,12 @@ export default function VoiceFleetPage() {
       setProgBusy(false);
     }
   }, []);
+
+  // 들어오면 한 번 잰다 — 예전에는 누르기 전까지 진도가 비어 있어서, 화면을 열어도
+  // 제일 궁금한 숫자가 안 보였다. 서버가 1분 동안 같은 값을 돌려 쓰므로 대개 곧바로 온다.
+  useEffect(() => {
+    if (admin) measure(false);
+  }, [admin, measure]);
 
   const send = useCallback(
     async (op: string, target: string, args: Record<string, unknown> = {}) => {
@@ -358,6 +365,17 @@ ${books.join(" · ")}`)) return;
   const codes = [...new Set(pcs.filter((p) => !p.stale && p.codeVersion).map((p) => p.codeVersion))];
   const mixedCode = codes.length > 1 ? codes.join(" / ") : "";
 
+  // 아직 옛 방식으로 남은 절 — 구약/신약. 0 이면 그쪽 교체 버튼은 아예 감춘다
+  // 다시 만들 후보는 PC 마다 자기 것만 안다(그 PC 작업 파일에만 있는 값이다).
+  // 전체 그림은 여기서 합쳐 보여 주고, 실제로 누르는 것은 그 PC 카드에서 한다.
+  const reworkAll = pcs.reduce(
+    (s, p) => s + Object.values(p.rework || {}).reduce((x, v) => x + v.count, 0),
+    0,
+  );
+
+  const legacyLeft = { old: 0, new: 0 };
+  for (const b of prog?.books || []) legacyLeft[b.testament] += b.legacy;
+
   const taken = leases.filter((l) => l.state === "taken");
   const done = leases.filter((l) => l.state === "done");
 
@@ -469,7 +487,11 @@ ${books.join(" · ")}`)) return;
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-sm font-semibold">성경 전체 진도</h2>
           <span className="text-xs text-[var(--ink-faint)]">
-            {prog ? `${new Date(prog.at).toLocaleString("ko-KR")} 기준` : "아직 재지 않았습니다"}
+            {prog
+              ? `${new Date(prog.at).toLocaleString("ko-KR")} 기준 (${ago(prog.at)})`
+              : progBusy
+                ? "재는 중…"
+                : "아직 재지 않았습니다"}
           </span>
           <span className="ml-auto flex gap-1.5">
             <Btn onClick={measure} disabled={progBusy}>
@@ -502,6 +524,12 @@ ${books.join(" · ")}`)) return;
               </span>
             </div>
             <Bar done={prog.done} legacy={prog.legacy} total={prog.total} />
+            {reworkAll > 0 && (
+              <p className="mt-1.5 text-xs text-[var(--ink-faint)]">
+                이미 만든 절 가운데 <strong>다시 만들면 나아질 절 {reworkAll.toLocaleString()}개</strong>
+                {" "}— 어느 PC 가 만든 것인지에 따라 아래 PC 카드에서 눌러 주세요
+              </p>
+            )}
             {showBooks && (
               <div className="mt-3 space-y-1">
                 {prog.books.map((b) => (
@@ -588,9 +616,13 @@ ${books.join(" · ")}`)) return;
                 {p.polite ? "양보 모드 끄기" : "양보 모드 켜기"}
               </Btn>
             </div>
-            <p className="mt-1 text-[11px] text-[var(--ink-faint)]">
-              한 번에 만드는 절 수 — 그래픽 메모리가 모자라면 워커가 알아서 줄입니다.
-              양보 모드는 사람이 함께 쓰는 PC 용(생성이 뒷자리로 물러납니다).
+            <p className="mt-1 text-[11px] text-[var(--ink-faint)] leading-relaxed">
+              <b>생성 멈춤/이어가기</b> — 만들기를 잠시 멈추거나 다시 시작합니다(프로그램은 그대로).<br />
+              <b>스튜디오 다시 시작</b> — 프로그램을 껐다 켭니다. <b>평소에는 누를 일이 없습니다</b>{" "}
+              (새 코드는 30분마다 저절로 반영되고, 그래픽 오류도 스스로 회복합니다).
+              그래도 이상하게 멈춰 있을 때 씁니다.<br />
+              <b>한 번에 N절씩</b> — 그래픽 메모리가 모자라면 워커가 알아서 줄입니다.{" "}
+              <b>양보 모드</b> — 사람이 함께 쓰는 PC 용(생성이 뒷자리로 물러납니다).
             </p>
             <Rework pc={p} busy={busy} onSend={sendRework} />
 
@@ -599,26 +631,34 @@ ${books.join(" · ")}`)) return;
                 onClick={() => {
                   setPicked(new Set());
                   setAssignTo(assignTo === p.tokenId ? null : p.tokenId);
-                  if (!prog) measure();
+                  if (!prog) measure(false);
                 }}
                 disabled={busy}
               >
-                {assignTo === p.tokenId ? "책 맡기기 닫기" : "책 맡기기"}
+                {assignTo === p.tokenId ? "책 맡기기 닫기" : "책 맡기기 — 아직 안 만든 책 주기"}
               </Btn>
-              {(["구약", "신약"] as const).map((w) => (
-                <Btn
-                  key={w}
-                  onClick={() => {
-                    if (!confirm(`${p.label} 에 ${w} 구방식 교체를 맡길까요?
+              {/*
+                구방식 교체는 **남은 것이 있을 때만** 보여 준다. 2026-09-10 이전에 만든 음원을
+                다시 만드는 일이라, 다 끝나면 영영 누를 일이 없는 버튼이다(구약은 이미 0 이 되었다).
+              */}
+              {(["구약", "신약"] as const).map((w) => {
+                const n = legacyLeft[w === "구약" ? "old" : "new"];
+                if (!n) return null;
+                return (
+                  <Btn
+                    key={w}
+                    onClick={() => {
+                      if (!confirm(`${p.label} 에 ${w} 구방식 교체를 맡길까요?
 
-아직 옛 방식으로 남은 절만 다시 만들어 덮어씁니다.`)) return;
-                    send("queue_replace", p.tokenId, { which: w });
-                  }}
-                  disabled={busy}
-                >
-                  {w} 구방식 교체
-                </Btn>
-              ))}
+아직 옛 방식으로 남은 ${n.toLocaleString()}절을 다시 만들어 덮어씁니다.`)) return;
+                      send("queue_replace", p.tokenId, { which: w });
+                    }}
+                    disabled={busy}
+                  >
+                    {w} 구방식 교체 {n.toLocaleString()}절
+                  </Btn>
+                );
+              })}
             </div>
 
             {assignTo === p.tokenId && (
@@ -806,7 +846,11 @@ function Rework({
   if (kinds.length === 0) return null;
   return (
     <div className="mt-2 pt-2 border-t border-[var(--line)]">
-      <p className="text-xs text-[var(--ink-faint)] mb-1">다시 만들 후보</p>
+      <p className="text-xs text-[var(--ink-faint)] mb-1">
+        다시 만들 후보 — 이미 올라간 음원 중 흠이 있는 절입니다.{" "}
+        <b>급하지 않습니다</b>: 지금 맡은 책을 다 만든 뒤에 누르셔도 됩니다
+        (누르면 그 PC 가 하던 일을 잠시 비켜 이것부터 만듭니다).
+      </p>
       {kinds.map(([kind, v]) => (
         <div key={kind} className="flex items-center gap-2 flex-wrap text-sm py-0.5">
           <span>

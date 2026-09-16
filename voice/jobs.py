@@ -1180,8 +1180,12 @@ def refresh_job_text(job):
 # 지시를 받으면 자기 데이터로 골라 작업을 건다.
 REWORK_KINDS = {
     "short_end": "절 끝이 짧게 잘림",
-    "weak_qc": "검수 기준에 못 미치는데 합격 처리됨",
 }
+# '검수 기준에 못 미치는데 합격' 은 **뺐다**(2026-09-16 지휘부 지시).
+# 228절을 표본으로 보니 전부 고유명사 오인식이었고(아담·셋·에노스 → Adam, Seth, Enos /
+# 에녹·므두셀라 → 앤옥·무두샐라), 그중 아홉은 **이미 관리자가 '이대로 사용' 으로 판단한 절**이었다.
+# 다시 만들어도 ASR 이 이름을 못 알아듣는 것은 그대로다 — 사람이 이미 정한 것을 다시 묻는 목록이었다.
+# (숫자는 원인이 아니다. qc 가 ASR 의 숫자를 한자어·고유어 두 가지로 되돌려 나은 쪽을 쓴다.)
 
 
 def rework_candidates(kind="short_end", voice=None, limit=None):
@@ -1205,19 +1209,6 @@ def rework_candidates(kind="short_end", voice=None, limit=None):
                 continue
             out.append({"ref": ref, "text": it["text"], "out": it["out"], "jid": jid,
                         "key": it.get("key", ""), "why": f"절 끝 {e:.0f}ms", "sort": e})
-        elif kind == "weak_qc":
-            # 재시도 상한에 닿아 '가장 나은 시도' 를 쓴 절 — 자기 길이 기준에도 못 미치는데
-            # 합격으로 올라가 있다. '일치율 90% 미만' 같은 헐거운 조건은 쓰지 않는다:
-            # 검수 기준이 길이별 60~85% 라 멀쩡한 절이 1,600개 넘게 딸려 온다(2026-09-16 실측).
-            r = it.get("ratio")
-            if not isinstance(r, (int, float)):
-                continue
-            th = engine.qc_threshold(len(it.get("text") or ""))
-            if r >= th:
-                continue
-            out.append({"ref": ref, "text": it["text"], "out": it["out"], "jid": jid,
-                        "key": it.get("key", ""),
-                        "why": f"일치율 {r*100:.0f}% (기준 {th*100:.0f}%)", "sort": r})
     out.sort(key=lambda x: x["sort"])
     return out[:limit] if limit else out
 
