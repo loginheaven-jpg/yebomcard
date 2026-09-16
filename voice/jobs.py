@@ -951,25 +951,56 @@ def unfinished():
     return out
 
 
-def refresh_all_jobs():
-    """모든 작업(끝난 것까지)의 본문을 최신 DB 로 맞춘다. 끝난 작업에 만들 절이 생기면 다시 큐에 올린다.
+def refresh_all_jobs(progress=True):
+    """끝난 작업의 본문을 최신 DB 로 맞춘다. 만들 절이 생기면 다시 큐에 올린다.
 
     보류가 풀리거나 낭독 내용이 달라진 절이 생기는데, unfinished() 는 pending 이 있어야 골라내므로
     끝난 작업은 영영 대상에서 빠진다 — 그러면 고쳐진 절의 음원이 끝내 안 생긴다.
-    스튜디오(resume_all)와 run_plan 이 시작할 때 부른다. 반환: 다시 큐에 올린 작업 수"""
-    n = 0
-    for j in list_jobs():
+
+    **대기·진행 중인 작업은 건드리지 않는다.** 워커가 집을 때 스스로 맞추고(_process), 무엇보다
+    스튜디오가 이것을 **뒤에서** 돌리는 동안 워커가 같은 파일에 진행을 쓰기 때문이다 — 낡은 사본으로
+    덮어쓰면 만든 절이 '대기' 로 되돌아가 다시 만들게 된다. 같은 이유로 읽은 뒤 그 파일이 바뀌었으면
+    쓰지 않는다(다음에 켤 때 다시 한다).
+
+    작업이 쌓일수록 오래 걸린다(2026-09-16: 56개에 76초). 그래서 진행을 찍는다.
+    반환: 다시 큐에 올린 작업 수"""
+    t0 = time.time()
+    js = list_jobs()
+    n = checked = 0
+    for j0 in js:
+        if j0.get("status") in ("queued", "running") or j0["id"] == _cur.get("job"):
+            continue
+        path = _path(j0["id"])
         try:
-            if not refresh_job_text(j):
-                continue
+            before = path.stat().st_mtime
+        except OSError:
+            continue
+        j = load(j0["id"])
+        if not j:
+            continue
+        checked += 1
+        try:
+            changed = refresh_job_text(j)
         except Exception as e:
             print(f"[본문 최신화] '{j.get('title')}' 실패 — 건너뜀: {e}", flush=True)
+            continue
+        if progress and checked % 10 == 0:
+            print(f"[본문 최신화] 끝난 작업 {checked}개 확인 · {time.time() - t0:.0f}초", flush=True)
+        if not changed:
+            continue
+        try:
+            if path.stat().st_mtime != before:
+                continue            # 그 사이 워커가 이 파일을 썼다 — 내 사본은 낡았다
+        except OSError:
             continue
         if j.get("status") == "done" and any(i.get("status") == "pending" for i in j.get("items", [])):
             j["status"] = "queued"
             n += 1
             print(f"[본문 최신화] '{j.get('title')}' 에 만들 절이 생겨 다시 큐에 올립니다", flush=True)
         save(j)
+    if progress:
+        print(f"[본문 최신화] 끝 — 끝난 작업 {checked}개 · {time.time() - t0:.0f}초"
+              + (f" · 다시 큐에 올린 작업 {n}개" if n else ""), flush=True)
     return n
 
 

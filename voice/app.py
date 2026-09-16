@@ -14,6 +14,12 @@ import sys
 import warnings
 from pathlib import Path
 
+if __name__ == "__main__":
+    # 켜자마자 한 줄을 찍는다. 이 아래 import 와 작업 정리에 시간이 걸려, 예전에는 1분 넘게
+    # 창이 텅 비어 있어 멈춘 것처럼 보였다(2026-09-16 지휘부 보고: '아무것도 안 보인다').
+    print("[시작] 예봄성경 음원 스튜디오를 켜는 중입니다 — 화면이 뜨기까지 10초쯤 걸립니다",
+          flush=True)
+
 # gradio 가 새 starlette 에서 이름이 바뀐 상수(HTTP_422_UNPROCESSABLE_ENTITY)를 쓰면서 찍는 경고.
 # 동작과 무관한데 오류처럼 보여서 끈다.
 warnings.filterwarnings("ignore", message=r".*HTTP_422_UNPROCESSABLE_ENTITY")
@@ -891,16 +897,26 @@ if __name__ == "__main__":
                 print(f"[실행 파일] 새 방식으로 고쳤습니다: {p.name}", flush=True)
         except Exception as e:
             print(f"[실행 파일] 고치기 건너뜀: {e}", flush=True)
-    # 중단·오류로 멈춘 작업을 이어간다. **브라우저를 열기 전에, 화면과 무관하게** 한다 —
-    # 예전에는 화면이 열릴 때(demo.load)만 해서, 창을 닫아 두거나 브라우저가 안 뜨면 이어지지
-    # 않았다. 오류로 멈춘 작업도 여기서 다시 큐에 올라간다(jobs.unfinished 가 error 를 포함).
-    try:
-        n = jobs.resume_all()
-        if n:
-            print(f"[재개] 멈춰 있던 작업 {n}개를 이어서 진행합니다", flush=True)
-    except Exception as e:
-        print(f"[재개] 실패: {e}", flush=True)
+    # 워커는 **바로** 켠다. 대기 중인 작업은 워커가 집을 때 스스로 본문을 맞추므로 기다릴 이유가 없다.
     jobs.start_worker()
+
+    # 멈춘 작업 이어가기 + 끝난 작업의 본문 맞추기는 **뒤에서** 한다.
+    #
+    # 화면과 무관하게 해야 한다 — 예전에는 화면이 열릴 때(demo.load)만 해서 브라우저가 안 뜨면
+    # 이어지지 않았다. 그렇다고 화면을 띄우기 **전에** 하면 작업이 쌓일수록 오래 걸려(56개에 76초)
+    # 창이 1분 넘게 텅 비어 있었다. 그래서 따로 돌린다 — 진행은 창에 찍힌다.
+    # 워커가 하던 일을 덮어쓰지 않게 jobs.refresh_all_jobs 가 대기·진행 중인 작업은 건너뛴다.
+    def _resume_in_background():
+        try:
+            print("[재개] 멈춘 작업을 찾고 끝난 작업의 본문을 맞춥니다(뒤에서 합니다)", flush=True)
+            n = jobs.resume_all()
+            if n:
+                print(f"[재개] 멈춰 있던 작업 {n}개를 이어서 진행합니다", flush=True)
+        except Exception as e:
+            print(f"[재개] 실패: {e}", flush=True)
+
+    import threading
+    threading.Thread(target=_resume_in_background, daemon=True, name="resume").start()
     # 서버에 현황을 보고하고 지시를 받는다 — 이 PC 앞에 앉지 않아도 어디까지 왔는지 보이게.
     # 서버 연동 정보가 없으면 조용히 건너뛴다(혼자 쓰는 PC 도 그대로 돌아야 한다).
     if fleet.start():
