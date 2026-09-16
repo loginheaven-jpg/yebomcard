@@ -153,6 +153,10 @@ export default function Home() {
   const navNonceRef = useRef(0);
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [reportCount, setReportCount] = useState(0); // 운영자 미처리 신고 건수 (톱니 점·설정 배지)
+  // 음원 생성에서 사람이 손봐야 할 것 — 응답 없는 PC · 오류로 선 작업 · 노는 PC · 쌓인 보류 절.
+  // 며칠씩 도는 일이라 **아무도 안 보면 몇 시간이 그냥 간다**(2026-09-16: PC 한 대가 54분 침묵,
+  // 다른 한 대가 39분간 0절). 앱을 열 때 저절로 눈에 띄게 한다.
+  const [voiceAttention, setVoiceAttention] = useState(0);
 
   // 책갈피 카운트 — 진입 시 + 5초 폴링 (책갈피 추가/삭제는 SearchPanel 안에서 일어남)
   useEffect(() => {
@@ -353,6 +357,22 @@ export default function Home() {
       fetch("/api/admin/verse-notes")
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => { if (d) setReportCount((d.items || []).length); })
+        .catch(() => {});
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [adminMode]);
+
+  // 음원 생성 — 손봐야 할 것 (설정 시트 배지). 관리자만, 마운트 + 창 포커스 시.
+  useEffect(() => {
+    if (!adminMode) {
+      setVoiceAttention(0);
+      return;
+    }
+    const load = () =>
+      fetch("/api/voice-studio/fleet")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d?.attention) setVoiceAttention(d.attention.count || 0); })
         .catch(() => {});
     load();
     window.addEventListener("focus", load);
@@ -716,6 +736,7 @@ export default function Home() {
           onLogout={async () => { await logout(); }}
           adminMode={adminMode}
           reportCount={reportCount}
+          voiceAttention={voiceAttention}
           bulkEditMode={bulkEditMode}
           onToggleBulkEdit={() => setBulkEditMode((v) => !v)}
           onOpenHymn={() => setShowHymn(true)}
@@ -767,7 +788,7 @@ export default function Home() {
           active={activeTab}
           onTabChange={handleTabChange}
           bookmarkCount={bookmarkCount}
-          settingsDot={reportCount > 0}
+          settingsDot={reportCount > 0 || voiceAttention > 0}
           hidden={tabBarHidden}
           onReveal={revealTabBar}
           onInteract={revealTabBar}

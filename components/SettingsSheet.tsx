@@ -31,6 +31,8 @@ interface Props {
   // 관리자
   adminMode: boolean;
   reportCount?: number;
+  /** 음원 생성에서 사람이 손봐야 할 것 — 응답 없는 PC·오류·노는 PC·쌓인 보류 절 */
+  voiceAttention?: number;
   bulkEditMode: boolean;
   onToggleBulkEdit: () => void;
   // 도구
@@ -56,6 +58,7 @@ export default function SettingsSheet({
   onLogout,
   adminMode,
   reportCount = 0,
+  voiceAttention = 0,
   bulkEditMode,
   onToggleBulkEdit,
   onOpenHymn,
@@ -331,7 +334,14 @@ export default function SettingsSheet({
                     className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
                   >
                     <span>음원 생성 현황</span>
-                    <span className="text-[var(--ink-faint)]">›</span>
+                    <span className="flex items-center gap-1.5">
+                      {voiceAttention > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {voiceAttention > 99 ? "99+" : voiceAttention}
+                        </span>
+                      )}
+                      <span className="text-[var(--ink-faint)]">›</span>
+                    </span>
                   </a>
                   <a
                     href="/admin/voice-studio"

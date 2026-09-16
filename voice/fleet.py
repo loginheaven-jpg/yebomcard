@@ -195,7 +195,7 @@ def snapshot():
     cur = jobs.current()
     js = jobs.list_jobs()
     pending = ok_total = held_total = up_total = 0
-    queued = 0
+    queued = error_jobs = 0
     job_title = ""
     batch = 0
     for j in js:
@@ -206,6 +206,8 @@ def snapshot():
         up_total += sum(1 for i in j.get("items") or [] if i.get("uploaded"))
         if j.get("status") in ("queued", "running") and p:
             queued += 1
+        if j.get("status") == "error" and p:
+            error_jobs += 1      # 사람이 봐야 할 수도 있다 — 자동 회복이 세 번 하고 손을 뗀다
         if j["id"] == cur.get("job"):
             job_title = j.get("title", "")
             batch = int(j.get("batch") or 0)
@@ -231,6 +233,7 @@ def snapshot():
         "batch": batch,
         "versesPerHour": _rate_per_hour(ok_total),
         "queued": queued,
+        "errorJobs": error_jobs,
         "pending": pending,
         "okTotal": ok_total,
         "heldTotal": held_total,

@@ -85,6 +85,13 @@ interface Progress {
   books: ProgressBook[];
   cached?: boolean;
 }
+interface Attention {
+  count: number;
+  stale: { label: string; tokenId: string; minutes: number }[];
+  errors: { label: string; tokenId: string; jobs: number; message: string }[];
+  idle: { label: string; tokenId: string }[];
+  held: number;
+}
 interface Total {
   pcs: number;
   livePcs: number;
@@ -125,6 +132,7 @@ export default function VoiceFleetPage() {
   const admin = isAdmin(session);
 
   const [total, setTotal] = useState<Total | null>(null);
+  const [attn, setAttn] = useState<Attention | null>(null);
   const [pcs, setPcs] = useState<Pc[]>([]);
   const [leases, setLeases] = useState<Lease[]>([]);
   const [commands, setCommands] = useState<Command[]>([]);
@@ -142,6 +150,7 @@ export default function VoiceFleetPage() {
         fetch("/api/voice-studio/lease").then((r) => r.json()),
       ]);
       if (f?.total) setTotal(f.total);
+      if (f?.attention) setAttn(f.attention);
       if (Array.isArray(f?.pcs)) setPcs(f.pcs);
       if (Array.isArray(l?.leases)) setLeases(l.leases);
     } catch {
@@ -258,6 +267,49 @@ export default function VoiceFleetPage() {
           닫기
         </a>
       </header>
+
+      {attn && attn.count > 0 && (
+        <section className="rounded-xl border border-amber-400/60 bg-amber-50/60 dark:bg-amber-900/15 p-3 mb-4">
+          <h2 className="text-sm font-semibold mb-1.5">손봐야 할 것 {attn.count}건</h2>
+          <ul className="space-y-1.5 text-sm">
+            {attn.stale.map((s) => (
+              <li key={s.tokenId} className="flex items-center gap-2 flex-wrap">
+                <span>🔴 <strong>{s.label}</strong> 가 {s.minutes}분째 응답이 없습니다</span>
+                <span className="text-xs text-[var(--ink-faint)]">
+                  그 PC 에서 바탕화면 &apos;예봄성경 음원생성&apos; 을 다시 눌러 주세요
+                </span>
+              </li>
+            ))}
+            {attn.errors.map((e) => (
+              <li key={e.tokenId} className="flex items-center gap-2 flex-wrap">
+                <span>🟠 <strong>{e.label}</strong> 에 오류로 멈춘 작업 {e.jobs}건</span>
+                {e.message && (
+                  <span className="text-xs text-[var(--ink-faint)] truncate max-w-full">
+                    {e.message}
+                  </span>
+                )}
+                <Btn onClick={() => send("restart", e.tokenId)} disabled={busy}>
+                  다시 켜기
+                </Btn>
+              </li>
+            ))}
+            {attn.idle.map((i) => (
+              <li key={i.tokenId} className="flex items-center gap-2 flex-wrap">
+                <span>🟡 <strong>{i.label}</strong> 가 할 일 없이 쉬고 있습니다</span>
+                <span className="text-xs text-[var(--ink-faint)]">아래에서 책을 맡겨 주세요</span>
+              </li>
+            ))}
+            {attn.held > 0 && (
+              <li className="flex items-center gap-2 flex-wrap">
+                <span>🟡 사람이 판단할 보류 절이 {attn.held}개 쌓였습니다</span>
+                <a href="/admin/voice-held" className="text-xs underline">
+                  보류 절 검수 열기
+                </a>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {total && (
         <section className="rounded-xl border border-[var(--line)] p-3 mb-4 text-sm">

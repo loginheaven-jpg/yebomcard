@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
 import { studioR2Enabled } from "@/lib/voiceStudio/r2";
 import {
+  attentionOf,
   isStale,
   listLeases,
   listPcs,
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
     batch: num(body.batch),
     versesPerHour: num(body.versesPerHour),
     queued: num(body.queued),
+    errorJobs: num(body.errorJobs),
     pending: num(body.pending),
     okTotal: num(body.okTotal),
     heldTotal: num(body.heldTotal),
@@ -123,6 +125,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     now: new Date(now).toISOString(),
+    attention: attentionOf(pcs, total.held, now),
     total,
     pcs: pcs.map((p) => ({ ...p, stale: isStale(p, now) })),
     leases,
