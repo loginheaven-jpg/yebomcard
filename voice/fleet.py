@@ -383,24 +383,26 @@ def _do_command(c):
 
 
 def _code_update_round():
-    """서버에 새 코드가 올라왔으면 받아 두고 '다시 켜야 한다' 고 알린다.
+    """소스가 바뀌었으면 '다시 켜야 한다' 고 알린다.
 
-    받기만 해서는 소용이 없다 — 돌고 있는 파이썬은 이미 읽어 들인 옛 코드를 물고 있다.
-    그래서 실제로 바뀐 파일이 있을 때만 다시 켠다."""
+    두 갈래를 **한 가지 기준**으로 판단한다 — 디스크의 소스 지문이 지금 돌고 있는 것과 다른가.
+      · 설치본: 서버에서 새 소스를 받아 온다(bootstrap.sync_code) → 받았으면 지문이 달라진다
+      · 개발 PC: 사람이 git 으로 바꾼다 → 서버와 무관하게 지문이 달라진다
+
+    예전에는 개발 PC 를 아예 건너뛰었다. 그러니 push 할 때마다 그 PC 만 옛 코드로 남아
+    '코드가 다릅니다' 경고가 늘 떠 있었다(2026-09-16). 받아 두기만 해서는 소용이 없다 —
+    돌고 있는 파이썬은 이미 읽어 들인 옛 코드를 물고 있으므로 다시 켜야 반영된다."""
     try:
         import bootstrap
-    except Exception:
-        return False
-    if not (getattr(bootstrap, "BASE", "") and getattr(bootstrap, "TOKEN", "")):
-        return False            # 서버에서 소스를 받지 않는 PC(개발 PC) — 사람이 git 으로 맞춘다
-    try:
-        changed = bootstrap.sync_code()
+        if getattr(bootstrap, "BASE", "") and getattr(bootstrap, "TOKEN", ""):
+            bootstrap.sync_code()
     except Exception as e:
         print(f"[코드] 서버와 맞추지 못했습니다(다음에 다시 합니다): {str(e)[:80]}", flush=True)
+        # 그래도 디스크가 바뀌었을 수 있으니 아래 비교는 해 본다
+    now = _compute_code_version()
+    if now == _CODE_VERSION:
         return False
-    if not changed:
-        return False
-    print(f"[코드] 서버에 새 코드가 있어 {changed}개를 받았습니다 — 반영하려면 다시 켜야 합니다",
+    print(f"[코드] 소스가 바뀌었습니다({_CODE_VERSION} → {now}) — 반영하려면 다시 켜야 합니다",
           flush=True)
     return True
 
