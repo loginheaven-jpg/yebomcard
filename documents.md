@@ -36,6 +36,7 @@
 | [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md) | TTS | 3단 폴백 / 캐시 v5 / accent 분기 / WEB R2 음원 / 미니플레이어 패턴 | TTS 정책·인프라 변경 시 |
 | [docs/IA_5TAB.md](docs/IA_5TAB.md) | UI/UX | BottomTabBar(6탭) + SettingsSheet + QuickNavFab + 모달 스택 / 좌우 스와이프 / 다크 추종 | IA 또는 탭 정책 변경 시 |
 | [docs/READING_PLAN.md](docs/READING_PLAN.md) | 말씀의삶 | 플랜 층 설계 — 판정 규칙(entryChapter/nextChapter) · 경계 장 10개 · 플랜 모드 개입 지점 · TTS 세 묶음 | 플랜 정책·판정 규칙 변경 시 |
+| [docs/VOICE_OPERATIONS.md](docs/VOICE_OPERATIONS.md) | 음원 생성 | **음원 생성 운영 인수인계** — 생성 PC 무리 · 현황/지시/임대 · 런북 · 기준값과 근거 · 하지 말 것 · 새 성우 절차 · 남은 일. 음원 전용 대화의 첫 문서 | 운영 규칙·기준값·PC 구성 변경 시 |
 | [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md) | 데이터 | bible_verses/bible_audio/scraps + UNIQUE 정책 + RLS + 마이그레이션 + BibleVersion 추가 체크리스트 | DB 스키마·정책 변경 시 |
 
 ### docs/tasks/ (진행 중 작업 지시서)
@@ -44,6 +45,7 @@
 
 | 문서 | 상태 | 내용 |
 |---|---|---|
+| [docs/tasks/음원생성_대화_시작_지시문.md](docs/tasks/음원생성_대화_시작_지시문.md) | **확정본** | 음원 생성 전용 새 대화를 열 때 붙여 넣는 지시문. [docs/VOICE_OPERATIONS.md](docs/VOICE_OPERATIONS.md) 를 먼저 읽게 한다 |
 | [docs/tasks/말씀의삶_클코_작업지시서_v1.1.md](docs/tasks/말씀의삶_클코_작업지시서_v1.1.md) | **확정본** | 성경읽기진도표 91회차 북클럽 — 단계 0~4. §번호는 v1 유지 |
 | [docs/tasks/말씀의삶_주요화면시안.html](docs/tasks/말씀의삶_주요화면시안.html) | 별첨 | 화면 A~D 시안. 단, 시안 D 의 "먼저 마친 사람이 위" 는 폐기(v1.1 §6.3) |
 | [docs/tasks/말씀의삶_클코_작업지시서_v1.md](docs/tasks/말씀의삶_클코_작업지시서_v1.md) | 이력 | v1.1 로 대체. 검토 경과 확인용 |
@@ -118,12 +120,17 @@
 ### 특정 시스템 단면 작업 시
 
 - TTS · 음원: [docs/TTS_PIPELINE.md](docs/TTS_PIPELINE.md)
+- 음원 생성(사전 생성 성우 · 생성 PC 운영): [docs/VOICE_OPERATIONS.md](docs/VOICE_OPERATIONS.md) · 설계 근거 [voice/README.md](voice/README.md)
 - UI · IA · 모달: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 - 스키마 · 마이그레이션: [docs/DATA_SCHEMA.md](docs/DATA_SCHEMA.md)
 
 ---
 
 ## 📜 변경 이력 (최신 위)
+
+### 2026-09-16 — 음원 생성 운영을 별도 대화로 분리
+- `docs/VOICE_OPERATIONS.md` 신규 — 앱 개발 대화에서 음원 생성 운영을 떼어 내며 쌓인 운영 지식을 옮김
+- AGENTS.md 의 음원 절이 이 문서를 가리키도록 갱신. plan.md 의 옛 '영희(f4) 진행 상황'(2026-09-09) 절은 이 문서로 대체됨을 표시
 
 ### 2026-06-11 — 문서 체계 v1.0 출범
 - documents.md 신규 (본 파일)

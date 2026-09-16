@@ -86,7 +86,8 @@ python C:\dev\yebomcard\voice\fleet_cli.py log         # 최근 지시와 결과
 - 각 PC 는 스튜디오(`voice/app.py`)를 켜면 `fleet.py` 가 함께 돌며 보고·수신·임대를 맡는다
 - **전체 생성**을 켠 PC 는 진도표(`voice/plan.py`) 순서로 책을 하나씩 빌려 혼자 진행한다.
   여러 대가 붙어도 서버가 겹치지 않게 나눠 준다
-- 절차·설계는 [voice/README.md](voice/README.md) '새 성우로 성경 전체를 만들 때'
+- **운영 전반은 [docs/VOICE_OPERATIONS.md](docs/VOICE_OPERATIONS.md)** — 런북 · 기준값과 근거 · 하지 말 것 · 새 성우 절차 · 남은 일.
+  음원 생성은 2026-09-16 부터 **별도 대화**에서 다룬다(앱 개발 대화와 분리). 설계 근거는 [voice/README.md](voice/README.md)
 
 ### 데이터 (Supabase)
 - `bible_verses` 7개 version (nkrv/rnksv/easy/kjv/nirv/gnt/web)
