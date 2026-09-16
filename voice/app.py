@@ -118,10 +118,19 @@ def ui_register(name, audio, ref_text, start, end):
 
 
 def ui_voice_info(name):
+    """보이스 정보 — **성우 슬롯이 있는지**를 함께 보여 준다.
+
+    슬롯이 없으면 만들어도 예봄성경에 올라가지 않는다(업로드 경로가 슬롯으로 막혀 있다).
+    예전에는 그 사실이 어디에도 안 보여, 한참 만든 뒤에야 알게 되었다."""
     if not name:
         return None, ""
     m = engine.voice_meta(name)
-    return engine.voice_ref(name), f"{m.get('duration')}초 · 참조텍스트: {m.get('ref_text','')[:120]}"
+    key = engine.voice_upload_key(name)
+    slot = (f"성우 슬롯 {key} — 만든 절이 예봄성경으로 올라갑니다" if key else
+            "[주의] 성우 슬롯이 없습니다 — 만들어도 예봄성경에 올라가지 않습니다. "
+            "예봄성경 설정 → 관리자 → 음원 생성 PC 설치 에서 슬롯을 지정하세요")
+    info = f"{m.get('duration')}초 · 참조텍스트: {m.get('ref_text', '')[:110]}"
+    return engine.voice_ref(name), slot + chr(10) + info
 
 
 def ui_delete_voice(name):
@@ -638,9 +647,17 @@ def ui_merge(jid):
 
 # ═══════════════════ UI ═══════════════════
 with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
-    gr.Markdown("# 커스텀 보이스 성경 낭독 스튜디오\n"
-                "내 목소리를 등록하고, 성경 범위를 골라 **절 단위** 음원을 만듭니다. "
-                "생성된 절은 자동 검수(ASR 역대조)를 거치고, 불합격은 자동 재시도 후 **보류**로 분리됩니다.")
+    gr.Markdown("# 커스텀 보이스 성경 낭독 스튜디오")
+    gr.Markdown(
+        "성우 목소리를 등록하고, 성경 범위를 골라 **절 단위** 음원을 만듭니다. "
+        "만든 절은 자동 검수(받아쓰기 대조)를 거쳐 예봄성경으로 올라가고, "
+        "판단이 필요한 절만 **보류**로 빠집니다.\n\n"
+        "**여러 PC 를 함께 보고 부리는 일은 예봄성경 웹에서 합니다** — "
+        "`설정 → 관리자 → 음원 생성 현황`. 거기서 PC 별 진행·책 맡기기·다시 만들기·"
+        "한 번에 만드는 절 수·양보 모드를 모두 다룹니다.\n\n"
+        "이 화면은 **이 PC 에서만 할 수 있는 일**을 맡습니다 — "
+        "성우 등록 · 작업 만들기 · 만든 절을 직접 들어 보기."
+    )
 
     # ── 1. 생성 ──
     with gr.Tab("1. 생성"):
@@ -680,7 +697,7 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             b_btn_est = gr.Button("예상 계산")
             b_btn_add = gr.Button("작업 추가 (생성 시작)", variant="primary")
         b_msg = gr.Textbox(label="상태", lines=4)
-        gr.Markdown("### 작업 현황")
+        gr.Markdown("### 이 PC 의 작업")
         with gr.Row():
             b_status = gr.Textbox(label="워커", scale=3)
             b_btn_stop = gr.Button("워커 정지", variant="stop")
@@ -695,12 +712,12 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
             b_jid = gr.Dropdown([], label="이어할 작업 ID (배치 바꾸기는 비우면 지금 도는 작업)", scale=2)
             b_btn_resume = gr.Button("이어하기")
             b_btn_batch = gr.Button("배치를 위 값으로")
-        gr.Markdown("### 구방식 교체 — 남은 절을 다 만든 뒤에")
+        gr.Markdown("### 구방식 교체 — 옛 방식으로 만든 절 다시 만들기")
         gr.Markdown(
-            "2026-09-10 이전 영희 음원은 절 끝 글자가 짧게 잘린 것이 많습니다. "
-            "남은 절을 새 방식으로 다 만든 뒤, 이 버튼으로 같은 책들을 다시 만들어 교체합니다. "
-            "먼저 걸어 두어도 **남은 절 작업이 모두 끝난 다음에** 진행하고, "
-            "이미 새 방식으로 바뀐 절은 서버가 알아서 건너뜁니다.")
+            "옛 방식(본문 흘려 넣기)으로 만든 음원은 절 끝 글자가 짧게 잘린 것이 많습니다. "
+            "어느 절이 그에 해당하는지는 **서버가 판정합니다** — 성우마다 기준 시각이 따로 있어 "
+            "성우 이름을 여기 적지 않습니다. 남은 절을 다 만든 뒤에 진행되고, 이미 새 방식으로 "
+            "바뀐 절은 알아서 건너뜁니다. 웹 화면에서는 **남은 절 수와 함께** 보입니다.")
         with gr.Row():
             b_rep_which = gr.Radio(["구약", "신약"], value="구약", label="교체할 쪽")
             b_btn_rep = gr.Button("구방식 교체 작업 걸기", variant="secondary")
@@ -778,6 +795,19 @@ with gr.Blocks(title="커스텀 보이스 성경 낭독 스튜디오") as demo:
                 a_name = gr.Textbox(label="보이스 이름", placeholder="예: 리딩지저스")
                 a_btn_reg = gr.Button("보이스 등록", variant="primary")
                 a_msg = gr.Textbox(label="결과", lines=3)
+        gr.Markdown("### 새 성우로 성경 전체를 만들려면")
+        gr.Markdown(chr(10).join([
+            "1. **여기서 목소리를 등록합니다** (한 번). 참조 음원 10~30초를 올리고 구간을 고른 뒤,"
+            " 참조 텍스트는 *원문 넣기* 를 권합니다 — 받아쓰기 오인식이 섞이면 목소리가 흐려집니다.",
+            "2. **성우 슬롯을 받습니다** (한 번). 예봄성경 `설정 → 관리자 → 음원 생성 PC 설치` 에서"
+            " 그 보이스에 슬롯(f1~m5)을 지정합니다. **이것을 안 하면 만들어도 올라가지 않습니다.**",
+            "3. **PC 마다 일을 나눠 줍니다.** 예봄성경 `설정 → 관리자 → 음원 생성 현황` 에서"
+            " PC 카드의 *책 맡기기* 로 주거나, 아래 **전체 생성**을 켜면 진도표 순서로 나눠 갖습니다.",
+            "4. **지켜봅니다.** 설정에 '손봐야 할 것' 배지가 뜰 때만 열어 보시면 됩니다.",
+            "",
+            "*등록한 목소리는 서버에 올라가므로 다른 PC 는 켤 때 저절로 받아 갑니다.*",
+        ]))
+
         gr.Markdown("### 등록된 보이스")
         with gr.Row():
             a_list = gr.Dropdown([], label="보이스", scale=2)
