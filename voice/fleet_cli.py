@@ -197,7 +197,10 @@ def main():
     s = sub.add_parser("batch", help="지금 도는 작업의 배치 바꾸기")
     s.add_argument("n", type=int)
     s.add_argument("--pc", default="")
-    s.set_defaults(fn=lambda a: _send("set_batch", _resolve(a.pc), {"batch": a.n}))
+    s.add_argument("--this-pc", action="store_true",
+                   help="이 PC 가 앞으로 집는 작업에도 적용(대기 중인 책들까지)")
+    s.set_defaults(fn=lambda a: _send("set_batch", _resolve(a.pc),
+                                      {"batch": a.n, "pc_wide": bool(a.this_pc)}))
 
     s = sub.add_parser("queue", help="책을 큐에 올린다 (쉼표로 구분)")
     s.add_argument("books")

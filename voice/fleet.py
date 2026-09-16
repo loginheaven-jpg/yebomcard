@@ -277,8 +277,14 @@ def _do_command(c):
         return "워커를 다시 켰습니다"
 
     if op == "set_batch":
-        n = jobs.set_batch(a.get("jobId") or (jobs.current().get("job") or ""),
-                           a.get("batch", jobs.DEFAULT_BATCH))
+        n = max(1, min(8, int(a.get("batch", jobs.DEFAULT_BATCH))))
+        if a.get("pc_wide"):
+            # 이 PC 가 앞으로 집는 작업에도 적용한다 — 대기 중인 책들이 기본값으로 돌아가지 않게
+            set_state(batch=n)
+            jobs.pc_batch[0] = n
+            jobs.set_batch(jobs.current().get("job") or "", n)
+            return f"이 PC 의 배치를 {n} 로 정했습니다(지금 작업과 앞으로 집는 작업 모두)"
+        jobs.set_batch(a.get("jobId") or (jobs.current().get("job") or ""), n)
         return f"배치 {n}"
 
     if op == "delete_job":
@@ -554,10 +560,13 @@ def start():
         return False
     if not server.enabled():
         return False
-    # 저장해 둔 양보 모드를 되살린다 — 다시 켤 때마다 사람이 다시 켜 줄 일이 아니다
+    # 저장해 둔 설정을 되살린다 — 다시 켤 때마다 사람이 다시 정해 줄 일이 아니다
     try:
-        if state().get("polite"):
+        st = state()
+        if st.get("polite"):
             apply_polite(True)
+        if st.get("batch"):
+            jobs.pc_batch[0] = int(st["batch"])
     except Exception:
         pass
     _stop.clear()

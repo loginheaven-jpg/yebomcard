@@ -124,6 +124,12 @@ DEFAULT_BATCH = 8
 # 기어갈 때는 절당 300초쯤 되므로 180초면 정상과 사고를 가른다.
 STALL_SEC_PER_VERSE = 180
 
+# 이 PC 가 쓸 배치 — 사람이 "이 PC 는 4 로" 라고 정해 두면 **집는 작업마다** 그 값을 쓴다.
+# 작업 하나만 바꾸는 set_batch 로는 대기 중인 책들이 다시 기본값으로 시작해서, 그래픽 메모리가
+# 빠듯한 PC 는 책이 바뀔 때마다 같은 사고를 되풀이한다(2026-09-16).
+# fleet 이 켜질 때와 지시를 받을 때 채운다. None 이면 작업에 적힌 값을 그대로 쓴다.
+pc_batch = [None]
+
 
 def new_job(voice, title, items, temp=0.75, punct=True, batch=DEFAULT_BATCH, retry_max=3, seq=9999,
             upload_key=None, replace=False):
@@ -753,6 +759,12 @@ def _process(job):
     # 그래픽 메모리 부족 — 그 묶음만 반으로 줄여 다시 만들고 다음 묶음은 원래 배치로. 세 번째부터는 아예 줄인다.
     # 긴 절이 몰린 묶음에서만 모자라는 일이 많아, 한 번 모자랐다고 끝까지 줄이면 큰 배치의 이득을 잃는다
     # (새 PC 3080 Ti 실측: 배치 4 → 8 이 시간당 305 → 498절).
+    # 이 PC 에 정해 둔 배치가 있으면 그것으로 시작한다
+    if pc_batch[0] and int(job.get("batch") or 0) != int(pc_batch[0]):
+        job["batch"] = max(1, min(8, int(pc_batch[0])))
+        print(f"[배치] {job['title']}: 이 PC 설정으로 {job['batch']}", flush=True)
+        save(job)
+
     oom_cap, oom_hits = None, 0
     book_checked = None
     while not _stop.is_set():
