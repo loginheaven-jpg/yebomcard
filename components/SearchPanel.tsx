@@ -141,6 +141,51 @@ function isSelected(verse: BibleVerse, selected: BibleVerse[]): boolean {
   );
 }
 
+// ─── 본문 장 넘김 스와이프 기준값 (docs/IA_5TAB.md §5) ───
+/** 화면 가장자리 이만큼에서 시작한 터치는 받지 않는다 — iOS 뒤로가기 제스처(가장자리 약 20px)에 양보 */
+const SWIPE_EDGE_PX = 24;
+/** 이만큼 움직이면 가로·세로를 정한다. 정한 뒤로는 끝이 휘어도 바꾸지 않는다 */
+const SWIPE_LOCK_PX = 10;
+/** 이만큼 밀고 놓으면 넘긴다 */
+const SWIPE_COMMIT_PX = 50;
+/** 짧게 튕겨도 넘긴다 — 이만큼 이상, 놓기 직전 100ms 동안 이 속도(px/ms) 이상 */
+const SWIPE_FLICK_MIN_PX = 24;
+const SWIPE_FLICK_SPEED = 0.3;
+/** 가로 움직임은 앱이, 세로 스크롤과 두 손가락 확대는 브라우저가 맡는다 */
+const SWIPE_TOUCH_ACTION = "pan-y pinch-zoom";
+
+/** 본문을 손가락 따라 민다. ms 0 = 즉시(끄는 중), 그 밖엔 그만큼 걸려 옮겨 간다 */
+function paintSwipeShift(el: HTMLElement | null, shift: number, opacity: number, ms: number) {
+  if (!el) return;
+  el.style.transition = ms > 0 ? `transform ${ms}ms ease-out, opacity ${ms}ms ease-out` : "none";
+  el.style.transform = shift ? `translateX(${shift}px)` : "";
+  el.style.opacity = opacity < 1 ? String(opacity) : "";
+}
+
+/** 끝난 뒤 인라인 스타일을 비운다 — 본문 높이 전환(transition-[max-height])이 다시 살아난다 */
+function clearSwipeShift(el: HTMLElement | null) {
+  if (!el) return;
+  el.style.transition = "";
+  el.style.transform = "";
+  el.style.opacity = "";
+}
+
+/** 가장자리 화살표 — dir -1 이전 장 · 1 다음 장 · 0 숨김. progress 1 이면 놓았을 때 넘어간다 */
+function paintSwipeHints(
+  prevEl: HTMLElement | null,
+  nextEl: HTMLElement | null,
+  dir: -1 | 0 | 1,
+  progress: number,
+) {
+  const paint = (el: HTMLElement | null, on: boolean) => {
+    if (!el) return;
+    el.style.opacity = on ? String(0.3 + Math.min(progress, 1) * 0.7) : "0";
+    el.dataset.armed = on && progress >= 1 ? "true" : "false";
+  };
+  paint(prevEl, dir === -1);
+  paint(nextEl, dir === 1);
+}
+
 export default function SearchPanel({
   selectedVerses,
   mainVersion,
@@ -1929,13 +1974,44 @@ export default function SearchPanel({
     );
   }
 
-  // Chapter navigation helpers
-  // Phase 2c + 3 — 좌우 스와이프(장 이동) + 길게 누르기(전체화면) 통합 터치 핸들러
-  // 활성: 본문 영역 가운데 60% (가장자리 20% 제외 — iOS swipe-back 보호)
-  // 임계 스와이프: |dx| > 50px, 각도 30° 이내
-  // 임계 long-press: 500ms 정지, 이동 < 8px
-  // 비활성: editing/isAddingMore/모달 열림
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // ─── 본문 터치: 좌우 스와이프(장 넘김) + 길게 누르기(전체화면) ───
+  //
+  // 2026-09-17 개편 — 모바일에서 장 넘김이 자주 안 먹었다. 상단 장 이동 화살표를 뺀 뒤(2026-09-12)로
+  // 모바일의 주된 장 이동이라 손봤다. 기준값은 파일 위 SWIPE_* 에 있다.
+  //  · 시작: 화면 가장자리 SWIPE_EDGE_PX 만 뺀다. 전에는 좌우 20%(390px 폰에서 각 78px)를 버려,
+  //    오른손 엄지로 '다음 장' 을 밀면 시작점이 거기 걸려 무시되곤 했다.
+  //  · 방향: 손을 뗄 때가 아니라 SWIPE_LOCK_PX 움직였을 때 정한다. 가로로 정해지면 끝이 휘어도 스와이프다
+  //    (엄지는 원을 그린다 — 전에는 끝점이 30° 를 넘으면 버렸다). 세로로 정해지면 끝까지 스크롤이다.
+  //    정하기 전에 본문이 이미 스크롤됐으면 브라우저가 세로로 가져간 것이므로 세로로 본다.
+  //  · 본문 스크롤 칸에 touch-action(SWIPE_TOUCH_ACTION) — 가로 움직임을 브라우저가 스크롤로 가져가지 않는다.
+  //    touch-action 은 스크롤 칸에서 새로 시작하므로 감싼 div 가 아니라 **스크롤 칸에** 달아야 한다.
+  //  · 넘김: SWIPE_COMMIT_PX 이상 밀었거나 짧아도 빠르게 튕겼을 때. 되돌리며 놓으면 넘기지 않는다.
+  //  · 보임: 본문이 손가락을 따라 밀리고, 넘어갈 만큼 밀면 가장자리 화살표가 채워진다.
+  //    더 갈 장이 없는 쪽으로는 조금만 밀리고 화살표도 없다. 움직임 줄이기 설정이면 밀지 않는다.
+  //  · 끌 때마다 React 를 다시 그리지 않도록 스타일은 DOM 에 직접 칠한다.
+  // 길게 누르기: 500ms 동안 8px 안에 머물면 전체화면.
+  // 받지 않을 때: 절 편집 중 · 다른 장 절 모으는 중 · ⋮ 메뉴 열림 · 입력칸에서 시작 · 두 손가락(확대)
+  const swipeRef = useRef<{
+    x: number;
+    y: number;
+    /** 시작 때 본문 스크롤 위치 */
+    scrollTop: number;
+    /** 정해진 방향 — 정하기 전엔 null */
+    axis: "x" | "y" | null;
+    /** 튕김 속도를 재는 최근 위치 */
+    samples: { x: number; t: number }[];
+    /** 움직임 줄이기 — 본문을 밀지 않는다 */
+    still: boolean;
+  } | null>(null);
+  const prevHintRef = useRef<HTMLDivElement>(null);
+  const nextHintRef = useRef<HTMLDivElement>(null);
+  const swipeAnimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 밀려 나가는 중인 장 넘김 — 끝나기 전에 다시 만지면 바로 실행한다(빠르게 연달아 넘길 때 잃지 않게) */
+  const swipePendingRef = useRef<(() => void) | null>(null);
+  const goChapterRef = useRef(goChapter);
+  useEffect(() => {
+    goChapterRef.current = goChapter;
+  }, [goChapter]);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
   // visibleMain 은 아래 useMemo 로 정의 — 핸들러 클로저에서는 ref 로 접근
@@ -1948,16 +2024,111 @@ export default function SearchPanel({
     }
   }, []);
 
+  /** 진행 중인 애니메이션을 끝 상태로 건너뛴다 */
+  const flushSwipeAnim = useCallback(() => {
+    if (swipeAnimTimerRef.current) {
+      clearTimeout(swipeAnimTimerRef.current);
+      swipeAnimTimerRef.current = null;
+    }
+    const run = swipePendingRef.current;
+    swipePendingRef.current = null;
+    if (run) {
+      run();
+      if (swipeAnimTimerRef.current) {
+        clearTimeout(swipeAnimTimerRef.current);
+        swipeAnimTimerRef.current = null;
+      }
+    }
+    clearSwipeShift(scrollRef.current);
+  }, []);
+
+  /** 넘기지 않고 제자리로 */
+  const resetSwipe = useCallback((animate: boolean) => {
+    paintSwipeHints(prevHintRef.current, nextHintRef.current, 0, 0);
+    const el = scrollRef.current;
+    if (!animate || !el || !el.style.transform) {
+      clearSwipeShift(el);
+      return;
+    }
+    paintSwipeShift(el, 0, 1, 180);
+    swipeAnimTimerRef.current = setTimeout(() => {
+      swipeAnimTimerRef.current = null;
+      clearSwipeShift(scrollRef.current);
+    }, 200);
+  }, []);
+
+  /** 넘긴다 — 본문이 민 쪽으로 빠져나가고, 새 장이 반대쪽에서 들어온다 */
+  const commitSwipe = useCallback((dir: -1 | 1, still: boolean) => {
+    paintSwipeHints(prevHintRef.current, nextHintRef.current, 0, 0);
+    const el = scrollRef.current;
+    if (still || !el) {
+      clearSwipeShift(el);
+      goChapterRef.current(dir);
+      return;
+    }
+    // 다음 장(dir 1)은 왼쪽으로 밀었다 → 왼쪽으로 빠지고 오른쪽에서 들어온다
+    paintSwipeShift(el, -dir * window.innerWidth * 0.3, 0, 120);
+    swipePendingRef.current = () => {
+      goChapterRef.current(dir);
+      const next = scrollRef.current;
+      if (!next) return;
+      paintSwipeShift(next, dir * 40, 0, 0);
+      void next.offsetWidth; // 들어올 자리를 먼저 그려야 전환이 먹는다
+      paintSwipeShift(next, 0, 1, 200);
+      swipeAnimTimerRef.current = setTimeout(() => {
+        swipeAnimTimerRef.current = null;
+        clearSwipeShift(scrollRef.current);
+      }, 220);
+    };
+    swipeAnimTimerRef.current = setTimeout(() => {
+      swipeAnimTimerRef.current = null;
+      const run = swipePendingRef.current;
+      swipePendingRef.current = null;
+      run?.();
+    }, 120);
+  }, []);
+
+  /** 확대(두 손가락)·취소 — 넘기지 않고 모두 내려놓는다 */
+  const abortSwipe = useCallback(() => {
+    cancelLongPress();
+    if (!swipeRef.current) return;
+    swipeRef.current = null;
+    resetSwipe(true);
+  }, [cancelLongPress, resetSwipe]);
+
+  useEffect(
+    () => () => {
+      if (swipeAnimTimerRef.current) clearTimeout(swipeAnimTimerRef.current);
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    },
+    [],
+  );
+
   const handleVerseSwipeStart = useCallback(
     (e: React.TouchEvent) => {
       longPressedRef.current = false;
+      flushSwipeAnim();
+      if (e.touches.length > 1) {
+        abortSwipe();
+        return;
+      }
       if (editingVerseId !== null) return;
       if (isAddingMore) return;
+      if (moreOpen) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
       const t = e.touches[0];
       if (!t) return;
       const w = window.innerWidth;
-      if (t.clientX < w * 0.2 || t.clientX > w * 0.8) return;
-      swipeStartRef.current = { x: t.clientX, y: t.clientY };
+      if (t.clientX < SWIPE_EDGE_PX || t.clientX > w - SWIPE_EDGE_PX) return;
+      swipeRef.current = {
+        x: t.clientX,
+        y: t.clientY,
+        scrollTop: scrollRef.current?.scrollTop ?? 0,
+        axis: null,
+        samples: [{ x: t.clientX, t: performance.now() }],
+        still: !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+      };
       // 길게 누르기 타이머 — 500ms 후 전체화면 진입 (Q1=B)
       cancelLongPress();
       longPressTimerRef.current = setTimeout(() => {
@@ -1967,42 +2138,83 @@ export default function SearchPanel({
         }
       }, 500);
     },
-    [editingVerseId, isAddingMore, cancelLongPress],
+    [editingVerseId, isAddingMore, moreOpen, cancelLongPress, flushSwipeAnim, abortSwipe],
   );
 
   const handleVerseSwipeMove = useCallback(
     (e: React.TouchEvent) => {
-      const s = swipeStartRef.current;
+      const s = swipeRef.current;
       if (!s) return;
+      if (e.touches.length > 1) {
+        abortSwipe();
+        return;
+      }
       const t = e.touches[0];
       if (!t) return;
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
       // 8px 이상 이동하면 long-press 가 아님 — 타이머 취소
-      if (Math.abs(t.clientX - s.x) > 8 || Math.abs(t.clientY - s.y) > 8) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
         cancelLongPress();
       }
+      if (s.axis === null) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_LOCK_PX) return;
+        const scrolled = Math.abs((scrollRef.current?.scrollTop ?? 0) - s.scrollTop) > 2;
+        s.axis = !scrolled && Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      }
+      if (s.axis !== "x") return;
+
+      const now = performance.now();
+      s.samples.push({ x: t.clientX, t: now });
+      if (s.samples.length > 12) s.samples.shift();
+
+      const dir: -1 | 1 = dx < 0 ? 1 : -1;
+      const can = dir === 1 ? canNextChapter : canPrevChapter;
+      paintSwipeHints(
+        prevHintRef.current,
+        nextHintRef.current,
+        can ? dir : 0,
+        Math.abs(dx) / SWIPE_COMMIT_PX,
+      );
+      if (s.still) return;
+      const fade = 1 - Math.min(Math.abs(dx) / window.innerWidth, 1) * 0.3;
+      paintSwipeShift(scrollRef.current, can ? dx * 0.5 : dx * 0.12, can ? fade : 1, 0);
     },
-    [cancelLongPress],
+    [cancelLongPress, abortSwipe, canNextChapter, canPrevChapter],
   );
 
   const handleVerseSwipeEnd = useCallback(
     (e: React.TouchEvent) => {
       cancelLongPress();
-      const s = swipeStartRef.current;
+      const s = swipeRef.current;
       if (!s) return;
-      swipeStartRef.current = null;
-      // long-press 가 발화했으면 swipe 평가 스킵
-      if (longPressedRef.current) {
+      swipeRef.current = null;
+      // long-press 가 발화했거나 세로(스크롤)였으면 넘기지 않는다
+      const t = e.changedTouches[0];
+      if (longPressedRef.current || s.axis !== "x" || !t || e.touches.length > 0) {
+        resetSwipe(true);
         return;
       }
-      const t = e.changedTouches[0];
-      if (!t) return;
       const dx = t.clientX - s.x;
-      const dy = t.clientY - s.y;
-      if (Math.abs(dx) < 50) return;
-      if (Math.abs(dy) > Math.abs(dx) * 0.577) return;
-      goChapter(dx > 0 ? -1 : 1);
+      const now = performance.now();
+      // 놓기 직전 100ms 동안의 속도. 멈췄다 놓았으면 그 사이 움직임이 없어 0 에 가깝다
+      const from = s.samples.find((p) => now - p.t <= 100) ?? s.samples[s.samples.length - 1];
+      const speed = (t.clientX - from.x) / Math.max(now - from.t, 16);
+      const dir: -1 | 1 = dx < 0 ? 1 : -1;
+      const can = dir === 1 ? canNextChapter : canPrevChapter;
+      const sameWay = Math.sign(speed) === Math.sign(dx);
+      const fast = Math.abs(speed) >= SWIPE_FLICK_SPEED;
+      const far = Math.abs(dx) >= SWIPE_COMMIT_PX;
+      const flick = Math.abs(dx) >= SWIPE_FLICK_MIN_PX && fast && sameWay;
+      // 밀었다가 되돌리며 놓으면 마음을 바꾼 것이다
+      const reversing = fast && !sameWay;
+      if (can && !reversing && (far || flick)) {
+        commitSwipe(dir, s.still);
+      } else {
+        resetSwipe(true);
+      }
     },
-    [goChapter, cancelLongPress],
+    [cancelLongPress, resetSwipe, commitSwipe, canNextChapter, canPrevChapter],
   );
 
   // 현재 탭의 표시 구절 (풀스크린 입력용)
@@ -2712,11 +2924,31 @@ export default function SearchPanel({
           {/* Step: 절 본문 (리스트) — 스와이프 + 길게 누르기 통합 핸들러 */}
           {browseStep === "verse" && (
             <div
+              className="relative"
+              style={{ touchAction: SWIPE_TOUCH_ACTION }}
               onTouchStart={handleVerseSwipeStart}
               onTouchMove={handleVerseSwipeMove}
               onTouchEnd={handleVerseSwipeEnd}
-              onTouchCancel={() => { cancelLongPress(); swipeStartRef.current = null; }}
+              onTouchCancel={abortSwipe}
             >
+              {/* 장 넘김 화살표 — 끄는 동안만 보인다. 넘어갈 만큼 밀면 채워진다(data-armed) */}
+              {([
+                { ref: prevHintRef, side: "left-1", d: "M15 19l-7-7 7-7", label: "이전 장" },
+                { ref: nextHintRef, side: "right-1", d: "M9 5l7 7-7 7", label: "다음 장" },
+              ] as const).map((h) => (
+                <div
+                  key={h.label}
+                  ref={h.ref}
+                  aria-hidden
+                  data-armed="false"
+                  style={{ opacity: 0 }}
+                  className={`pointer-events-none absolute ${h.side} top-1/2 z-10 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full border border-gray-300 bg-white/95 text-gray-600 shadow-md transition-colors duration-150 data-[armed=true]:border-gray-900 data-[armed=true]:bg-gray-900 data-[armed=true]:text-white dark:border-gray-600 dark:bg-gray-800/95 dark:text-gray-300 dark:data-[armed=true]:border-gray-100 dark:data-[armed=true]:bg-gray-100 dark:data-[armed=true]:text-gray-900`}
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={h.d} />
+                  </svg>
+                </div>
+              ))}
               {/* 상단 한 줄 (2026-09-12 개편) — 제목 · 역본 · 읽기 · 전체화면 · ⋮
                   전에는 두 줄이었다. 위 줄은 브랜드+역본+글자크기(검색·목차와 공용), 아래 줄은 목차로+장 이동+읽기.
                   본문이 그만큼 좁았고, 재생을 시작하면 떠 있는 플레이어가 위를 덮어 역본·글자크기를 숨겨야 했다.
@@ -2950,8 +3182,8 @@ export default function SearchPanel({
               )}
 
               {parallel && browseVersesAlt.length > 0 ? (
-                /* 병기 모드 */
-                <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
+                /* 병기 모드 — touch-action 은 스크롤 칸에서 새로 시작하므로 여기에도 단다 */
+                <div ref={scrollRef} style={{ touchAction: SWIPE_TOUCH_ACTION }} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : (
@@ -3044,7 +3276,7 @@ export default function SearchPanel({
                 </div>
               ) : (
                 /* 단일 버전 모드 */
-                <div ref={scrollRef} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
+                <div ref={scrollRef} style={{ touchAction: SWIPE_TOUCH_ACTION }} className={`border border-gray-200 dark:border-gray-700 rounded-lg ${browseScrollMaxH} overflow-y-auto`}>
                   {loadingBrowse ? (
                     <div className="p-4 text-center text-gray-400">불러오는 중...</div>
                   ) : browseVerses.length === 0 ? (
