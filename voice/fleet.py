@@ -45,7 +45,7 @@ _thread = None
 _stop = threading.Event()
 _last_error = ""
 _started_at = [0.0]      # 이 프로세스를 켠 때 — 켠 직후의 헛된 다시 켜기를 막는다
-_rate = []          # [(시각, 합격 누계)] — 최근 것만 남긴다
+_rate = []          # [(시각, 워커가 만든 절 누계)] — 최근 것만 남긴다
 _lock = threading.Lock()
 
 
@@ -193,11 +193,15 @@ def _code_version():
     return _CODE_VERSION
 
 
-def _rate_per_hour(ok_total):
-    """최근 한 시간 동안 합격한 절 수. 창이 덜 찼으면 지금까지의 속도로 환산한다."""
+def _rate_per_hour():
+    """최근 한 시간 동안 이 PC 가 만들어 합격시킨 절 수. 창이 덜 찼으면 지금까지의 속도로 환산한다.
+
+    작업 파일의 합격 누계가 아니라 워커 카운터(jobs.made_count)로 잰다 — 건너뛴 절이 섞이면
+    책이 바뀔 때마다 속도가 수십만으로 튄다."""
     now = time.time()
+    made = jobs.made_count()
     with _lock:
-        _rate.append((now, ok_total))
+        _rate.append((now, made))
         while _rate and now - _rate[0][0] > RATE_WINDOW_SEC:
             _rate.pop(0)
         if len(_rate) < 2:
@@ -206,7 +210,7 @@ def _rate_per_hour(ok_total):
         el = now - t0
     if el < 60:
         return 0
-    return max(0, round((ok_total - n0) * 3600 / el))
+    return max(0, round((made - n0) * 3600 / el))
 
 
 def current_voice():
@@ -266,7 +270,7 @@ def snapshot():
         "jobId": cur.get("job"),
         "jobTitle": job_title,
         "batch": batch,
-        "versesPerHour": _rate_per_hour(ok_total),
+        "versesPerHour": _rate_per_hour(),
         "queued": queued,
         "errorJobs": error_jobs,
         "rework": _rework_report(),

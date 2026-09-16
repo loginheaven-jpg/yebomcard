@@ -304,6 +304,19 @@ def fleet_status(timeout=30):
     return r.json()
 
 
+def progress(fresh=False, timeout=300):
+    """성경 전체 진도(서버 실측) — 서버에 올라간 음원을 센다. PC 작업 파일과 무관하다.
+
+    fresh=False 면 서버가 1분 동안 돌려 쓰는 값을 받는다. 새로 세면 몇 초 걸린다."""
+    if not enabled():
+        return None
+    q = "?fresh=1" if fresh else ""
+    r = requests.get(f"{config()['base']}/api/voice-studio/progress{q}", headers=_headers(), timeout=timeout)
+    if not r.ok:
+        _raise(r)
+    return r.json()
+
+
 def fleet_commands(timeout=30):
     """내게 온 미처리 지시를 가져온다(가져간 표시가 남아 두 번 오지 않는다)."""
     if not enabled():

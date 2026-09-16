@@ -134,6 +134,7 @@ interface Total {
 }
 
 const REFRESH_MS = 10_000;
+const PROGRESS_REFRESH_MS = 5 * 60_000;
 
 function ago(iso: string): string {
   const t = Date.parse(iso);
@@ -219,26 +220,32 @@ export default function VoiceFleetPage() {
    * 성경 전체 진도를 **누를 때만** 잰다. 셈은 서버가 하므로 생성 PC 는 느려지지 않지만,
    * 본문 3만 절을 훑는 일이라 몇 초가 걸린다 — 실시간으로 되풀이할 일이 아니다.
    */
-  const measure = useCallback(async (fresh = true) => {
-    setProgBusy(true);
+  const measure = useCallback(async (fresh = true, quiet = false) => {
+    if (!quiet) setProgBusy(true);
     try {
       const q = new URLSearchParams();
       if (fresh) q.set("fresh", "1");
       if (voiceKey) q.set("voiceKey", voiceKey);
       const r = await fetch(`/api/voice-studio/progress?${q}`).then((x) => x.json());
-      if (r?.error) setMsg(r.error);
-      else setProg(r);
+      if (r?.error) {
+        if (!quiet) setMsg(r.error);
+      } else setProg(r);
     } catch {
-      setMsg("진도를 재지 못했습니다");
+      if (!quiet) setMsg("진도를 재지 못했습니다");
     } finally {
-      setProgBusy(false);
+      if (!quiet) setProgBusy(false);
     }
   }, [voiceKey]);
 
   // 들어오면 한 번 잰다 — 예전에는 누르기 전까지 진도가 비어 있어서, 화면을 열어도
   // 제일 궁금한 숫자가 안 보였다. 서버가 1분 동안 같은 값을 돌려 쓰므로 대개 곧바로 온다.
+  // 맨 위 요약의 '남은 절'·'이 속도면' 도 이 값으로 계산하므로, 화면을 켜 둔 채 멈춰 있지 않게
+  // 몇 분마다 조용히 다시 받는다(돌려 쓰는 값이면 곧바로 온다).
   useEffect(() => {
-    if (admin) measure(false);
+    if (!admin) return;
+    measure(false);
+    const t = setInterval(() => measure(false, true), PROGRESS_REFRESH_MS);
+    return () => clearInterval(t);
   }, [admin, measure]);
 
   const send = useCallback(
@@ -447,8 +454,19 @@ ${books.join(" · ")}`)) return;
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Stat label="일하는 PC" value={`${total.running}/${total.pcs}대`} />
             <Stat label="만드는 속도" value={`시간당 ${total.versesPerHour.toLocaleString()}절`} />
-            <Stat label="맡은 일 중 남은 절" value={total.pending.toLocaleString()} />
-            <Stat label="이 속도면" value={eta(total.pending, total.versesPerHour)} />
+            {/*
+              남은 절은 **서버 실측**(진도 API total − done)이다. 예전에는 PC 마다의 작업 파일 '남은 절' 을
+              합쳤는데, 여러 PC 가 같은 책을 들고 있고 다른 PC 가 만든 절은 그 책에 닿아야 빠지므로
+              실제의 두 배로 부풀어 있었다(2026-09-16: 합계 20,969 · 실측 10,669).
+            */}
+            <Stat
+              label="성경 전체 남은 절"
+              value={prog ? (prog.total - prog.done).toLocaleString() : "재는 중…"}
+            />
+            <Stat
+              label="이 속도면"
+              value={prog ? eta(prog.total - prog.done, total.versesPerHour) : "재는 중…"}
+            />
           </div>
           {/* 버튼 이름은 '무엇이 일어나는가' 로 적는다 — '다시 켬'(생성 재개)과
               '스튜디오 다시 켜기'(프로세스 재시작)는 말이 거의 같은데 전혀 다른 일이었다 */}

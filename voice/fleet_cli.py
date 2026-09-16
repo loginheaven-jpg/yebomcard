@@ -75,10 +75,23 @@ def cmd_status(a):
         print(json.dumps(st, ensure_ascii=False, indent=1))
         return 0
     t = st.get("total", {})
+    rate = t.get("versesPerHour", 0)
     print(f"PC {t.get('livePcs', 0)}/{t.get('pcs', 0)}대 살아 있음 · 돌고 있는 대수 {t.get('running', 0)}"
-          f" · 시간당 {t.get('versesPerHour', 0):,}절")
-    print(f"남은 절 {t.get('pending', 0):,} · 합격 누계 {t.get('ok', 0):,}"
-          f" · 보류 {t.get('held', 0):,} · 업로드 {t.get('uploaded', 0):,}")
+          f" · 시간당 {rate:,}절")
+    # 남은 절은 서버 실측으로 — PC 마다의 '남은 절' 을 합치면 같은 책을 여러 PC 가 들고 있어 부푼다
+    # (2026-09-16: 합계 20,969 · 실측 10,669).
+    try:
+        pg = server.progress()
+    except Exception:
+        pg = None
+    if pg:
+        left = pg["total"] - pg["done"]
+        eta = f" · 이 속도면 약 {left / rate:.1f}시간" if rate and left else ""
+        print(f"성경 전체 {pg['done']:,}/{pg['total']:,} · 남은 절 {left:,}"
+              + (f" · 구방식 {pg['legacy']:,}" if pg.get("legacy") else "") + eta)
+    else:
+        print("성경 전체 진도를 받지 못했습니다")
+    print(f"합격 누계 {t.get('ok', 0):,} · 보류 {t.get('held', 0):,} · 업로드 {t.get('uploaded', 0):,}")
     print(f"책 배분 — 끝남 {t.get('booksDone', 0)} · 맡은 중 {t.get('booksTaken', 0)}")
     codes = {p.get("codeVersion") for p in st.get("pcs", []) if not p.get("stale") and p.get("codeVersion")}
     if len(codes) > 1:
@@ -95,7 +108,7 @@ def cmd_status(a):
               + (" · 양보 모드" if p.get("polite") else ""))
         print(f"    지금: {p.get('note') or '(쉬는 중)'}")
         if p.get("jobTitle"):
-            print(f"    작업: {p['jobTitle']} · 남은 절 {p.get('pending', 0):,}"
+            print(f"    작업: {p['jobTitle']} · 작업 파일의 남은 절 {p.get('pending', 0):,}"
                   f" · 대기 작업 {p.get('queued', 0)}")
         if p.get("leases"):
             print(f"    맡은 책: {', '.join(p['leases'])}")
