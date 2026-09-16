@@ -29,8 +29,26 @@ export function ttsCacheKey(cleanedText: string, voiceKey: string, lang: "ko" | 
   return `tts/${TTS_CACHE_VERSION}/${lang}/${voiceKey}/${hash}.mp3`;
 }
 
-/** 로컬 스튜디오가 사전 생성한 음원을 올릴 수 있는 성우 슬롯 */
+/**
+ * 로컬 스튜디오가 사전 생성한 음원을 올릴 수 있는 성우 슬롯.
+ *
+ * 새 성우로 성경 전체를 만들려면 **여기에 그 칸을 더하는 것이 첫 걸음**이다. 업로드·진도·보류
+ * 판단이 모두 이 목록으로 막혀 있어, 목록에 없으면 올릴 수도 셀 수도 없다.
+ * 칸을 더한 뒤 `app/api/tts/route.ts` 의 `KOREAN_VOICE_CONFIG` 에 `pregenerated: true` 로 두면
+ * 교인에게도 그 음원이 나간다.
+ */
 export const PREGENERATED_VOICE_KEYS = ["f4"] as const;
+
+/** 성우 칸의 사람이 읽는 이름 — 화면에 'f4' 대신 '영희' 로 보이게 */
+export const PREGENERATED_VOICE_NAMES: Record<string, string> = {
+  f4: "영희",
+};
+
+/** 'f4' → '영희(f4)'. 이름을 모르면 칸 이름만 돌려준다 */
+export function voiceLabel(key: string): string {
+  const n = PREGENERATED_VOICE_NAMES[key];
+  return n ? `${n}(${key})` : key;
+}
 
 /**
  * 구방식 음원 기준 시각 — 이 시각 **이전**에 올라온 사전 생성 음원은 교체 대상이다.

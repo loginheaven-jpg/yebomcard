@@ -110,6 +110,8 @@ interface Progress {
   legacy: number;
   books: ProgressBook[];
   cached?: boolean;
+  /** 고를 수 있는 성우 — 하나뿐이면 선택칸을 띄우지 않는다 */
+  voices?: { key: string; label: string }[];
 }
 interface Attention {
   count: number;
@@ -168,6 +170,8 @@ export default function VoiceFleetPage() {
   const [prog, setProg] = useState<Progress | null>(null);
   const [progBusy, setProgBusy] = useState(false);
   const [showBooks, setShowBooks] = useState(false);
+  /** 지금 보고 있는 성우 칸 — 사전 생성 성우가 여럿이 되면 고를 수 있다 */
+  const [voiceKey, setVoiceKey] = useState("");
   /** 지금 '책 맡기기' 를 펼친 PC — 한 번에 한 대만 연다 */
   const [assignTo, setAssignTo] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -218,7 +222,10 @@ export default function VoiceFleetPage() {
   const measure = useCallback(async (fresh = true) => {
     setProgBusy(true);
     try {
-      const r = await fetch(`/api/voice-studio/progress${fresh ? "?fresh=1" : ""}`).then((x) => x.json());
+      const q = new URLSearchParams();
+      if (fresh) q.set("fresh", "1");
+      if (voiceKey) q.set("voiceKey", voiceKey);
+      const r = await fetch(`/api/voice-studio/progress?${q}`).then((x) => x.json());
       if (r?.error) setMsg(r.error);
       else setProg(r);
     } catch {
@@ -226,7 +233,7 @@ export default function VoiceFleetPage() {
     } finally {
       setProgBusy(false);
     }
-  }, []);
+  }, [voiceKey]);
 
   // 들어오면 한 번 잰다 — 예전에는 누르기 전까지 진도가 비어 있어서, 화면을 열어도
   // 제일 궁금한 숫자가 안 보였다. 서버가 1분 동안 같은 값을 돌려 쓰므로 대개 곧바로 온다.
@@ -279,7 +286,7 @@ export default function VoiceFleetPage() {
         const r = await fetch("/api/voice-studio/verse-regen", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ verses }),
+          body: JSON.stringify({ verses, voiceKey: voiceKey || prog?.voiceKey }),
         });
         const d = await r.json();
         setMsg(d.ok ? `${d.created}절을 다시 만들기로 했습니다 — 10분 안에 시작합니다` : d.error || "실패");
@@ -325,7 +332,7 @@ ${books.join(" · ")}`)) return;
         setBusy(false);
       }
     },
-    [],
+    [voiceKey, prog],
   );
 
   const leaseAction = useCallback(
@@ -485,7 +492,28 @@ ${books.join(" · ")}`)) return;
 
       <section className="rounded-xl border border-[var(--line)] p-3 mb-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-sm font-semibold">성경 전체 진도</h2>
+          <h2 className="text-sm font-semibold">
+            성경 전체 진도
+            {prog?.voiceKey && (
+              <span className="ml-1.5 font-normal text-[var(--ink-faint)]">
+                {prog.voices?.find((v) => v.key === prog.voiceKey)?.label || prog.voiceKey}
+              </span>
+            )}
+          </h2>
+          {/* 성우가 여럿일 때만 고르게 한다 — 하나뿐이면 고를 것이 없다 */}
+          {(prog?.voices?.length ?? 0) > 1 && (
+            <select
+              value={voiceKey || prog?.voiceKey || ""}
+              onChange={(e) => setVoiceKey(e.target.value)}
+              className="text-xs rounded-lg border border-[var(--line)] bg-transparent px-1.5 py-1"
+            >
+              {prog?.voices?.map((v) => (
+                <option key={v.key} value={v.key}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+          )}
           <span className="text-xs text-[var(--ink-faint)]">
             {prog
               ? `${new Date(prog.at).toLocaleString("ko-KR")} 기준 (${ago(prog.at)})`

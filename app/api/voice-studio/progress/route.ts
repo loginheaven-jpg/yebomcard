@@ -23,7 +23,12 @@ import { requireAdmin, requireDevice } from "@/lib/voiceStudio/auth";
 import { studioList } from "@/lib/voiceStudio/r2";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { BOOKS } from "@/lib/books";
-import { cleanForTts, TTS_CACHE_VERSION, PREGENERATED_VOICE_KEYS } from "@/lib/tts/verseText";
+import {
+  cleanForTts,
+  TTS_CACHE_VERSION,
+  PREGENERATED_VOICE_KEYS,
+  voiceLabel,
+} from "@/lib/tts/verseText";
 import { isLegacyFile, keyHash } from "@/lib/voiceStudio/legacy";
 
 export const runtime = "nodejs";
@@ -142,14 +147,16 @@ export async function GET(req: Request) {
 
   const fresh = url.searchParams.get("fresh") === "1";
   const hit = cache.get(voiceKey);
+  // 고를 수 있는 성우 목록을 함께 준다 — 새 성우가 붙으면 화면에 저절로 선택칸이 생긴다
+  const voices = PREGENERATED_VOICE_KEYS.map((k) => ({ key: k, label: voiceLabel(k) }));
   if (!fresh && hit && Date.now() - hit.at < CACHE_MS) {
-    return NextResponse.json({ ...hit.snap, cached: true });
+    return NextResponse.json({ ...hit.snap, cached: true, voices });
   }
 
   try {
     const snap = await build(voiceKey);
     cache.set(voiceKey, { at: Date.now(), snap });
-    return NextResponse.json({ ...snap, cached: false });
+    return NextResponse.json({ ...snap, cached: false, voices });
   } catch (e) {
     return NextResponse.json(
       { error: `진도를 재지 못했습니다: ${e instanceof Error ? e.message : String(e)}` },

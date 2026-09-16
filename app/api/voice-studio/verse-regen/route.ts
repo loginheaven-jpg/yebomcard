@@ -7,20 +7,23 @@
 
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/voiceStudio/auth";
+import { PREGENERATED_VOICE_KEYS } from "@/lib/tts/verseText";
 import { createRegenRequests, listRegenRequests, MAX_VERSES_PER_REQUEST } from "@/lib/voiceStudio/verseRegen";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 사전 생성 음원이 있는 성우·역본 — 지금은 영희(f4) 새번역뿐
-const VOICE_KEY = "f4";
+// 사전 생성 음원을 만드는 역본 — 새번역 하나다
 const VERSION = "rnksv";
 
 export async function POST(req: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
 
-  let body: { verses?: { bookCode?: string; chapter?: number; verse?: number }[] };
+  let body: {
+    verses?: { bookCode?: string; chapter?: number; verse?: number }[];
+    voiceKey?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -31,19 +34,26 @@ export async function POST(req: Request) {
     chapter: Number(v.chapter),
     verse: Number(v.verse),
   }));
+  // 성우 칸을 받는다 — 새 성우를 붙일 때 이 경로가 f4 에 못박혀 있으면 그 성우는 다시 만들 수가 없다
+  const voiceKey = (body.voiceKey || PREGENERATED_VOICE_KEYS[0]).trim();
+  if (!(PREGENERATED_VOICE_KEYS as readonly string[]).includes(voiceKey)) {
+    return NextResponse.json({ error: `알 수 없는 성우 슬롯: '${voiceKey}'` }, { status: 400 });
+  }
   if (verses.length === 0) return NextResponse.json({ error: "절을 고르세요" }, { status: 400 });
   if (verses.length > MAX_VERSES_PER_REQUEST) {
     return NextResponse.json({ error: `한 번에 최대 ${MAX_VERSES_PER_REQUEST}절까지` }, { status: 400 });
   }
 
-  const created = await createRegenRequests(VOICE_KEY, VERSION, verses, "관리자 요청", gate.session.email || "관리자");
+  const created = await createRegenRequests(voiceKey, VERSION, verses, "관리자 요청", gate.session.email || "관리자");
   return NextResponse.json({ ok: true, created: created.length, refs: created.map((r) => r.ref) });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const gate = await requireAdmin();
   if (!gate.ok) return gate.res;
-  const items = (await listRegenRequests(VOICE_KEY))
+  // 성우를 지정하지 않으면 첫 칸 — 지금은 사전 생성 성우가 하나뿐이라 그대로다
+  const voiceKey = (new URL(req.url).searchParams.get("voiceKey") || PREGENERATED_VOICE_KEYS[0]).trim();
+  const items = (await listRegenRequests(voiceKey))
     .sort((a, b) => (b.at || "").localeCompare(a.at || ""))
     .slice(0, 200);
   return NextResponse.json({ items }, { headers: { "Cache-Control": "no-store" } });
