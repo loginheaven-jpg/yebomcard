@@ -44,7 +44,10 @@ export default function TTSMiniPlayer({
   dockBottom?: boolean;
   /** 본문 화면 상단 바 아래 한 줄 변형 */
   inline?: boolean;
-  /** 인라인일 때 접기 버튼이 부를 함수 */
+  /**
+   * 인라인일 때 접기 버튼이 부를 함수. **없으면 접기 대신 듣기 종료(✕)를 둔다** —
+   * 본문 화면은 위에 읽기(정지) 버튼이 있어 접기를 두지만, 목차·검색 같은 목록 화면에는 끝낼 길이 따로 없다
+   */
   onCollapse?: () => void;
 }) {
   const tts = useTts();
@@ -362,8 +365,8 @@ export default function TTSMiniPlayer({
 
         {inline && playPauseBtn}
 
-        {inline ? (
-          /* 줄만 접는다 — 소리는 계속 난다. 끝내는 것은 상단 정지 아이콘 하나뿐.
+        {inline && onCollapse ? (
+          /* 줄만 접는다 — 소리는 계속 난다. 본문 화면에서 끝내는 것은 상단 정지 아이콘 하나뿐.
              재생 버튼과 붙어 있으면 잘못 누르므로 한 칸 띄우고 조금 작게 둔다 */
           <button
             type="button"
@@ -383,7 +386,7 @@ export default function TTSMiniPlayer({
             onClick={() => tts.stop()}
             aria-label="듣기 종료"
             title="듣기 종료"
-            className="shrink-0 w-7 h-7 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center justify-center"
+            className={`shrink-0 ${inline ? "ml-1 " : ""}w-7 h-7 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center justify-center`}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
               <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />

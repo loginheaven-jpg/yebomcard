@@ -122,6 +122,12 @@ interface SearchPanelProps {
   /** 하단 탭바가 감춰진 상태 — 그만큼 본문 스크롤 영역을 아래로 확장 */
   tabBarHidden?: boolean;
   /**
+   * 이 패널이 지금 보이는 화면인가. 다른 화면(말씀의삶·카드)으로 가도 언마운트되지 않고 display:none 으로만
+   * 가려지므로, 보이지 않을 때는 인라인 플레이어를 그리지 않는다 — 그리면 떠 있는 플레이어가 물러나
+   * 그 화면에 플레이어가 하나도 없게 된다.
+   */
+  isActiveView?: boolean;
+  /**
    * 본문 상단 ⋮ 메뉴 — 설정 시트에 있는 것들의 **지름길**이다(설정에서도 그대로 쓸 수 있다).
    * 읽는 중에는 하단 탭바가 자동으로 숨으므로, 손 닿는 곳에 같은 길을 하나 더 둔다.
    */
@@ -211,6 +217,7 @@ export default function SearchPanel({
   scrapCount,
   onReadingViewChange,
   tabBarHidden = false,
+  isActiveView = true,
   onOpenPlan,
   onOpenWorship,
   onLogin,
@@ -248,13 +255,6 @@ export default function SearchPanel({
     }
   }, [sessionLoading, isLoggedIn, mainVersion, subVersion, setMainVersion, setSubVersion]);
 
-  // ⇄ 클릭: 주/부 교환 (부가 "none"이 아닐 때만)
-  function handleSwapVersions() {
-    if (subVersion === "none") return;
-    const oldMain = mainVersion;
-    setMainVersion(subVersion as BibleVersion);
-    setSubVersion(oldMain);
-  }
   const [mode, setMode] = useState<SearchMode>("search");
   const parallel = subVersion !== "none";
   
@@ -265,8 +265,6 @@ export default function SearchPanel({
 
   const { fontSize, setFontSize, fontKey } = useFont();
   const currentFont = FONTS.find((f) => f.key === fontKey) || FONTS[0];
-  // 읽기 중 빠른 글자 크기 조절 — 대역 선택 우측 'A' 버튼 → 인라인 스테퍼 팝오버
-  const [fontStepOpen, setFontStepOpen] = useState(false);
 
   // ─── 검색 펼침 토글 + 모드 (본문검색 vs 주제추천) ───
   const [showSearchRow, setShowSearchRow] = useState(false);
@@ -2303,6 +2301,234 @@ export default function SearchPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitSeq]);
 
+  // ─── 화면 머리줄 — 모든 화면이 한 틀을 쓴다 (2026-09-17 지휘부) ───
+  // 본문 바(2026-09-12)만 새 틀이고 목차·장 목록·검색·첫 화면은 옛 3칸 줄(로고 · 30px 칩 · ⇄ · '가')이었다.
+  // 이제 모두 [왼쪽: 두 줄 제목] … [오른쪽: 40px 조작] 한 줄(44px)이고, 조작 조각은 아래 것을 함께 쓴다.
+  // 화면마다 쓸모 있는 것만 둔다 — 목록·검색에서는 대역이 의미 없다(검색은 원래 모든 역본을 함께 보인다).
+  const chipStyle = (arrow: string): React.CSSProperties => ({
+    height: "40px",
+    paddingLeft: "8px",
+    paddingRight: "16px",
+    borderRadius: "10px",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath ${arrow} d='M4 6L0 2h8z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 6px center",
+    backgroundSize: "8px",
+  });
+
+  /* 역본 — 네이티브 select 를 칩 모양으로만 바꿨다.
+     모바일에서 누르면 OS 선택기가 뜨고 전체 이름·접근성·다크모드가 따라온다 */
+  const mainVersionChip = (
+    <select
+      value={mainVersion}
+      onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
+      aria-label="주 역본"
+      className="shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
+      style={chipStyle("fill='%23ffffff' opacity='0.7'")}
+    >
+      {versionOptions.map((v) => (
+        <option key={v} value={v}>{getVersionLabel(v)}</option>
+      ))}
+    </select>
+  );
+
+  const subVersionChip = (
+    <select
+      value={subVersion}
+      onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
+      aria-label="대역(대조할 역본)"
+      className={`shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
+        subVersion === "none"
+          ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
+          : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
+      }`}
+      style={chipStyle("fill='%236b7280'")}
+    >
+      <option value="none">대역</option>
+      {subVersionOptions.map((v) => (
+        <option key={v} value={v}>{getVersionLabel(v)}</option>
+      ))}
+    </select>
+  );
+
+  const menuItemClass =
+    "w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+  const menuIcon = (d: string) => (
+    <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+    </svg>
+  );
+
+  /* ⋮ — 글자 크기 · 한 절씩 크게 · 설정 지름길. 모든 화면에서 같은 메뉴다(옛 '가' 버튼이 여기로 들어왔다).
+     '한 절씩 크게' 는 절이 보이는 화면에만 — 본문에서는 장을 불러오는 동안 흐리게 둔다 */
+  const moreMenu = (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setMoreOpen((v) => !v)}
+        aria-label="더 보기"
+        aria-expanded={moreOpen}
+        title="더 보기"
+        className="w-8 h-11 flex items-center justify-center rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      >
+        <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <circle cx="12" cy="5" r="1.7" />
+          <circle cx="12" cy="12" r="1.7" />
+          <circle cx="12" cy="19" r="1.7" />
+        </svg>
+      </button>
+      {moreOpen && (
+        <>
+          <div className="fixed inset-0 z-[59]" onClick={() => setMoreOpen(false)} aria-hidden />
+          <div className="absolute right-0 top-full mt-1.5 z-[60] w-[216px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="pl-1 text-xs font-semibold text-gray-500 dark:text-gray-400">글자 크기</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setFontSize(Math.max(16, fontSize - 2))}
+                  aria-label="글자 작게"
+                  className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                >
+                  A−
+                </button>
+                <span className="min-w-[30px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
+                <button
+                  type="button"
+                  onClick={() => setFontSize(Math.min(60, fontSize + 2))}
+                  aria-label="글자 크게"
+                  className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+                >
+                  A+
+                </button>
+              </div>
+            </div>
+
+            {(isReadingView || canFullscreen) && (
+              <>
+                <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
+                {/* 한 절씩 크게 — 옛 '전체화면(1절씩 보기)'. 이름은 얻는 것(크게)을 앞세웠다 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setShowFullscreen(true);
+                  }}
+                  disabled={!canFullscreen}
+                  className={menuItemClass}
+                >
+                  {menuIcon("M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15")}
+                  한 절씩 크게
+                </button>
+              </>
+            )}
+
+            <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
+            {/* 설정 시트의 지름길 — 설정에도 그대로 남아 있다 */}
+            {onOpenPlan && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onOpenPlan();
+                }}
+                className={menuItemClass}
+              >
+                {menuIcon("M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z")}
+                말씀의삶
+              </button>
+            )}
+            {onOpenWorship && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onOpenWorship();
+                }}
+                className={menuItemClass}
+              >
+                {menuIcon("M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25")}
+                예배성경
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                void promptAppInstall();
+              }}
+              className={menuItemClass}
+            >
+              {menuIcon("M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5")}
+              앱으로 설치
+            </button>
+            {(isLoggedIn ? onLogout : onLogin) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  if (isLoggedIn) void onLogout?.();
+                  else onLogin?.();
+                }}
+                className={menuItemClass}
+              >
+                {menuIcon("M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9")}
+                {isLoggedIn ? "로그아웃" : "로그인"}
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  /* 플레이어 — 재생 중에만 머리줄 아래 줄로(모든 화면). 접으면 하단 탭바와 같은 손잡이(36×4)만 남는다.
+     접어도 소리는 계속 난다. 전체화면일 때는 그쪽 도킹 플레이어에, 이 패널이 가려져 있을 때는 떠 있는 플레이어에 맡긴다.
+     본문 화면은 끝에 접기(▾)를 — 끝내는 것은 위 읽기 버튼이다. 목록 화면에는 읽기 버튼이 없어 듣기 종료(✕)를 둔다 */
+  const playerRow =
+    playerActive && !showFullscreen && isActiveView ? (
+      playerOpen ? (
+        <TTSMiniPlayer inline onCollapse={isReadingView ? () => setPlayerOpen(false) : undefined} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPlayerOpen(true)}
+          aria-label="플레이어 펼치기"
+          title="플레이어 펼치기"
+          className="w-full mb-2 h-5 flex items-start justify-center bg-transparent border-0 p-0"
+        >
+          <span aria-hidden className="mt-1 block rounded-full bg-gray-400/60 dark:bg-gray-500/60" style={{ width: 36, height: 4 }} />
+        </button>
+      )
+    ) : null;
+
+  /** 목록 화면 머리줄의 왼쪽 — 본문 바 제목과 같은 두 줄. onBack 이 있으면 ‹ 를 붙이고 누르면 한 단계 위로 */
+  const listBarTitle = (title: string, sub: string, onBack?: () => void) => {
+    const text = (
+      <span className="min-w-0 flex flex-col items-start">
+        <span className="max-w-full truncate text-[16px] min-[360px]:text-[18px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
+          {title}
+        </span>
+        <span className="text-[12.5px] leading-tight text-gray-500 dark:text-gray-400">{sub}</span>
+      </span>
+    );
+    if (!onBack) return <div className="flex-1 min-w-0 flex items-center px-1">{text}</div>;
+    return (
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex-1 min-w-0 flex items-center gap-0.5 pr-1 rounded-lg text-left active:bg-gray-100 dark:active:bg-gray-800 transition-colors"
+      >
+        <svg className="w-5 h-5 shrink-0 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        {text}
+      </button>
+    );
+  };
+
+  const searchResultCount = searchByVersion.reduce((acc, g) => acc + g.verses.length, 0);
+
   return (
     <div className="w-full max-w-[1400px] mx-auto">
       {/* 플랜 헤더 — 플랜 모드일 때만. 풀스크린에서는 숨긴다(§5.6) */}
@@ -2375,130 +2601,44 @@ export default function SearchPanel({
           onClose={() => setShowFullscreen(false)}
         />
       )}
-      {/* Header — 3열 grid: 좌(브랜드) · 중앙(번역본 셀렉터들) · 우(글자 크기).
-          **읽기 화면에서는 그리지 않는다**(2026-09-12) — 그 화면은 아래의 한 줄 상단 바가 대신한다.
-          이 줄은 검색·목차 화면과 공용이므로 그 화면들에서는 그대로 남는다. */}
+      {/* 머리줄 — 본문이 아닌 화면(첫 화면 · 검색 · 주제 추천 · 목차 · 장 목록).
+          본문 화면은 스와이프 영역 안의 본문 바가 그린다. 두 줄은 같은 조각(역본 칩·⋮·플레이어 줄)을 쓴다.
+          2026-09-17 옛 3칸 줄(로고 · 30px 칩 · ⇄ · '가')을 걷었다 — ⇄ 는 뺐고 '가' 는 ⋮ 안 글자 크기가 맡는다. */}
       {!isAddingMore && !isReadingView && (
-        <div className="grid grid-cols-3 items-start mb-3 gap-2">
-          <div className="flex flex-col items-center justify-self-start shrink-0 leading-none">
-            <div className="text-gray-900 dark:text-gray-100">
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-              </svg>
-            </div>
-            <div
-              className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)] mt-0.5"
-              style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.4px", lineHeight: 1 }}
-            >
-              Yebom
-            </div>
-          </div>
-          <div className={`flex items-center gap-1.5 shrink-0 justify-self-center ${tts.status !== "idle" ? "hidden" : ""}`}>
-            <select
-              value={mainVersion}
-              onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-              className="text-[11px] font-semibold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
-              style={{
-                height: "30px",
-                width: "78px",
-                paddingLeft: "10px",
-                paddingRight: "18px",
-                borderRadius: "4px",
-                backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 7px center",
-                backgroundSize: "8px",
-              }}
-            >
-              {versionOptions.map((v) => (
-                <option key={v} value={v}>{getVersionLabel(v)}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleSwapVersions}
-              disabled={subVersion === "none"}
-              title="주/부 버전 교환"
-              aria-label="주/부 버전 교환"
-              className="flex items-center justify-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
-              style={{
-                width: subVersion === "none" ? "26px" : "42px",
-                height: subVersion === "none" ? "30px" : "34px",
-                borderRadius: "8px",
-                fontSize: subVersion === "none" ? "13px" : "17px",
-                fontWeight: 700,
-                lineHeight: 1,
-              }}
-            >
-              ⇄
-            </button>
-            <select
-              value={subVersion}
-              onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-              className={`text-[11px] font-semibold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
-                subVersion === "none"
-                  ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
-                  : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-              }`}
-              style={{
-                height: "30px",
-                width: "78px",
-                paddingLeft: "10px",
-                paddingRight: "18px",
-                borderRadius: "4px",
-                backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 7px center",
-                backgroundSize: "8px",
-              }}
-            >
-              <option value="none">대역 선택…</option>
-              {subVersionOptions.map((v) => (
-                <option key={v} value={v}>{getVersionLabel(v)}</option>
-              ))}
-            </select>
-            {/* 화면 설정 아이콘 — Phase 2b 에서 하단 5탭 "설정" 으로 흡수 (사용자 #5) */}
-          </div>
-          {/* 우측 컬럼: 글자 크기 '가' — 버전 셀렉터는 col-2 정중앙, '가'는 우측으로 분리해 좌우 균형.
-              읽기(TTS) 중엔 우상단 미니플레이어와 겹치므로 숨김(사용자 승인: 읽기 중 대역/폰트 가림 허용) */}
-          <div className={`relative shrink-0 justify-self-end ${tts.status !== "idle" ? "hidden" : ""}`}>
-            <button
-              type="button"
-              onClick={() => setFontStepOpen((v) => !v)}
-              aria-label="글자 크기 조절"
-              aria-expanded={fontStepOpen}
-              title="글자 크기"
-              className="flex items-center justify-center text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-90 transition-all"
-              style={{ width: "30px", height: "30px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, lineHeight: 1 }}
-            >
-              가
-            </button>
-            {fontStepOpen && (
-              <>
-                <div className="fixed inset-0 z-[59]" onClick={() => setFontStepOpen(false)} aria-hidden />
-                <div className="absolute right-0 top-full mt-1.5 z-[60] flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-1">
-                  <button
-                    type="button"
-                    onClick={() => setFontSize(Math.max(16, fontSize - 2))}
-                    aria-label="글자 작게"
-                    className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
+        <>
+          {/* mt-2·mb-0: 본문 바는 아래 책갈피 칸(mb-2) 밑에 놓여 8px 내려와 있다. 같은 자리에 오도록 맞춘다 —
+              화면을 오갈 때 머리줄이 위아래로 튀지 않는다. 아래 여백은 그 책갈피 칸의 mb-2 가 맡는다 */}
+          <div className="flex items-center gap-1 min-[360px]:gap-1.5 mt-2">
+            {mode === "chapter" && browseStep === "book" ? (
+              listBarTitle("성경 목차", bookTestament === "old" ? `구약 ${OLD_TESTAMENT.length}권` : `신약 ${NEW_TESTAMENT.length}권`)
+            ) : mode === "chapter" && browseStep === "chapter" ? (
+              // 옛 '‹ 목차로 · 민수기' 줄을 제목에 합쳤다 — 누르면 목차로
+              listBarTitle(getBookByCode(bookCode)?.nameKr || "책 선택", `총 ${chapters.length}장`, () => setBrowseStep("book"))
+            ) : mode === "topic" ? (
+              listBarTitle("주제 추천", topicLoading ? "찾는 중…" : topicResults.length > 0 ? `${topicResults.length}절` : "감사 · 위로 · 새해…")
+            ) : showSearchRow || lastSearchType !== null || searchResultCount > 0 ? (
+              listBarTitle("말씀 찾기", searchLoading ? "찾는 중…" : searchResultCount > 0 ? `${searchResultCount}건` : "구절 · 단어 · 주제")
+            ) : (
+              /* 첫 화면 — 로고는 여기에만 */
+              <div className="flex-1 min-w-0 flex items-center px-1">
+                <div className="flex flex-col items-center leading-none text-gray-900 dark:text-gray-100">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                  </svg>
+                  <span
+                    className="italic text-gray-600 dark:text-gray-300 font-[family-name:var(--font-playfair)] mt-0.5"
+                    style={{ fontSize: "11px", fontWeight: 500, letterSpacing: "0.4px", lineHeight: 1 }}
                   >
-                    A−
-                  </button>
-                  <span className="min-w-[34px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFontSize(Math.min(60, fontSize + 2))}
-                    aria-label="글자 크게"
-                    className="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
-                  >
-                    A+
-                  </button>
+                    Yebom
+                  </span>
                 </div>
-              </>
+              </div>
             )}
+            {mainVersionChip}
+            {moreMenu}
           </div>
-        </div>
+          {playerRow}
+        </>
       )}
 
       {/* Adding more indicator */}
@@ -2877,28 +3017,7 @@ export default function SearchPanel({
           {/* Step: 장 선택 (그리드) */}
           {browseStep === "chapter" && (
             <div>
-              {/* 헤더: ← 목차로 + 중앙 책이름 */}
-              <div className="flex items-center justify-between mb-3">
-                <button
-                  onClick={() => setBrowseStep("book")}
-                  className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 transition-colors shrink-0"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  목차로
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBrowseStep("book")}
-                  className="text-sm font-semibold text-gray-800 dark:text-gray-200 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  title="성경 선택으로"
-                >
-                  {getBookByCode(bookCode)?.nameKr || "책 선택"}
-                </button>
-                <span className="w-14" />
-              </div>
-
+              {/* 책 이름과 '목차로' 는 머리줄 제목이 맡는다(2026-09-17) */}
               {/* 장 그리드 */}
               <div className="grid grid-cols-7 gap-1.5">
                 {chapters.map((ch) => (
@@ -2981,53 +3100,8 @@ export default function SearchPanel({
                   </span>
                 </button>
 
-                {/* 역본 — 네이티브 select 를 칩 모양으로만 바꿨다.
-                    모바일에서 누르면 OS 선택기가 뜨고 전체 이름·접근성·다크모드가 따라온다 */}
-                <select
-                  value={mainVersion}
-                  onChange={(e) => setMainVersion(e.target.value as BibleVersion)}
-                  aria-label="주 역본"
-                  className="shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-gray-900 text-white border-none outline-none cursor-pointer text-center"
-                  style={{
-                    height: "40px",
-                    paddingLeft: "8px",
-                    paddingRight: "16px",
-                    borderRadius: "10px",
-                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%23ffffff' opacity='0.7' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 6px center",
-                    backgroundSize: "8px",
-                  }}
-                >
-                  {versionOptions.map((v) => (
-                    <option key={v} value={v}>{getVersionLabel(v)}</option>
-                  ))}
-                </select>
-                <select
-                  value={subVersion}
-                  onChange={(e) => setSubVersion(e.target.value as BibleVersion | "none")}
-                  aria-label="대역(대조할 역본)"
-                  className={`shrink-0 w-[64px] min-[360px]:w-[70px] text-[13px] font-bold bg-white dark:bg-gray-800 outline-none cursor-pointer text-center border ${
-                    subVersion === "none"
-                      ? "border-dashed border-gray-400 dark:border-gray-500 text-gray-400 dark:text-gray-500"
-                      : "border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100"
-                  }`}
-                  style={{
-                    height: "40px",
-                    paddingLeft: "8px",
-                    paddingRight: "16px",
-                    borderRadius: "10px",
-                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath fill='%236b7280' d='M4 6L0 2h8z'/%3E%3C/svg%3E\")",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "right 6px center",
-                    backgroundSize: "8px",
-                  }}
-                >
-                  <option value="none">대역</option>
-                  {subVersionOptions.map((v) => (
-                    <option key={v} value={v}>{getVersionLabel(v)}</option>
-                  ))}
-                </select>
+                {mainVersionChip}
+                {subVersionChip}
 
                 {/* 읽기 — 읽기를 끝내는 유일한 버튼이다(플레이어의 접기는 소리를 끊지 않는다) */}
                 <TTSButton
@@ -3038,151 +3112,10 @@ export default function SearchPanel({
                   onClick={handleTtsToggle}
                 />
 
-                {/* ⋮ — 글자 크기 · 한 절씩 크게 · 설정 지름길. 펼쳐보기 아이콘은 2026-09-12 여기로 들어왔다 */}
-                <div className="relative shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setMoreOpen((v) => !v)}
-                    aria-label="더 보기"
-                    aria-expanded={moreOpen}
-                    title="더 보기"
-                    className="w-8 h-11 flex items-center justify-center rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <circle cx="12" cy="5" r="1.7" />
-                      <circle cx="12" cy="12" r="1.7" />
-                      <circle cx="12" cy="19" r="1.7" />
-                    </svg>
-                  </button>
-                  {moreOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[59]" onClick={() => setMoreOpen(false)} aria-hidden />
-                      <div className="absolute right-0 top-full mt-1.5 z-[60] w-[216px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-2">
-                        {/* 글자 크기 — 지금 모양 그대로 */}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="pl-1 text-xs font-semibold text-gray-500 dark:text-gray-400">글자 크기</span>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setFontSize(Math.max(16, fontSize - 2))}
-                              aria-label="글자 작게"
-                              className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
-                            >
-                              A−
-                            </button>
-                            <span className="min-w-[30px] text-center text-xs font-semibold tabular-nums text-gray-900 dark:text-gray-100">{fontSize}</span>
-                            <button
-                              type="button"
-                              onClick={() => setFontSize(Math.min(60, fontSize + 2))}
-                              aria-label="글자 크게"
-                              className="w-9 h-9 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all text-sm font-bold flex items-center justify-center"
-                            >
-                              A+
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
-                        {/* 한 절씩 크게 — 옛 '전체화면(1절씩 보기)'. 이름은 얻는 것(크게)을 앞세웠다 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMoreOpen(false);
-                            setShowFullscreen(true);
-                          }}
-                          disabled={browseVerses.length === 0}
-                          className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                          </svg>
-                          한 절씩 크게
-                        </button>
-
-                        <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
-                        {/* 설정 시트의 지름길 — 설정에도 그대로 남아 있다 */}
-                        {onOpenPlan && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMoreOpen(false);
-                              onOpenPlan();
-                            }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            말씀의삶
-                          </button>
-                        )}
-                        {onOpenWorship && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMoreOpen(false);
-                              onOpenWorship();
-                            }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                            </svg>
-                            예배성경
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMoreOpen(false);
-                            void promptAppInstall();
-                          }}
-                          className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                          </svg>
-                          앱으로 설치
-                        </button>
-                        {(isLoggedIn ? onLogout : onLogin) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMoreOpen(false);
-                              if (isLoggedIn) void onLogout?.();
-                              else onLogin?.();
-                            }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-left text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <svg className="w-[18px] h-[18px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                            </svg>
-                            {isLoggedIn ? "로그아웃" : "로그인"}
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                {moreMenu}
               </div>
 
-              {/* 플레이어 — 재생 중에만 둘째 줄로. 접으면 하단 탭바와 같은 손잡이(36×4)만 남고
-                  본문이 그만큼 올라온다. 접어도 소리는 계속 난다. 전체화면일 때는 그쪽 도킹 플레이어에 맡긴다. */}
-              {playerActive && !showFullscreen && (
-                playerOpen ? (
-                  <TTSMiniPlayer inline onCollapse={() => setPlayerOpen(false)} />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setPlayerOpen(true)}
-                    aria-label="플레이어 펼치기"
-                    title="플레이어 펼치기"
-                    className="w-full mb-2 h-5 flex items-start justify-center bg-transparent border-0 p-0"
-                  >
-                    <span aria-hidden className="mt-1 block rounded-full bg-gray-400/60 dark:bg-gray-500/60" style={{ width: 36, height: 4 }} />
-                  </button>
-                )
-              )}
+              {playerRow}
 
               {parallel && browseVersesAlt.length > 0 ? (
                 /* 병기 모드 — touch-action 은 스크롤 칸에서 새로 시작하므로 여기에도 단다 */

@@ -635,6 +635,7 @@ export default function Home() {
           onUnitComplete={handleUnitComplete}
           fullscreenCloseNonce={fullscreenCloseNonce}
           tabBarHidden={tabBarHidden}
+          isActiveView={view === "search"}
         />
       </div>
 
