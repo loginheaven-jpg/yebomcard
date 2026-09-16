@@ -6,7 +6,11 @@
  *
  * 배치파일이 하는 일은 딱 세 가지다. 나머지 판단은 전부 bootstrap.py 가 한다
  * (배치 스크립트는 한글·오류 처리가 취약해서 최소한만 맡긴다):
- *   1. 파이썬이 없으면 winget 으로 설치
+ *   1. 파이썬 찾기 — 없으면 winget 으로 설치
+ *      찾은 것을 **직접 실행해 본 뒤에만** 믿는다. 윈도우는 파이썬이 없어도
+ *      `WindowsApps\python.exe` 라는 스토어 안내 스텁을 두는데, `where python` 이 그것을
+ *      찾아내는 바람에 '파이썬 있음' 으로 보고 설치를 건너뛴 뒤 그 스텁을 실행해
+ *      "Python was not found" 만 보고 끝났다(2026-09-16 새 PC 설치 실패)
  *   2. bootstrap.py 를 서버에서 받아온다
  *   3. 실행한다
  *
@@ -41,29 +45,26 @@ function batch(baseUrl: string, token: string, label: string): string {
     `echo   설치 위치: %YEBOM_HOME%`,
     `echo.`,
     ``,
-    `rem ── 1. 파이썬 확인, 없으면 설치 ──`,
+    `rem ── 1. 파이썬 찾기 — 없으면 설치 ──`,
+    `rem  Windows ships a Store stub at WindowsApps\python.exe even with no Python.`,
+    `rem  "where" finds it, so we used to think Python existed, skip the install and run`,
+    `rem  the stub - it only prints "Python was not found" (2026-09-16 setup failure).`,
+    `rem  So every candidate is actually executed before we trust it.`,
     `set "PY="`,
-    `for /f "delims=" %%i in ('where python 2^>nul') do if not defined PY set "PY=%%i"`,
+    `call :findpy`,
     `if not defined PY (`,
     `  echo   파이썬이 없습니다. 자동으로 설치합니다 ^(3~5분^)...`,
     `  winget install -e --id Python.Python.3.12 --scope user --accept-source-agreements --accept-package-agreements`,
-    `  if errorlevel 1 (`,
-    `    echo.`,
-    `    echo   [실패] 파이썬 자동 설치에 실패했습니다.`,
-    `    echo   https://www.python.org/downloads/ 에서 직접 설치한 뒤 이 파일을 다시 실행해 주세요.`,
-    `    echo   설치할 때 "Add python.exe to PATH" 를 반드시 체크하세요.`,
-    `    pause & exit /b 1`,
-    `  )`,
-    `  rem winget 설치 직후에는 PATH 가 이 창에 반영되지 않는다 — 알려진 경로에서 직접 찾는다`,
-    `  set "PY=%LOCALAPPDATA%\\Programs\\Python\\Python312\\python.exe"`,
+    `  call :findpy`,
     `)`,
-    `if not exist "%PY%" (`,
-    `  for /f "delims=" %%i in ('where python 2^>nul') do set "PY=%%i"`,
-    `)`,
-    `if not exist "%PY%" (`,
-    `  echo   [실패] 파이썬을 찾지 못했습니다. PC 를 다시 시작한 뒤 이 파일을 다시 실행해 주세요.`,
+    `if not defined PY (`,
+    `  echo.`,
+    `  echo   [실패] 파이썬을 찾지 못했습니다.`,
+    `  echo   https://www.python.org/downloads/ 에서 직접 설치한 뒤 이 파일을 다시 실행해 주세요.`,
+    `  echo   설치할 때 "Add python.exe to PATH" 를 반드시 체크하세요.`,
     `  pause & exit /b 1`,
     `)`,
+    `echo   파이썬: %PY%`,
     ``,
     `rem ── 2. 설치 스크립트 받기 ──`,
     `if not exist "%YEBOM_HOME%" mkdir "%YEBOM_HOME%"`,
@@ -87,6 +88,31 @@ function batch(baseUrl: string, token: string, label: string): string {
     `)`,
     `endlocal`,
     `exit /b %RC%`,
+    ``,
+    `rem ── find python (reached only via call above) ──`,
+    `:findpy`,
+    `set "PY="`,
+    `rem 1) py launcher - only ever points at a real installation`,
+    `for /f "delims=" %%i in ('py -3 -c "import sys;print(sys.executable)" 2^>nul') do call :pick "%%i"`,
+    `if defined PY goto :eof`,
+    `rem 2) python.exe on PATH`,
+    `for /f "delims=" %%i in ('where python 2^>nul') do call :pick "%%i"`,
+    `if defined PY goto :eof`,
+    `rem 3) common install dirs - right after winget, PATH is not live in this window`,
+    `for %%d in ("%LOCALAPPDATA%\Programs\Python\Python313" "%LOCALAPPDATA%\Programs\Python\Python312" "%LOCALAPPDATA%\Programs\Python\Python311" "%ProgramFiles%\Python313" "%ProgramFiles%\Python312" "C:\Python313" "C:\Python312") do call :pick "%%~d\python.exe"`,
+    `goto :eof`,
+    ``,
+    `:pick`,
+    `if defined PY goto :eof`,
+    `set "CAND=%~1"`,
+    `rem The Store stub is not python. No external tool here: another find on PATH`,
+    `rem (git, for one) would make the whole check miss.`,
+    `if not "%CAND:WindowsApps=%"=="%CAND%" goto :eof`,
+    `if not exist "%CAND%" goto :eof`,
+    `rem Run it once - this is what filters out the stub and broken installs`,
+    `"%CAND%" -c "import sys" >nul 2>nul || goto :eof`,
+    `set "PY=%CAND%"`,
+    `goto :eof`,
   ].join("\r\n");
 }
 
