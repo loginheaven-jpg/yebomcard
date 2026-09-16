@@ -785,6 +785,14 @@ def _process(job):
         except Exception as e:
             # 그래픽 메모리 부족이면 같은 절을 배치를 반으로 줄여 다시 만든다 — 작업을 멈추지 않는다.
             # (예전엔 여기서 작업이 '오류'로 멈춰 누군가 이어하기를 누를 때까지 서 있었다)
+            if "out of memory" in str(e).lower() and batch == 1 and engine.asr_to_cpu():
+                # 배치를 더 줄일 수 없다. 마지막 수단으로 **검수 모델을 CPU 로 내린다** —
+                # Whisper(small, float16)가 1.5~2GB 를 쥐고 있어, VRAM 이 작은 PC 에서는
+                # 이것만 비켜도 생성이 들어간다(검수는 느려지지만 멈추는 것보다 낫다).
+                job["batch_note"] = "그래픽 메모리 부족 — 검수를 CPU 로 내리고 계속합니다"
+                print(f"[배치] {job['title']}: {job['batch_note']}", flush=True)
+                save(job)
+                continue
             if "out of memory" in str(e).lower() and batch > 1:
                 oom_hits += 1
                 oom_cap = max(1, batch // 2)
@@ -802,7 +810,14 @@ def _process(job):
                 save(job)
                 continue
             job["status"] = "error"
-            job["error"] = str(e)[:500]
+            if "out of memory" in str(e).lower():
+                # 배치 1 · 검수 CPU 까지 갔는데도 모자란다 — 이 PC 로는 감당이 안 된다.
+                # 다시 켜도 VRAM 은 늘지 않으므로 사람이 볼 수 있게 분명히 적는다.
+                job["error"] = ("그래픽 메모리가 부족합니다. 이 PC 로는 이 작업을 할 수 없습니다"
+                                " (모델만 4.6GB — 6GB 미만 그래픽카드는 어렵습니다). "
+                                + str(e)[:200])
+            else:
+                job["error"] = str(e)[:500]
             save(job)
             return
         if oom_cap and oom_hits < 3:

@@ -415,7 +415,14 @@ _CUDA_WORDS = ("cuda", "cudnn", "nvml", "device-side", "no kernel image", "drive
 
 
 def _is_gpu_error(msg):
+    """다시 켜면 풀릴 그래픽 쪽 사고인가.
+
+    **메모리 부족은 여기서 뺀다.** 다시 켠다고 VRAM 이 늘지 않으므로 같은 자리에서 또 모자란다 —
+    헛되이 세 번 다시 켠 뒤에야 사람에게 알리게 된다. 메모리 부족은 워커가 배치를 낮추고
+    검수를 CPU 로 내려 스스로 감당하고(jobs._process), 그래도 안 되면 바로 사람에게 알린다."""
     m = (msg or "").lower()
+    if "out of memory" in m:
+        return False
     return any(w in m for w in _CUDA_WORDS)
 
 

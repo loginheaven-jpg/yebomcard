@@ -286,6 +286,29 @@ def get_asr():
     return _asr
 
 
+def asr_to_cpu():
+    """검수 모델을 CPU 로 내린다 — VRAM 이 모자랄 때의 마지막 수단.
+
+    Whisper(small, float16)가 1.5~2GB 를 쥐고 있어, 작은 그래픽카드에서는 이것만 비켜도
+    생성이 들어간다. 검수는 느려지지만(한 절 0.6초 → 2~3초) 작업이 멈추는 것보다 낫다.
+    이미 CPU 면 False — 더 내줄 것이 없다는 뜻이라 부르는 쪽이 포기하면 된다."""
+    global _asr
+    if os.environ.get("YEBOM_ASR_DEVICE", "cuda").lower() == "cpu":
+        return False
+    os.environ["YEBOM_ASR_DEVICE"] = "cpu"
+    _asr = None                      # 다음 검수 때 CPU 로 다시 올린다
+    try:
+        import gc
+        import torch
+        gc.collect()
+        torch.cuda.empty_cache()     # 비운 자리를 생성이 바로 쓸 수 있게
+    except Exception:
+        pass
+    print("[검수] 그래픽 메모리가 모자라 검수 모델을 CPU 로 내립니다 — 느려지지만 계속합니다",
+          flush=True)
+    return True
+
+
 def transcribe(path, with_ts=True):
     segs, _ = get_asr().transcribe(str(path), language="ko", vad_filter=False)
     out = [{"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text.strip()} for s in segs]

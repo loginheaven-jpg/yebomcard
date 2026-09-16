@@ -126,9 +126,20 @@ def check_gpu():
     for tok in first.replace(",", " ").split():
         if tok.isdigit():
             mb = max(mb, int(tok))
+    # VRAM 별 실측(3060 12GB): 생성 배치 8 = 9.5GB, 배치 4 = 6.7GB, 배치 1 = 4.6GB.
+    # 여기에 검수 모델(Whisper small, float16)이 1.5~2GB 를 더 쓴다.
+    # 모자라면 워커가 스스로 배치를 낮추고, 배치 1 에서도 모자라면 검수를 CPU 로 내린다
+    # (jobs._process · engine.asr_to_cpu). 그래도 안 되는 선만 설치 때 분명히 막는다.
+    if mb and mb < 6000:
+        die(
+            f"그래픽 메모리가 {mb}MB 로 너무 작습니다.",
+            "생성 모델만 4.6GB 가 필요해 6GB 미만에서는 만들 수 없습니다."
+            "\n  RTX 3060 12GB 이상을 권합니다.",
+        )
     if mb and mb < 11000:
         print(
-            f"  [주의] VRAM 이 {mb}MB 입니다. 12GB 미만이면 긴 절에서 메모리 부족이 날 수 있습니다.",
+            f"  [주의] 그래픽 메모리가 {mb}MB 입니다. 12GB 미만이면 한 번에 만드는 절 수를"
+            "\n         자동으로 줄여 돌아갑니다 — 멈추지는 않지만 느려집니다.",
             flush=True,
         )
 
