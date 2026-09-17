@@ -3,14 +3,21 @@
 /**
  * 하단 6탭 네비게이션 — 리디자인 Phase 2a
  *
- * 탭: 목차 / 검색 / 본문 / 찬송가 / 책갈피 / 설정
+ * 탭: 성경 / 검색 / 말씀의삶 / 찬송가 / 책갈피 / 설정
  *
- * 2026-09-12 지휘부 지시로 네 번째 자리를 '말씀의삶' 에서 '찬송가' 로 바꿨다 — 찬송가가 더 자주,
- * 더 급히 찾는 것이라는 판단이다(예배 중). 말씀의삶은 본문 상단 ⋮ 메뉴로 들어간다.
+ * 세 자리의 역할 (2026-09-17 지휘부)
+ *   - 하단 탭 = **자주 가는 곳**. 이름표가 보여야 고령 교인이 찾는다 — ⋮ 안으로 숨기지 않는다
+ *   - 본문 ⋮ = 지금 이 말씀을 어떻게 볼까(글자 크기 · 한 절씩 크게 · 예배성경) + 로그인·앱 설치
+ *   - 설정   = 한 번 정해 두는 것(계정 · 화면 · 음성 · 앱 정보)
+ *
+ * 2026-09-17 '목차' 와 '본문' 을 **성경** 하나로 합치고, 빈 자리에 **말씀의삶** 을 돌려놓았다.
+ * 말씀의삶은 교회 전체가 날마다 쓰는 프로그램인데 2026-09-12 찬송가에 자리를 내준 뒤 ⋮ 안에만 있었다.
+ * 성경 탭은 마지막 읽던 곳을 열고, 읽는 중에 다시 누르면 목차를 연다(판정은 page.tsx).
+ * 목차는 본문 제목 → 장 목록 → 제목 ‹ 로도 간다.
+ *
+ * 2026-09-12 네 번째 자리를 '말씀의삶' 에서 '찬송가' 로 바꿨다 — 찬송가가 더 자주,
+ * 더 급히 찾는 것이라는 판단이다(예배 중).
  * 찬송가는 화면이 아니라 **창**이라, 눌러도 화면이 바뀌지 않고 창이 열린다(설정 탭과 같은 꼴).
- *
- * Phase 2a 는 *전환기* — 기존 상단 탭(성경목차/본문검색/주제추천/책갈피)도 살아있고,
- * 사용자는 양쪽 어디서든 진입 가능. Phase 2b 에서 상단 탭 제거 + 시트 통합 완료.
  */
 
 import { useRef, type ReactNode } from "react";
@@ -26,7 +33,7 @@ import { useRef, type ReactNode } from "react";
  */
 const REVEAL_TAP_GUARD_MS = 500;
 
-export type ActiveTab = "toc" | "search" | "read" | "hymn" | "bookmark" | "settings";
+export type ActiveTab = "bible" | "search" | "plan" | "hymn" | "bookmark" | "settings";
 
 interface Tab {
   id: ActiveTab;
@@ -36,8 +43,8 @@ interface Tab {
 
 const TABS: Tab[] = [
   {
-    id: "toc",
-    label: "목차",
+    id: "bible",
+    label: "성경",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -54,11 +61,11 @@ const TABS: Tab[] = [
     ),
   },
   {
-    id: "read",
-    label: "본문",
+    id: "plan",
+    label: "말씀의삶",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -106,6 +113,11 @@ interface Props {
   onReveal?: () => void;
   /** 탭바를 만지는 동안 자동 숨김 타이머 재무장 */
   onInteract?: () => void;
+  /**
+   * 본문 ⋮ 메뉴가 열려 있다 — 메뉴의 바깥 닫기 막(z-59)보다 위로 올려 탭을 바로 누를 수 있게 한다.
+   * ⋮ 을 누르면 탭바가 함께 올라와 '메뉴가 두 무리' 라는 것을 보여 준다(2026-09-17 지휘부)
+   */
+  raised?: boolean;
 }
 
 export default function BottomTabBar({
@@ -117,6 +129,7 @@ export default function BottomTabBar({
   hidden = false,
   onReveal,
   onInteract,
+  raised = false,
 }: Props) {
   /** 손잡이를 눌러 펼친 시각 — 그 직후의 유령 클릭을 걸러낸다 */
   const revealedAt = useRef(0);
@@ -127,7 +140,7 @@ export default function BottomTabBar({
       aria-label="주 네비게이션"
       aria-hidden={hidden || undefined}
       onPointerDown={onInteract}
-      className="fixed inset-x-0 z-30 bg-[var(--paper)] dark:bg-gray-900 border-t border-[var(--line)] dark:border-gray-700 transition-transform duration-200 ease-out"
+      className={`fixed inset-x-0 ${raised ? "z-[61]" : "z-30"} bg-[var(--paper)] dark:bg-gray-900 border-t border-[var(--line)] dark:border-gray-700 transition-transform duration-200 ease-out`}
       style={{
         bottom: liftPx,
         paddingBottom: "env(safe-area-inset-bottom, 0)",

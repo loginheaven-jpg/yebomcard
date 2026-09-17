@@ -128,11 +128,14 @@ interface SearchPanelProps {
    */
   isActiveView?: boolean;
   /**
-   * 본문 상단 ⋮ 메뉴 — 설정 시트에 있는 것들의 **지름길**이다(설정에서도 그대로 쓸 수 있다).
-   * 읽는 중에는 하단 탭바가 자동으로 숨으므로, 손 닿는 곳에 같은 길을 하나 더 둔다.
+   * ⋮ 메뉴 — 지금 이 말씀을 어떻게 볼까(글자 크기 · 한 절씩 크게 · 예배성경) + 앱 설치 · 로그인.
+   * 말씀의삶은 2026-09-17 하단 탭으로 돌아가 여기서 뺐다.
    */
-  onOpenPlan?: () => void;
   onOpenWorship?: () => void;
+  /** ⋮ 메뉴가 열리고 닫힐 때 — page.tsx 가 그동안 하단 탭바를 올려 둔다('메뉴가 두 무리' 라는 것을 보이게) */
+  onMoreMenuChange?: (open: boolean) => void;
+  /** 값이 바뀌면 ⋮ 메뉴를 닫는다 — 메뉴가 열린 채 하단 탭을 눌렀을 때 */
+  moreMenuCloseNonce?: number;
   onLogin?: () => void;
   onLogout?: () => void | Promise<void>;
 }
@@ -218,7 +221,8 @@ export default function SearchPanel({
   onReadingViewChange,
   tabBarHidden = false,
   isActiveView = true,
-  onOpenPlan,
+  onMoreMenuChange,
+  moreMenuCloseNonce,
   onOpenWorship,
   onLogin,
   onLogout,
@@ -909,6 +913,16 @@ export default function SearchPanel({
   const [moreOpen, setMoreOpen] = useState(false);
   // 안드로이드 뒤로가기로 메뉴만 닫는다(본문을 벗어나지 않게)
   useHardwareBack(moreOpen, () => setMoreOpen(false));
+  // 열려 있는 동안 하단 탭바를 올려 둔다(page.tsx). 이 패널이 가려지면(다른 화면) 메뉴도 닫는다
+  useEffect(() => {
+    onMoreMenuChange?.(moreOpen && isActiveView);
+  }, [moreOpen, isActiveView, onMoreMenuChange]);
+  useEffect(() => {
+    if (!isActiveView) setMoreOpen(false);
+  }, [isActiveView]);
+  useEffect(() => {
+    if (moreMenuCloseNonce) setMoreOpen(false);
+  }, [moreMenuCloseNonce]);
   // 하단 탭바(높이 약 56px)가 감춰지면 그만큼 본문 영역을 아래로 확장.
   // 컨테이너 폭은 그대로라 글자가 다시 흐르지 않고, 아래쪽이 더 보일 뿐임.
   // 상단이 두 줄(약 99px)에서 한 줄(바 44 + 여백 8 = 52px)로 줄었다 — 그만큼 본문에 돌려준다.
@@ -2359,7 +2373,10 @@ export default function SearchPanel({
     </svg>
   );
 
-  /* ⋮ — 글자 크기 · 한 절씩 크게 · 설정 지름길. 모든 화면에서 같은 메뉴다(옛 '가' 버튼이 여기로 들어왔다).
+  /* ⋮ — 모든 화면에서 같은 메뉴다(옛 '가' 버튼이 여기로 들어왔다).
+     역할 (2026-09-17 지휘부): 하단 탭 = 자주 가는 곳 / ⋮ = 지금 이 말씀을 어떻게 볼까 / 설정 = 한 번 정해 두는 것.
+     그래서 여기에는 글자 크기 · 한 절씩 크게 · 예배성경을 두고, 자주 쓰는 로그인과 앱 설치를 함께 둔다.
+     말씀의삶은 하단 탭으로 돌아갔다. 누르면 하단 탭바가 함께 올라온다(page.tsx).
      '한 절씩 크게' 는 절이 보이는 화면에만 — 본문에서는 장을 불러오는 동안 흐리게 둔다 */
   const moreMenu = (
     <div className="relative shrink-0">
@@ -2424,20 +2441,6 @@ export default function SearchPanel({
             )}
 
             <div className="my-1.5 border-t border-gray-100 dark:border-gray-700" />
-            {/* 설정 시트의 지름길 — 설정에도 그대로 남아 있다 */}
-            {onOpenPlan && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  onOpenPlan();
-                }}
-                className={menuItemClass}
-              >
-                {menuIcon("M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z")}
-                말씀의삶
-              </button>
-            )}
             {onOpenWorship && (
               <button
                 type="button"
@@ -3072,7 +3075,7 @@ export default function SearchPanel({
                   전에는 두 줄이었다. 위 줄은 브랜드+역본+글자크기(검색·목차와 공용), 아래 줄은 목차로+장 이동+읽기.
                   본문이 그만큼 좁았고, 재생을 시작하면 떠 있는 플레이어가 위를 덮어 역본·글자크기를 숨겨야 했다.
                   장 이동 화살표는 뺐다(지휘부 결정) — 390px 한 줄에 제목까지 들어갈 폭이 없었다.
-                  장 이동은 본문 스와이프·제목 탭(목차)·하단 목차 탭·PC 좌우 여백 클릭으로 한다. */}
+                  장 이동은 본문 스와이프·제목 탭(장 목록)·하단 성경 탭(읽는 중 다시 누르면 목차)·PC 좌우 여백 클릭으로 한다. */}
               {/* 2026-09-17 균형 맞춤(지휘부): 역본 칩 36px·모서리 8 과 읽기 44px·모서리 12 가 위아래로 어긋났다 →
                   조작은 모두 40px·모서리 10. 제목과 칩 사이 빈칸이 허전해 제목을 키웠다(18/24px).
                   줄 높이는 ⋮(44px)가 정하므로 그대로다 — 본문 높이 상수(browseMaxHClass)를 건드리지 않는다.

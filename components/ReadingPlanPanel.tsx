@@ -46,6 +46,17 @@ interface Props {
   onOpenUnit?: (seq: number) => void;
   /** 로그인 유도 (비로그인 상태에서 체크를 시도했을 때) */
   onLogin?: () => void;
+  /**
+   * 초대링크(`?join=코드`)로 들어온 코드 — page.tsx 가 URL 에서 읽어 넘긴다.
+   * 로그인돼 있으면 곧바로 참여하고, 아니면 초대 모양의 코드 창을 띄운다. 처리하면 onInviteHandled 로 알린다
+   */
+  inviteCode?: string | null;
+  onInviteHandled?: () => void;
+  /**
+   * 곧장 로그인 화면으로 — 초대 창의 '로그인하고 참여' 가 쓴다. onLogin 은 '로그인이 필요합니다' 확인 창을
+   * 한 번 더 띄우는데, 초대받은 사람은 이미 참여하겠다고 누른 것이라 두 번 묻지 않는다
+   */
+  onLoginNow?: () => void;
 }
 
 const LONG_PRESS_MS = 500;
@@ -80,7 +91,7 @@ function rowState(u: UnitProgress, currentSeq: number): RowState {
   return u.status;
 }
 
-export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
+export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onInviteHandled, onLoginNow }: Props) {
   const { loading: sessionLoading, isLoggedIn, deviceReady } = useSession();
 
   const [readByBook, setReadByBook] = useState<Record<string, Set<number>>>({});
@@ -97,6 +108,10 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
   const [groupNonce, setGroupNonce] = useState(0);
   const [groupPromptOpen, setGroupPromptOpen] = useState(false);
   const [groupPromptError, setGroupPromptError] = useState<string | null>(null);
+  /** 초대 모양으로 연 코드 창의 코드 — null 이면 보통 창 */
+  const [invitedCode, setInvitedCode] = useState<string | null>(null);
+  /** 이번에 초대링크를 처리했다 — 그 뒤로는 보통 코드 창을 따로 띄우지 않는다 */
+  const inviteSeenRef = useRef(false);
   const [planToast, setPlanToast] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -142,6 +157,33 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
     if (isLoggedIn && !deviceReady) return;
     let alive = true;
     (async () => {
+      // 초대링크 — 로그인돼 있으면 묻지 않고 참여, 아니면 '로그인하고 참여' 창
+      if (inviteCode) {
+        inviteSeenRef.current = true;
+        if (!isLoggedIn) {
+          setInvitedCode(inviteCode);
+          setGroupPromptError(null);
+          setGroupPromptOpen(true);
+          onInviteHandled?.();
+          return;
+        }
+        const res = await joinGroup(inviteCode);
+        if (!alive) return;
+        if ("error" in res) {
+          // 코드가 틀렸거나(링크가 잘렸거나) 참여 실패 — 이유를 보이고 다시 넣게 한다
+          setGroupPromptError(res.error);
+          setGroupPromptOpen(true);
+        } else {
+          lsSet(LS_GROUP_PROMPT, "joined");
+          setPlanToast(`${res.group.name} 에 참여했습니다`);
+          setGroupNonce((n) => n + 1);
+          setTab("group"); // 참여한 그룹이 바로 보이게
+        }
+        // 처리 끝을 마지막에 알린다 — 부모가 코드를 비우면 이 effect 가 다시 돌며 지금 실행은 끝난 것으로 본다
+        onInviteHandled?.();
+        return;
+      }
+      if (inviteSeenRef.current) return;
       const pending = readPendingGroupCode();
       if (pending) {
         if (!isLoggedIn) return; // 로그인하러 간 사이 — 다시 묻지 않는다
@@ -157,6 +199,7 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
         lsSet(LS_GROUP_PROMPT, "joined");
         setPlanToast(`${res.group.name} 에 참여했습니다`);
         setGroupNonce((n) => n + 1);
+        setTab("group"); // 로그인하고 돌아와 참여했다 — 참여한 그룹이 바로 보이게
         return;
       }
       if (lsGet(LS_GROUP_PROMPT)) return;
@@ -169,15 +212,19 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
     return () => {
       alive = false;
     };
-  }, [sessionLoading, isLoggedIn, deviceReady]);
+    // onInviteHandled 는 부모가 매 렌더 새로 만드는 함수라 deps 에 넣지 않는다 — inviteCode 가 null 이 되며 한 번 더 돌 뿐이다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionLoading, isLoggedIn, deviceReady, inviteCode]);
 
   const submitGroupCode = useCallback(
     async (code: string): Promise<string | null> => {
       if (!isLoggedIn) {
-        // 참여는 로그인이 필요하다 — 코드를 적어 두고 로그인으로. 돌아와 말씀의삶에 들어오면 위 effect 가 참여한다
+        // 참여는 로그인이 필요하다 — 코드를 적어 두고 로그인으로. 돌아오면 page.tsx 가 말씀의삶을 열고 위 effect 가 참여한다.
+        // 초대 창에서 누른 것이면 확인 창 없이 곧장 로그인 화면으로
         writePendingGroupCode(code);
         setGroupPromptOpen(false);
-        onLogin?.();
+        if (invitedCode && onLoginNow) onLoginNow();
+        else onLogin?.();
         return null;
       }
       const res = await joinGroup(code);
@@ -189,14 +236,16 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
       setGroupNonce((n) => n + 1);
       return null;
     },
-    [isLoggedIn, onLogin],
+    [isLoggedIn, onLogin, onLoginNow, invitedCode],
   );
 
   const skipGroupPrompt = useCallback(() => {
-    lsSet(LS_GROUP_PROMPT, "skipped");
+    // 초대 창을 '나중에' 로 닫은 것은 보통 코드 창을 건너뛴 것과 다르다 — 기억하지 않는다
+    if (!invitedCode) lsSet(LS_GROUP_PROMPT, "skipped");
     setGroupPromptOpen(false);
     setGroupPromptError(null);
-  }, []);
+    setInvitedCode(null);
+  }, [invitedCode]);
 
   const clearPlanToast = useCallback(() => setPlanToast(null), []);
 
@@ -495,6 +544,8 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin }: Props) {
       {groupPromptOpen && (
         <GroupCodePrompt
           isLoggedIn={isLoggedIn}
+          invited={!!invitedCode}
+          initialCode={invitedCode ?? ""}
           initialError={groupPromptError}
           onSubmit={submitGroupCode}
           onSkip={skipGroupPrompt}

@@ -198,7 +198,7 @@ export default function HomeBlankContent({
           <ol className="text-xs text-gray-700 dark:text-gray-300 space-y-1.5 leading-relaxed">
             <li>
               <span className="font-semibold">1.</span>{" "}
-              <span className="text-gray-500 dark:text-gray-400">성경목차</span>{" "}
+              <span className="text-gray-500 dark:text-gray-400">성경</span>{" "}
               → 책 → 장 선택
             </li>
             <li>

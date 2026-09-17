@@ -79,6 +79,31 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
     }
   }, []);
 
+  /**
+   * 초대링크 — `https://bible.yebom.org/?join=코드`. 받은 사람은 누르고 로그인만 하면 참여된다
+   * (page.tsx 가 링크를 받아 말씀의삶을 열고, ReadingPlanPanel 이 참여시킨다). 코드 입력 참여도 그대로 있다.
+   * 폰에서는 공유 창(카톡 등)을 띄우고, 공유 창이 없는 브라우저는 문구와 링크를 복사한다.
+   */
+  const shareInvite = useCallback(async (g: ReadingGroup) => {
+    const url = `${window.location.origin}/?join=${g.inviteCode}`;
+    const text = `예봄성경 말씀의삶 '${g.name}' 그룹에 초대합니다. 링크를 누르고 로그인하면 바로 참여됩니다.`;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "말씀의삶 그룹 초대", text, url });
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return; // 공유 창을 닫았다
+        // 그 밖의 실패는 복사로 넘어간다
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setNotice("초대링크를 복사했습니다. 카톡 등에 붙여 넣으세요");
+    } catch {
+      setNotice(`복사할 수 없습니다. 이 주소를 전해 주세요: ${url}`);
+    }
+  }, []);
+
   const onLeave = useCallback(
     async (g: ReadingGroup) => {
       setMenuFor(null);
@@ -155,6 +180,7 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
               menuOpen={menuFor === g.id}
               onToggleMenu={() => setMenuFor((v) => (v === g.id ? null : g.id))}
               onCopy={() => void copyCode(g)}
+              onShare={() => void shareInvite(g)}
               onLeave={() => void onLeave(g)}
             />
           ))
@@ -205,6 +231,7 @@ function GroupCard({
   menuOpen,
   onToggleMenu,
   onCopy,
+  onShare,
   onLeave,
 }: {
   group: ReadingGroup;
@@ -213,6 +240,7 @@ function GroupCard({
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCopy: () => void;
+  onShare: () => void;
   onLeave: () => void;
 }) {
   const n = rows?.length ?? group.memberCount;
@@ -256,14 +284,24 @@ function GroupCard({
           {avg !== null && ` · 평균 ${avg}회차`}
           {finished > 0 && ` · 완주 ${finished}명`}
         </span>
-        <button
-          type="button"
-          onClick={onCopy}
-          aria-label="초대코드 복사"
-          className="text-[11px] font-mono font-semibold tracking-wider px-2 py-1 rounded-md bg-[var(--paper-2)] text-[var(--ink-soft)]"
-        >
-          {copied ? "복사됨" : group.inviteCode}
-        </button>
+        <div className="shrink-0 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="초대코드 복사"
+            className="text-[11px] font-mono font-semibold tracking-wider px-2 py-1 rounded-md bg-[var(--paper-2)] text-[var(--ink-soft)]"
+          >
+            {copied ? "복사됨" : group.inviteCode}
+          </button>
+          {/* 초대링크 — 누르고 로그인만 하면 참여된다(코드를 옮겨 적지 않아도 된다) */}
+          <button
+            type="button"
+            onClick={onShare}
+            className="text-[11px] font-semibold px-2 py-1 rounded-md bg-[var(--amber-tint)] text-[var(--amber-deep)]"
+          >
+            초대링크
+          </button>
+        </div>
       </div>
 
       {rows === undefined ? (

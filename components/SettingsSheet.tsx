@@ -6,19 +6,20 @@
  * 흡수: 우상단 설정 아이콘(사용자 #5) + 우하단 도구함 FAB + 전체화면 버튼(사용자 #6)
  *
  * 섹션:
- *  1. 찬송가 (큰 카드 — 사용자 결정 R2: 하위 시트 없이 즉시 노출)
+ *  1. 계정 (로그인·로그아웃 / 관리자 편집)
  *  2. 화면 설정 (밝게/어둡게 + 글자 크기 + 글꼴)
  *  3. 읽기 모드 (전체화면 1절씩 진입)
  *  4. 음성 (TTS — 미니플레이어와 동기 view-only)
- *  5. 도구 (예배성경 / 성경카드)
- *  6. 계정 (로그인·로그아웃 / 관리자 편집)
- *  7. 앱 정보 (버전 / 종료)
+ *  5. 앱 정보 (버전 / 종료)
+ *
+ * 설정은 **한 번 정해 두는 것**만 둔다(2026-09-17 지휘부). 찬송가는 하단 탭에, 예배성경·앱 설치·로그인은
+ * 본문 ⋮ 메뉴에 있어 여기서 뺐다 — 찬송가 큰 카드와 '도구'(예배성경 · 성경카드 · 앱으로 설치) 묶음.
+ * 성경카드는 절을 고른 뒤 '이 말씀으로 카드 만들기'(VerseDisplay)로 만든다.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { useFont, FONTS } from "@/contexts/FontContext";
 import { useTts, KOREAN_VOICE_LABELS, KOREAN_VOICE_ORDER, RECORDED_VOICE_LABELS, RECORDED_VOICE_ORDER, koreanVoiceGender, koreanVoiceStatusFrom, type KoreanVoice, type RecordedVoice } from "@/contexts/TtsContext";
-import { promptAppInstall } from "@/lib/pwaInstall";
 import { VERSE_GAP_LABELS, type VerseGap } from "@/lib/tts/verseGap";
 
 interface Props {
@@ -35,11 +36,6 @@ interface Props {
   voiceAttention?: number;
   bulkEditMode: boolean;
   onToggleBulkEdit: () => void;
-  // 도구
-  onOpenHymn: () => void;
-  onOpenWorship: () => void;
-  onOpenCardBuilder: () => void;
-  canCreateCard: boolean;
   // 읽기 모드
   onOpenFullscreen: () => void;
   canOpenFullscreen: boolean;
@@ -61,10 +57,6 @@ export default function SettingsSheet({
   voiceAttention = 0,
   bulkEditMode,
   onToggleBulkEdit,
-  onOpenHymn,
-  onOpenWorship,
-  onOpenCardBuilder,
-  canCreateCard,
   onOpenFullscreen,
   canOpenFullscreen,
   autoHideTabBar,
@@ -369,30 +361,6 @@ export default function SettingsSheet({
             )}
           </section>
 
-          {/* 찬송가 (큰 카드) */}
-          <section>
-            <button
-              onClick={() => {
-                onClose();
-                onOpenHymn();
-              }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-[var(--amber-tint)] dark:bg-amber-950/30 hover:brightness-95 transition-all"
-            >
-              <span className="w-11 h-11 rounded-xl bg-[var(--amber)] text-white flex items-center justify-center shadow-sm">
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                </svg>
-              </span>
-              <span className="flex-1 text-left">
-                <span className="block text-[15px] font-semibold text-[var(--ink)] dark:text-gray-100">찬송가</span>
-                <span className="block text-xs text-[var(--ink-soft)] dark:text-gray-400">21세기 새찬송가 검색·재생</span>
-              </span>
-              <svg className="w-4 h-4 text-[var(--ink-faint)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-            </button>
-          </section>
-
           {/* 2. 화면 설정 */}
           <section>
             <div className="flex items-center justify-between mb-2 px-1">
@@ -635,54 +603,6 @@ export default function SettingsSheet({
                 </p>
               </div>
             </div>
-          </section>
-
-          {/* 5. 도구 — 예배성경 / 성경카드 */}
-          <section>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--ink-soft)] dark:text-gray-400 mb-2 px-1">도구</div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenWorship();
-                }}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95"
-              >
-                <svg className="w-6 h-6 text-[var(--amber-deep)] dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                </svg>
-                <span className="text-xs font-semibold text-[var(--ink)] dark:text-gray-100">예배성경</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (!canCreateCard) return;
-                  onClose();
-                  onOpenCardBuilder();
-                }}
-                disabled={!canCreateCard}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95 ${
-                  !canCreateCard ? "opacity-40 cursor-not-allowed" : ""
-                }`}
-              >
-                <svg className="w-6 h-6 text-[var(--amber-deep)] dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v13.5A1.5 1.5 0 003.75 21z" />
-                </svg>
-                <span className="text-xs font-semibold text-[var(--ink)] dark:text-gray-100">성경카드</span>
-                {!canCreateCard && (
-                  <span className="text-[9px] text-[var(--ink-faint)] dark:text-gray-500">절 선택 후 사용</span>
-                )}
-              </button>
-            </div>
-            {/* 앱으로 설치 — 자동 설치 팝업이 불규칙하므로 수동 설치 진입점 제공 */}
-            <button
-              onClick={() => void promptAppInstall()}
-              className="w-full mt-2 flex items-center justify-center gap-2 p-3 rounded-xl bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 hover:brightness-95"
-            >
-              <svg className="w-5 h-5 text-[var(--amber-deep)] dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              <span className="text-sm font-semibold text-[var(--ink)] dark:text-gray-100">앱으로 설치</span>
-            </button>
           </section>
 
           {/* 앱 정보 */}

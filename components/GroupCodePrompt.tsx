@@ -7,6 +7,9 @@
  * 닫으면 그냥 진도표로 들어간다(로그인했으면 개인 진도, 아니면 보기만).
  * 참여했거나 한 번 건너뛰면 그 기기에서는 다시 묻지 않는다 — 판단은 ReadingPlanPanel 이 한다.
  * 나중에는 그룹 탭 '초대코드로 참여'로 언제든 참여할 수 있다.
+ *
+ * 초대링크(`?join=코드`)로 들어왔는데 로그인하지 않았으면 같은 창을 **초대 모양**(`invited`)으로 연다 —
+ * 코드는 이미 채워져 있고 버튼 하나('로그인하고 참여')면 된다. 로그인하고 돌아오면 저절로 참여한다.
  */
 
 import { useEffect, useState } from "react";
@@ -14,6 +17,10 @@ import { useHardwareBack } from "@/hooks/useHardwareBack";
 
 interface Props {
   isLoggedIn: boolean;
+  /** 초대링크로 들어왔다 — 코드를 채우고 '초대받았습니다' 문구로 */
+  invited?: boolean;
+  /** 처음부터 채워 둘 코드(초대링크) */
+  initialCode?: string;
   /** 자동 참여가 실패해 다시 연 경우 — 그 이유를 처음부터 보여 준다 */
   initialError?: string | null;
   /** 코드로 참여. 실패하면 창에 띄울 문구를, 성공(또는 로그인으로 넘김)이면 null 을 돌려준다 */
@@ -27,8 +34,15 @@ function normalize(raw: string): string {
   return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
 }
 
-export default function GroupCodePrompt({ isLoggedIn, initialError, onSubmit, onSkip }: Props) {
-  const [value, setValue] = useState("");
+export default function GroupCodePrompt({
+  isLoggedIn,
+  invited = false,
+  initialCode = "",
+  initialError,
+  onSubmit,
+  onSkip,
+}: Props) {
+  const [value, setValue] = useState(initialCode);
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [busy, setBusy] = useState(false);
 
@@ -63,13 +77,27 @@ export default function GroupCodePrompt({ isLoggedIn, initialError, onSubmit, on
       >
         <div className="w-10 h-1 rounded-full bg-[var(--line)] mx-auto mb-4" aria-hidden />
         <p id="group-code-prompt-title" className="text-sm font-bold text-[var(--ink)] mb-1">
-          함께 읽는 그룹이 있나요?
+          {invited ? "함께 읽는 그룹에 초대받았습니다" : "함께 읽는 그룹이 있나요?"}
         </p>
         <p className="text-[12px] text-[var(--ink-soft)] leading-relaxed mb-3">
-          받은 초대코드 6자리를 넣으면 그룹에 참여해 서로의 진도를 볼 수 있습니다.
-          <br />
-          없으면 비워 두고 확인을 누르세요.
-          {!isLoggedIn && (
+          {invited ? (
+            <>
+              그룹에 참여하면 서로의 진도를 볼 수 있습니다.
+              {!isLoggedIn && (
+                <>
+                  <br />
+                  <span className="text-[var(--amber-deep)]">로그인하면 바로 참여합니다.</span>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              받은 초대코드 6자리를 넣으면 그룹에 참여해 서로의 진도를 볼 수 있습니다.
+              <br />
+              없으면 비워 두고 확인을 누르세요.
+            </>
+          )}
+          {!invited && !isLoggedIn && (
             <>
               <br />
               <span className="text-[var(--amber-deep)]">
@@ -102,14 +130,14 @@ export default function GroupCodePrompt({ isLoggedIn, initialError, onSubmit, on
           disabled={busy}
           className="w-full mt-3 py-3 rounded-xl text-sm font-bold bg-[var(--amber)] text-white disabled:opacity-50"
         >
-          {busy ? "참여하는 중…" : "확인"}
+          {busy ? "참여하는 중…" : invited ? (isLoggedIn ? "참여" : "로그인하고 참여") : "확인"}
         </button>
         <button
           type="button"
           onClick={onSkip}
           className="w-full mt-2 py-2 text-[12px] text-[var(--ink-faint)] underline underline-offset-2"
         >
-          그룹 없이 들어가기
+          {invited ? "나중에" : "그룹 없이 들어가기"}
         </button>
         <p className="text-[11px] text-[var(--ink-faint)] text-center mt-1">나중에 그룹 탭에서도 참여할 수 있습니다</p>
       </div>

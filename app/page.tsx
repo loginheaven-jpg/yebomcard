@@ -30,11 +30,11 @@ import { useSession, LOGIN_URL } from "@/hooks/useSession";
 import { useLoginGate } from "@/components/LoginGate";
 import { isAdmin } from "@/lib/admin";
 import WorshipBible from "@/components/WorshipBible";
-import CardBuilder from "@/components/CardBuilder";
 import HymnModal from "@/components/HymnModal";
 import GlobalFontSettings from "@/components/GlobalFontSettings";
 import { useHardwareBack, getActiveModalCount } from "@/hooks/useHardwareBack";
 import { isIntentionalLeave, markIntentionalLeave } from "@/lib/appExit";
+import { readPendingGroupCode } from "@/lib/auth/device-owner";
 import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 import { useFont } from "@/contexts/FontContext";
 
@@ -78,7 +78,6 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // 도구함 FAB 제거됨 (Phase 2b SettingsSheet 흡수) — showToolMenu/setShowToolMenu 상태도 함께 제거
   const [showWorship, setShowWorship] = useState(false);
-  const [showCardBuilder, setShowCardBuilder] = useState(false);
   const [showHymn, setShowHymn] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [bulkEditMode, setBulkEditMode] = useState(false);
@@ -116,7 +115,11 @@ export default function Home() {
   // 자동 숨김은 **본문을 볼 때만**이다. 말씀의삶 탭은 목록 화면이라 숨기면 안 된다.
   // SearchPanel 이 display:none 으로만 가려져 언마운트되지 않으므로 isReadingView 는
   // plan 뷰에서도 true 로 남는다 — view 조건을 반드시 함께 봐야 한다.
-  const shouldAutoHideTabBar = autoHideTabBar && isReadingView && view === "search";
+  // ⋮ 메뉴가 열려 있는 동안은 감추지 않는다 — ⋮ 을 누르면 탭바가 함께 올라와 '메뉴가 두 무리' 라는 것을
+  // 보여 준다(2026-09-17 지휘부). 메뉴를 닫으면 다시 3초 뒤 감춘다.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [moreMenuCloseNonce, setMoreMenuCloseNonce] = useState(0);
+  const shouldAutoHideTabBar = autoHideTabBar && isReadingView && view === "search" && !moreMenuOpen;
 
   /** 탭바 표시 + (본문·설정 ON 이면) 다시 감출 타이머 재무장 */
   const revealTabBar = useCallback(() => {
@@ -215,7 +218,7 @@ export default function Home() {
       setPlanMode({ planId: "yebom91", seq });
       setPlanPos(target);
       setView("search");
-      setActiveTab("read");
+      setActiveTab("bible");
       // 진도표는 새번역 기준이다. 성우는 TtsContext 의 역본 기본값 규칙이 이어받아
       // 영희(f4)로 맞춘다 — 교인이 성우를 직접 고른 적이 있으면 그 선택을 존중한다.
       setMainVersion("rnksv");
@@ -322,25 +325,59 @@ export default function Home() {
 
   const handleTabChange = useCallback((tab: ActiveTab) => {
     setActiveTab(tab);
+    // ⋮ 메뉴가 열린 채 탭을 눌렀으면 메뉴는 닫는다(탭바가 메뉴 위로 올라와 있어 바로 눌린다)
+    setMoreMenuCloseNonce((n) => n + 1);
     if (tab === "settings") {
       setShowSettingsSheet(true);
       return;
     }
     // 찬송가는 화면이 아니라 창이다 — 보고 있던 화면 위에 열고, 닫으면 그 화면으로 돌아온다.
-    // (2026-09-12 이 자리는 '말씀의삶' 이었다. 말씀의삶은 본문 상단 ⋮ 메뉴로 옮겼다.)
     if (tab === "hymn") {
       setShowHymn(true);
       return;
     }
-    // 목차·검색·책갈피로 나가면 플랜 모드를 푼다. 본문(read)은 유지한다.
-    if (tab === "toc" || tab === "search" || tab === "bookmark") setPlanMode(null);
+    // 말씀의삶 — 2026-09-17 탭으로 돌아왔다(9-12 부터는 ⋮ 안에만 있었다)
+    if (tab === "plan") {
+      setCompletedSeq(null);
+      setView("plan");
+      return;
+    }
+    // 성경 = 옛 '목차' + '본문'. 읽는 중에 누르면 목차, 그 밖에서는 마지막 읽던 곳(없으면 SearchPanel 이 목차로).
+    // 목차로 나가면 플랜 모드를 푼다(옛 목차 탭과 같다). 본문으로 가는 것은 유지한다.
+    let target: "toc" | "search" | "read" | "bookmark";
+    if (tab === "bible") target = view === "search" && isReadingView ? "toc" : "read";
+    else target = tab;
+    if (target === "toc" || target === "search" || target === "bookmark") setPlanMode(null);
     setView("search");
     navNonceRef.current += 1;
-    setNavRequest({
-      target: tab as "toc" | "search" | "read" | "bookmark",
-      nonce: navNonceRef.current,
-    });
+    setNavRequest({ target, nonce: navNonceRef.current });
+  }, [view, isReadingView]);
+
+  // ─── 말씀의삶 초대링크 — https://bible.yebom.org/?join=코드 ───
+  // 링크를 누르면 말씀의삶을 열고 참여를 맡긴다(ReadingPlanPanel). 로그인돼 있으면 곧바로 참여,
+  // 아니면 '로그인하고 참여' 한 번 — 로그인 직전에 코드를 기기에 적어 두고(30분), 돌아오면 아래 effect 가 다시 연다.
+  // 코드는 URL 에서 곧바로 지운다 — 새로고침·뒤로가기로 두 번 처리하지 않게.
+  // **코드를 여기서 기기에 적지 않는다**: 세션 확인이 401(비로그인)이면 SessionContext 가 적어 둔 코드를 지운다.
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("join");
+    if (raw === null) return;
+    window.history.replaceState(window.history.state, "", "/");
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    if (code.length !== 6) return;
+    setInviteCode(code);
+    setActiveTab("plan");
+    setView("plan");
   }, []);
+
+  // 로그인하러 갔다 돌아왔는데 참여할 코드가 남아 있으면(초대링크·코드 입력 창) 말씀의삶을 연다 —
+  // 전에는 교인이 말씀의삶을 다시 찾아 들어가야 참여됐다
+  useEffect(() => {
+    if (!isLoggedIn || !deviceReady) return;
+    if (!readPendingGroupCode()) return;
+    setActiveTab("plan");
+    setView("plan");
+  }, [isLoggedIn, deviceReady]);
 
   // 관리자 권한 잃으면 편집 모드 자동 해제
   useEffect(() => {
@@ -388,7 +425,6 @@ export default function Home() {
   useHardwareBack(showScrap, () => setShowScrap(false));
   useHardwareBack(showHymn, () => setShowHymn(false));
   useHardwareBack(showWorship, () => setShowWorship(false));
-  useHardwareBack(showCardBuilder, () => setShowCardBuilder(false));
   useHardwareBack(showFontSettings, () => setShowFontSettings(false));
   useHardwareBack(view === "card", () => setView("display"));
   useHardwareBack(view === "display", () => {
@@ -620,9 +656,10 @@ export default function Home() {
           }}
           scrapCount={scrapCount}
           onReadingViewChange={setIsReadingView}
-          // 본문 상단 ⋮ 메뉴 — 설정 시트에도 그대로 있고, 읽는 중에 손 닿는 지름길로 함께 둔다
-          onOpenPlan={() => { setCompletedSeq(null); setView("plan"); }}
+          // 본문 상단 ⋮ 메뉴 — 예배성경 · 로그인은 읽는 중에 손 닿는 곳에 둔다
           onOpenWorship={() => setShowWorship(true)}
+          onMoreMenuChange={setMoreMenuOpen}
+          moreMenuCloseNonce={moreMenuCloseNonce}
           onLogin={() => {
             markIntentionalLeave();
             window.location.href = LOGIN_URL;
@@ -667,18 +704,6 @@ export default function Home() {
       {/* 찬송가 모달 */}
       {showHymn && (
         <HymnModal onClose={() => setShowHymn(false)} />
-      )}
-
-      {/* 성경카드 빌더 */}
-      {showCardBuilder && (
-        <CardBuilder
-          onClose={() => setShowCardBuilder(false)}
-          onStart={(verses) => {
-            setSelectedVerses(verses);
-            setView("card");
-            setShowCardBuilder(false);
-          }}
-        />
       )}
 
       {/* 토스트 */}
@@ -740,10 +765,6 @@ export default function Home() {
           voiceAttention={voiceAttention}
           bulkEditMode={bulkEditMode}
           onToggleBulkEdit={() => setBulkEditMode((v) => !v)}
-          onOpenHymn={() => setShowHymn(true)}
-          onOpenWorship={() => setShowWorship(true)}
-          onOpenCardBuilder={() => setShowCardBuilder(true)}
-          canCreateCard={selectedVerses.length > 0}
           onOpenFullscreen={() => setFullscreenRequestNonce((n) => n + 1)}
           canOpenFullscreen={view === "search"}
           autoHideTabBar={autoHideTabBar}
@@ -761,6 +782,12 @@ export default function Home() {
         <ReadingPlanPanel
           onOpenUnit={openPlanUnit}
           onLogin={() => ensureLogin("말씀의삶")}
+          inviteCode={inviteCode}
+          onInviteHandled={() => setInviteCode(null)}
+          onLoginNow={() => {
+            markIntentionalLeave();
+            window.location.href = LOGIN_URL;
+          }}
         />
       )}
 
@@ -786,8 +813,10 @@ export default function Home() {
 
       {(view === "search" || view === "plan") && (
         <BottomTabBar
-          active={activeTab}
+          // 말씀의삶은 탭 말고도 들어오는 길이 있다(플랜 헤더·완료 시트·초대링크) — 화면을 보고 정한다
+          active={view === "plan" ? "plan" : activeTab === "plan" ? "bible" : activeTab}
           onTabChange={handleTabChange}
+          raised={moreMenuOpen && view === "search"}
           bookmarkCount={bookmarkCount}
           settingsDot={reportCount > 0 || voiceAttention > 0}
           hidden={tabBarHidden}
