@@ -175,9 +175,9 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
           setGroupPromptOpen(true);
         } else {
           lsSet(LS_GROUP_PROMPT, "joined");
+          // 진도표에 머문다(지휘부: 링크의 도착지는 진도표) — 참여는 알림과 요약 줄의 그룹 순위로 보인다
           setPlanToast(`${res.group.name} 에 참여했습니다`);
           setGroupNonce((n) => n + 1);
-          setTab("group"); // 참여한 그룹이 바로 보이게
         }
         // 처리 끝을 마지막에 알린다 — 부모가 코드를 비우면 이 effect 가 다시 돌며 지금 실행은 끝난 것으로 본다
         onInviteHandled?.();
@@ -199,7 +199,6 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
         lsSet(LS_GROUP_PROMPT, "joined");
         setPlanToast(`${res.group.name} 에 참여했습니다`);
         setGroupNonce((n) => n + 1);
-        setTab("group"); // 로그인하고 돌아와 참여했다 — 참여한 그룹이 바로 보이게
         return;
       }
       if (lsGet(LS_GROUP_PROMPT)) return;

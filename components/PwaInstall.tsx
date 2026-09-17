@@ -7,6 +7,7 @@ import {
   triggerInstall,
   isStandaloneMode,
 } from "@/lib/pwaInstall";
+import { LAUNCH_URL } from "@/lib/launchUrl";
 
 export default function PwaInstall() {
   const [showInstallBtn, setShowInstallBtn] = useState(false);
@@ -38,9 +39,11 @@ export default function PwaInstall() {
 
     if (!installed) {
       // 인앱 브라우저(카카오/네이버 등) → 외부 Chrome 으로 리다이렉트
+      // 주소는 **처음 열린 주소**로 넘긴다 — 이 effect 는 page 보다 뒤에 돌아, 그 사이 초대링크(?join=)·
+      // 본문가기(?goto=)가 주소창에서 지워져 있다(lib/launchUrl.ts)
       const isInApp = /kakaotalk|naver|line|instagram|fbav/i.test(ua);
       if (isInApp && /android/i.test(ua)) {
-        const url = window.location.href;
+        const url = LAUNCH_URL || window.location.href;
         window.location.href = `intent://${url.replace(/^https?:\/\//, "")}#Intent;scheme=https;package=com.android.chrome;end`;
       }
       // iOS Safari → 설치 가이드 버튼 (2초 후)
