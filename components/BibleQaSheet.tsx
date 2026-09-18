@@ -15,7 +15,7 @@
  * 화면은 폰에서 위에서 아래로 세 카드, PC 에서 좌우로 세 칸(지휘부 2026-09-18).
  * **앱은 한 번만 답한다** — 이어서 묻고 싶으면 그 AI 로 넘긴다.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useQaVoiceInput } from "@/hooks/useQaVoiceInput";
 import { stripNotes, type BibleVerse } from "@/lib/types";
@@ -35,10 +35,12 @@ import {
 } from "@/lib/bibleQa/answerFormat";
 import {
   askBibleQa,
+  fetchSermonCards,
   reportQaAnswer,
   setQaSaved,
   type QaAnswer,
   type QaResult,
+  type SermonCard,
 } from "@/lib/bibleQa/client";
 
 /** 마지막에 고른 AI 를 기억한다 — 처음 쓰는 교인은 Gemini(지휘부). */
@@ -85,9 +87,15 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // 말로 물었는지 기록에 남긴다(관리자 화면에서 '음성' 으로 보인다)
   const [usedVoice, setUsedVoice] = useState(false);
+  // 이 구절을 다룬 우리 교회 설교. 답 **아래**에 붙는다 — 늦게 도착해도 읽는 중인 글이 밀리지 않게.
+  const [sermons, setSermons] = useState<SermonCard[]>([]);
+  const sermonAcRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useHardwareBack(true, onClose);
+
+  // 창이 닫히면 카드 요청도 끊는다.
+  useEffect(() => () => sermonAcRef.current?.abort(), []);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -150,6 +158,22 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       }
       setAsking(true);
       if (!retry) setResult(null);
+
+      // **질문과 같은 순간에** 설교 카드를 따로 부른다. 답을 받은 뒤에 부르면
+      // (수 초 + 카드 시간)이 되어 라우트를 나눈 이득이 클라이언트에서 사라진다.
+      sermonAcRef.current?.abort();
+      const ac = new AbortController();
+      sermonAcRef.current = ac;
+      const sermonsPromise = fetchSermonCards(
+        {
+          bookCode: target.bookCode,
+          chapter: target.chapter,
+          verseStart: target.verseStart,
+          verseEnd: target.verseEnd,
+        },
+        ac.signal,
+      );
+
       const res = await askBibleQa({
         bookCode: target.bookCode,
         chapter: target.chapter,
@@ -164,6 +188,14 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       setResult(res);
       setSaved(false);
       setAsking(false);
+      // **위기 화면에서는 절대 그리지 않는다.** 화면 조건만 두면 요청은 나가고 상태에 남아
+      // 다음 렌더에서 튀어나온다 — 여기서 버린다.
+      if (res.kind === "answered") {
+        setSermons(await sermonsPromise);
+      } else {
+        ac.abort();
+        setSermons([]);
+      }
       // 답이 오면 위부터 읽도록 되돌린다
       bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -492,6 +524,49 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                   />
                 ))}
               </div>
+              {/* 이 구절을 다룬 우리 교회 설교 — AI 가 쓴 것이 아니다.
+                  답 **아래**에 붙인다(늦게 도착해도 읽는 중인 글이 밀리지 않는다).
+                  맞는 것이 없으면 아무것도 그리지 않는다 — '관련 설교 없음' 을 쓰지 않는다. */}
+              {sermons.length > 0 && (
+                <div className="mt-3">
+                  <div className="text-[10.5px] font-bold text-gray-400 mb-1">
+                    이 구절을 다룬 우리 교회 설교
+                  </div>
+                  <div className="space-y-1.5">
+                    {sermons.map((s) => (
+                      <div
+                        key={s.id}
+                        className="rounded-xl border border-[var(--line)] dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2.5"
+                      >
+                        <div className="flex items-baseline gap-1.5 flex-wrap">
+                          <b className="text-[12.5px] font-bold text-gray-900 dark:text-gray-100">
+                            {s.title}
+                          </b>
+                          <span className="text-[10.5px] text-gray-400">{s.preached_on}</span>
+                          {s.preacher && (
+                            <span className="text-[10.5px] text-gray-400">{s.preacher}</span>
+                          )}
+                        </div>
+                        {s.summary && (
+                          <p className="mt-1 text-[11.5px] leading-relaxed text-gray-600 dark:text-gray-300">
+                            {s.summary}
+                          </p>
+                        )}
+                        {s.video_url && (
+                          <a
+                            href={s.video_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-1.5 text-[11.5px] font-semibold text-[var(--amber-deep)]"
+                          >
+                            설교 영상 보기 ↗
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="mt-2.5 text-[10.5px] leading-snug text-gray-400">{DISCLAIMER}</p>
             </>
           )}

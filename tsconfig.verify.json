@@ -1,0 +1,20 @@
+{
+  "// 무엇": "scripts/verify-*.ts 를 node 로 돌리려고 CommonJS 로 내보내는 설정.",
+  "// 왜 따로": "tsc CLI 로는 paths 를 줄 수 없어(@/ 별칭) 파일로 둬야 한다. 본 tsconfig 는 noEmit 이다.",
+  "// 쓰는 법": "npx tsc -p tsconfig.verify.json && node .verify/scripts/<이름>.js",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".verify",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "isolatedModules": false,
+    "incremental": false,
+    "jsx": "react-jsx",
+    "plugins": []
+  },
+  "include": ["scripts/verify-sermon-parse.ts", "scripts/verify-bible-qa-prompt.ts", "lib/**/*.ts"],
+  "exclude": ["node_modules", ".next", ".verify"]
+}

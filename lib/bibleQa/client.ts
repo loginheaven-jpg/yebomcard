@@ -138,3 +138,40 @@ export async function fetchChapterQas(bookCode: string, chapter: number): Promis
     return [];
   }
 }
+
+// ─── '이 구절을 다룬 우리 교회 설교' 카드 ──────────────────────────
+
+export interface SermonCard {
+  id: number;
+  preached_on: string;
+  title: string;
+  preacher: string | null;
+  video_url: string | null;
+  summary: string | null;
+}
+
+/**
+ * 카드는 **질문 POST 와 같은 순간에 따로** 부른다(docs/BIBLE_QA_SERMONS.md).
+ * 답을 받은 뒤에 부르면 (수 초 + 카드 시간)이 되어 라우트를 나눈 이득이 사라진다.
+ * 절이 바뀔 때 먼저 떠난 응답이 새 절에 붙지 않게 `signal` 을 받는다.
+ */
+export async function fetchSermonCards(
+  input: { bookCode: string; chapter: number; verseStart: number; verseEnd: number | null },
+  signal?: AbortSignal,
+): Promise<SermonCard[]> {
+  try {
+    const params = new URLSearchParams({
+      book: input.bookCode,
+      chapter: String(input.chapter),
+      verse_start: String(input.verseStart),
+    });
+    if (input.verseEnd) params.set("verse_end", String(input.verseEnd));
+    const res = await fetch(`/api/bible-qa/sermons?${params}`, { signal });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => ({}));
+    return Array.isArray(json.items) ? (json.items as SermonCard[]) : [];
+  } catch {
+    // 끊김·중단. 카드는 없어도 답은 그대로 보인다.
+    return [];
+  }
+}

@@ -9,6 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "verify:sermon": "tsc -p tsconfig.verify.json && node -r ./scripts/verify-alias.cjs .verify/scripts/verify-sermon-parse.js",
+    "ingest:sermons": "tsc -p tsconfig.verify.json && node -r ./scripts/verify-alias.cjs .verify/scripts/ingest-sermons.js",
     "verify:qa": "tsc scripts/verify-bible-qa-prompt.ts --outDir .verify --module commonjs --target es2022 --skipLibCheck --esModuleInterop --moduleResolution node --lib es2022,dom && node .verify/scripts/verify-bible-qa-prompt.js",
     "verify:plan": "tsc scripts/verify-plan-yebom91.ts --outDir .verify --module commonjs --target es2022 --skipLibCheck --esModuleInterop --moduleResolution node && node .verify/scripts/verify-plan-yebom91.js"
   },
