@@ -55,6 +55,33 @@
 - **본문 몰입 — 하단 탭바 자동 숨김**: 본문(`browseStep==="verse"`)에서 무조작 3초 → 아래로 슬라이드 감춤(얇은 손잡이만 남김). 복귀 = 하단 손잡이 탭 + 위로 스크롤(본문은 내부 컨테이너 스크롤이라 `window` **capture** 로 수집). 리빌 존은 `safe-area-inset-bottom` 위 28px 에 두어 iOS 홈 인디케이터 제스처와 분리. 상태는 `app/page.tsx` 소유(`tabBarHidden`), SearchPanel 은 `onReadingViewChange` 로 본문 여부만 보고. 설정 토글 `본문 볼 때 하단 메뉴 자동 숨김`(기본 ON, `yebom_autohide_tabbar`). 숨겨도 본문 컨테이너 높이(`browseScrollMaxH`)는 그대로 두어 **리플로우 없음**
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
+### 성경 질문 (2026-09-18)
+- 절을 고르고 **질문**을 누르면 열리는 창(`BibleQaSheet`). **로그인 전용.** Gemini·ChatGPT·Claude 가운데
+  하나 또는 **합창**(셋 동시). 마지막 고른 값을 기억하고 처음은 Gemini. **앱은 한 번만 답한다** —
+  이어서 묻고 싶으면 그 AI 로 넘긴다(ChatGPT·Claude 는 주소로, Gemini 는 클립보드)
+- **교리 기준 본문은 저장소 문서에서 읽는다**(`docs/BIBLE_QA_DOCTRINE.md` 의 마커 사이 §1~§10).
+  `next.config.ts` `outputFileTracingIncludes` 에 문서를 넣어야 배포에서도 읽힌다 —
+  빠뜨리면 **로컬만 되고 배포에서 조용히 깨진다.** `/api/bible-qa/health` 로 프로덕션에서 확인한다
+- **자주 바뀌는 네 목록은 DB**(`qa_lists`): 이단 목록 · 가정교회 자료 · 위기 상담 창구 · 삶공부 과정 이름
+- **선별**(`lib/bibleQa/gate.ts`) — `gemini-flash` 가 crisis·allow·deny 로 가른다.
+  **`max_tokens` 를 작게 주면 게이트가 완전히 죽는다**(Gemini thinking 토큰이 한도를 먹어 빈 응답 →
+  실패는 통과로 처리되니 위기를 한 번도 못 잡으면서 오류도 안 난다). 1024 로 둔다.
+  실패로 통과시킨 건은 `gate_result='error'` 로 남겨 진짜 allow 와 구별한다
+- **칸 라벨의 진실은 응답의 `model` 뿐이다.** `provider` 는 계열명으로 정규화돼 정상 응답과
+  강등된 응답이 같은 문자열로 온다. 폴백은 `use_fallback:false` 로 끄고, `model` 접두어가 어긋나면
+  라벨을 거짓으로 그리는 대신 **칸을 비운다**
+- **기록을 먼저 남긴다**(§B-10) — 선별 뒤 `ai_questions` INSERT → 그다음 모델 호출.
+  위기·거절도 남긴다. 열람은 **수퍼어드민만**이고(`isSuperAdmin`, admin 등급은 못 본다)
+  **열어 본 사실도 남는다**(`ai_question_views`). 교인에게 이 사실을 화면으로 알리지 않는다(지휘부)
+- **`maxDuration`**: 질문·STT 60초, 설교 들여오기 300초. 이 저장소 첫 사용례다 —
+  없으면 답이 다 왔는데도 플랫폼 기본 상한에서 조용히 504 가 된다
+- **설교 카드는 답변과 다른 라우트**(`/api/bible-qa/sermons`). 답변에 끼워 넣으면 DB 왕복이
+  응답 시간에 더해지고 색인 조회 실패가 답을 통째로 죽인다. 조회는 질문과 **같은 순간**에 나간다
+- 상세: [docs/BIBLE_QA_DOCTRINE.md](docs/BIBLE_QA_DOCTRINE.md) ·
+  [docs/BIBLE_QA_SERMONS.md](docs/BIBLE_QA_SERMONS.md) ·
+  [docs/BIBLE_QA_HERESY_LIST.md](docs/BIBLE_QA_HERESY_LIST.md) ·
+  [docs/BIBLE_QA_HOUSECHURCH.md](docs/BIBLE_QA_HOUSECHURCH.md)
+
 ### TTS 파이프라인
 - `TtsContext` + `TTSMiniPlayer`(속도·재생/정지 + **한국어 성우 선택** 팝오버). 발음/자동다음장/절번호는 `SettingsSheet`(성우도 병행).
 - **한국어 성우 — 역본별 목록**(`app/api/tts/route.ts` `KOREAN_VOICE_CONFIG`, 2026-09-11 개편):
@@ -145,6 +172,8 @@ R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_BUCKET
 R2_PUBLIC_BASE
+CRON_SECRET                    # 설교 들여오기 cron 보호(없으면 수퍼어드민만 호출 가능)
+SERMON_DRIVE_FOLDER_ID         # 옵션 — 설교 .txt 폴더(기본값이 코드에 있다. 비밀값 아님)
 ```
 
 ### 빌드·배포
@@ -163,6 +192,10 @@ R2_PUBLIC_BASE
 | TTS 영문 본문에 ko-KR voice 사용 | `lang="en"` 자동 분기 (`isEnglishVersion`) |
 | 캐시 키에 신규 분기 누락 | `makeCacheKey` 확장 + `DB_VERSION` bump |
 | `BibleVersion` 신규 추가 시 일부 배열 누락 | SearchPanel 6개 + FullscreenReader + WorshipBible 모두 일관 갱신 |
+| supabase-js `head: true` 로 표 존재 확인 | HEAD 응답에 본문이 없어 404 가 `error` 로 안 잡힌다(없는 표를 '있다' 고 한다) → `.select("id").limit(1)` |
+| Gemini 호출에 작은 `max_tokens` | thinking 토큰이 한도를 먹어 **HTTP 200 + 빈 응답**. 4096(답)·1024(한 낱말) 이상 |
+| 게이트웨이 응답 `provider` 로 모델 검증 | 계열명으로 정규화된다 → `model` 접두어로 대조 |
+| 문서 마커를 `indexOf` 로 찾기 | 서두 안내 표가 마커를 글자로 적어 둬 5자만 잘린다 → 마커가 **한 줄**인 곳을 찾는다 |
 
 ## 6. 외부 의존성 컨택트
 
