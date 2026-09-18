@@ -67,9 +67,11 @@ interface Props {
   verses: BibleVerse[];
   version: string;
   onClose: () => void;
+  /** 저장했을 때 — 절 화면이 저장 목록을 다시 읽도록 알린다 */
+  onSaved?: () => void;
 }
 
-export default function BibleQaSheet({ verses, version, onClose }: Props) {
+export default function BibleQaSheet({ verses, version, onClose, onSaved }: Props) {
   // 이 창은 절을 고르고 단추를 눌러야 열린다 — 서버에서 그려지는 일이 없으므로
   // 첫 렌더에 바로 기억한 값을 읽어도 어긋나지 않는다(loadPick 이 실패를 삼킨다).
   const [pick, setPick] = useState<Pick>(loadPick);
@@ -152,11 +154,12 @@ export default function BibleQaSheet({ verses, version, onClose }: Props) {
     const ok = await setQaSaved(result.id, true);
     if (ok) {
       setSaved(true);
+      onSaved?.();
       flash("저장했습니다. 이 절에서 다시 볼 수 있습니다.");
     } else {
       flash("저장하지 못했습니다.");
     }
-  }, [result, flash]);
+  }, [result, flash, onSaved]);
 
   const handleReport = useCallback(
     async (answer: QaAnswer) => {

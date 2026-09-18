@@ -31,6 +31,8 @@ interface Props {
   onLogout: () => void;
   // 관리자
   adminMode: boolean;
+  /** 수퍼어드민만 보이는 항목이 있다 — 성경 질문 기록(§B-10) */
+  superAdmin?: boolean;
   reportCount?: number;
   /** 음원 생성에서 사람이 손봐야 할 것 — 응답 없는 PC·오류·노는 PC·쌓인 보류 절 */
   voiceAttention?: number;
@@ -53,6 +55,7 @@ export default function SettingsSheet({
   onLogin,
   onLogout,
   adminMode,
+  superAdmin = false,
   reportCount = 0,
   voiceAttention = 0,
   bulkEditMode,
@@ -314,6 +317,20 @@ export default function SettingsSheet({
                       <span className="text-[var(--ink-faint)]">›</span>
                     </span>
                   </a>
+                  {superAdmin && (
+                    <a
+                      href="/admin/ai-questions"
+                      className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
+                    >
+                      <span>성경 질문 기록</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--ink-faint)]">
+                          수퍼어드민
+                        </span>
+                        <span className="text-[var(--ink-faint)]">›</span>
+                      </span>
+                    </a>
+                  )}
                   <a
                     href="/admin/voice-held"
                     className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"

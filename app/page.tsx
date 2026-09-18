@@ -28,7 +28,7 @@ import { addScrapToServer, fetchMyScraps, migrateLocalScraps } from "@/lib/scrap
 import { supabase } from "@/lib/supabase";
 import { useSession, LOGIN_URL } from "@/hooks/useSession";
 import { useLoginGate } from "@/components/LoginGate";
-import { isAdmin } from "@/lib/admin";
+import { isAdmin, isSuperAdmin } from "@/lib/admin";
 import WorshipBible from "@/components/WorshipBible";
 import HymnModal from "@/components/HymnModal";
 import GlobalFontSettings from "@/components/GlobalFontSettings";
@@ -48,6 +48,9 @@ export default function Home() {
   const { session, isLoggedIn, logout, deviceReady } = useSession();
   const { ensureLogin } = useLoginGate();
   const adminMode = isAdmin(session);
+  // 성경 질문 기록은 수퍼어드민만 본다(docs/BIBLE_QA_DOCTRINE.md §B-10).
+  // 화면 판정은 표시 제어일 뿐 — 실제 차단은 API 안의 게이트다.
+  const superAdmin = isSuperAdmin(session);
   const [selectedVerses, setSelectedVerses] = useState<BibleVerse[]>([]);
   const [view, setView] = useState<ViewMode>("search");
   const [mainVersion, setMainVersion] = useState<BibleVersion>("rnksv");
@@ -761,6 +764,7 @@ export default function Home() {
           }}
           onLogout={async () => { await logout(); }}
           adminMode={adminMode}
+          superAdmin={superAdmin}
           reportCount={reportCount}
           voiceAttention={voiceAttention}
           bulkEditMode={bulkEditMode}

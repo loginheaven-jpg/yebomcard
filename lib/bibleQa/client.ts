@@ -101,3 +101,40 @@ export async function reportQaAnswer(
     return false;
   }
 }
+
+// ─── 절에 저장해 둔 내 질문 ────────────────────────────────────────
+
+export interface SavedQaAnswer {
+  column_key: string;
+  model: string | null;
+  ok: boolean;
+  content: string | null;
+}
+
+export interface SavedQa {
+  id: number;
+  verse_start: number;
+  verse_end: number | null;
+  verses_ref: string | null;
+  question: string;
+  mode: string;
+  asked_at: string;
+  ai_question_answers: SavedQaAnswer[];
+}
+
+/**
+ * 이 장에서 내가 저장해 둔 질문. **장 단위로만 부른다** — 전체 페치 금지(노트와 같은 규칙).
+ * 표가 없거나 비로그인이면 빈 배열이 온다(화면이 깨지지 않는다).
+ */
+export async function fetchChapterQas(bookCode: string, chapter: number): Promise<SavedQa[]> {
+  try {
+    const res = await fetch(
+      `/api/bible-qa/saved?book=${encodeURIComponent(bookCode)}&chapter=${chapter}`,
+    );
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => ({}));
+    return Array.isArray(json.items) ? (json.items as SavedQa[]) : [];
+  } catch {
+    return [];
+  }
+}

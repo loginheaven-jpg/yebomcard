@@ -37,6 +37,7 @@ import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
 import HomeBlankContent from "./HomeBlankContent";
 import BibleQaSheet from "./BibleQaSheet";
+import { fetchChapterQas, setQaSaved, type SavedQa } from "@/lib/bibleQa/client";
 import TTSButton from "./TTSButton";
 import TTSMiniPlayer from "./TTSMiniPlayer";
 import { promptAppInstall } from "@/lib/pwaInstall";
@@ -383,6 +384,11 @@ export default function SearchPanel({
   const [reportTarget, setReportTarget] = useState<number | null>(null); // 신고 확인 팝업 대상 note id
   // 성경 질문 창 — 고른 절을 그대로 넘긴다(docs/BIBLE_QA_DOCTRINE.md)
   const [qaOpen, setQaOpen] = useState(false);
+  // 이 장에서 내가 저장해 둔 질문. 절 아래에 접힌 줄로 보인다(§B-10).
+  const [chapterQas, setChapterQas] = useState<SavedQa[]>([]);
+  const [expandedQa, setExpandedQa] = useState<Set<number>>(new Set());
+  // 질문창에서 저장하면 이 값을 올려 다시 읽는다.
+  const [qaReloadNonce, setQaReloadNonce] = useState(0);
   useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
   useHardwareBack(reportTarget !== null, () => setReportTarget(null));
 
@@ -399,6 +405,122 @@ export default function SearchPanel({
       setAmenedIds(new Set(shared.filter((s) => s.i_amened).map((s) => s.id)));
     });
   }, [sessionLoading, isLoggedIn, mode, browseStep, bookCode, chapter]);
+
+  // 현재 browse 장에 저장해 둔 질문만 로드 (노트와 같은 규칙 — 전체 페치 금지)
+  useEffect(() => {
+    if (sessionLoading || !isLoggedIn || mode !== "chapter" || browseStep !== "verse" || !bookCode || !chapter) {
+      setChapterQas([]);
+      return;
+    }
+    let alive = true;
+    fetchChapterQas(bookCode, chapter).then((items) => {
+      if (alive) setChapterQas(items);
+    });
+    // 장을 넘기는 사이 먼저 떠난 응답이 새 장에 붙지 않게 끊는다
+    return () => {
+      alive = false;
+    };
+  }, [sessionLoading, isLoggedIn, mode, browseStep, bookCode, chapter, qaReloadNonce]);
+
+  /** 이 절에서 시작한 저장된 질문 */
+  const qaFor = useCallback(
+    (verse: BibleVerse) => chapterQas.filter((q) => q.verse_start === verse.verse),
+    [chapterQas],
+  );
+
+  /** 저장 해제 — 행을 지우지 않고 그 절에서만 내린다(관리자 기록은 남는다, §B-10) */
+  const unsaveQa = useCallback(async (id: number) => {
+    setChapterQas((prev) => prev.filter((q) => q.id !== id));
+    const ok = await setQaSaved(id, false);
+    if (!ok) {
+      // 못 지웠으면 되돌린다 — 지워진 듯 보이다 되살아나는 것보다 낫다
+      setQaReloadNonce((n) => n + 1);
+      flashToast("지우지 못했습니다.");
+    }
+  }, []);
+
+  /**
+   * 절 아래에 보이는 '저장해 둔 질문' 줄. 메모(📝)·공유메모(💬)와 구별되게 물음표를 쓴다.
+   * 접혀 있을 때는 질문만, 펼치면 AI 별 답과 지우기가 나온다.
+   */
+  const renderVerseQas = useCallback(
+    (verse: BibleVerse) => {
+      const items = qaFor(verse);
+      if (items.length === 0) return null;
+      return (
+        <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+          {items.map((q) => {
+            const open = expandedQa.has(q.id);
+            return (
+              <div
+                key={q.id}
+                className="text-[13px] leading-snug text-violet-800 dark:text-violet-300 bg-violet-50/70 dark:bg-violet-950/30 rounded-md px-2 py-1 cursor-pointer"
+                onClick={() =>
+                  setExpandedQa((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(q.id)) next.delete(q.id);
+                    else next.add(q.id);
+                    return next;
+                  })
+                }
+              >
+                <div className="flex items-start gap-1">
+                  <span className="shrink-0" aria-hidden>
+                    ❓
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className={open ? "whitespace-pre-wrap break-words" : "truncate"}>
+                      {q.question}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-violet-400 select-none" aria-hidden>
+                    {open ? "▾" : "▸"}
+                  </span>
+                </div>
+                {open && (
+                  <div className="mt-1.5 space-y-1.5 border-t border-violet-100 dark:border-violet-900/40 pt-1.5">
+                    {(q.ai_question_answers ?? [])
+                      .filter((a) => a.ok && a.content)
+                      .map((a) => (
+                        <div key={a.column_key}>
+                          <div className="text-[10px] font-bold text-violet-500/80 mb-0.5">
+                            {a.column_key === "gemini"
+                              ? "Gemini"
+                              : a.column_key === "chatgpt"
+                                ? "ChatGPT"
+                                : "Claude"}
+                          </div>
+                          <div className="whitespace-pre-wrap break-words text-[12.5px] text-gray-700 dark:text-gray-300">
+                            {a.content}
+                          </div>
+                        </div>
+                      ))}
+                    <div className="flex items-center gap-3 pt-1 text-[12px]">
+                      <span className="text-violet-400/80">{fmtNoteDate(q.asked_at)}</span>
+                      <span className="flex-1" />
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unsaveQa(q.id);
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        지우기
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
+    [qaFor, expandedQa, unsaveQa],
+  );
+
 
   const noteFor = useCallback(
     (v: BibleVerse) =>
@@ -1929,6 +2051,7 @@ export default function SearchPanel({
             </div>
           );
         })()}
+        {renderVerseQas(verse)}
         {sharedFor(verse).length > 0 && (
           <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
             {sharedFor(verse).map((s) => {
@@ -3207,6 +3330,7 @@ export default function SearchPanel({
                                 </div>
                               );
                             })()}
+                            {renderVerseQas(v)}
                             {selected && (
                               <span className="float-right text-gray-700 dark:text-gray-300 text-sm">&#10003;</span>
                             )}
@@ -3430,6 +3554,7 @@ export default function SearchPanel({
           verses={selectedVerses}
           version={mainVersion}
           onClose={() => setQaOpen(false)}
+          onSaved={() => setQaReloadNonce((n) => n + 1)}
         />
       )}
 
