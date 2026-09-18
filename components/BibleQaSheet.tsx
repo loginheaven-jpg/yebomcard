@@ -32,19 +32,50 @@ import {
 import {
   handoffText,
   handoffUrl,
+  isHandoffTruncated,
   parseAnswer,
   supportsPrefill,
 } from "@/lib/bibleQa/answerFormat";
 import {
   answerColumn,
   askBibleQa,
+  fetchChapterQas,
   fetchSermonCards,
   reportQaAnswer,
   setQaSaved,
   type QaAnswer,
   type QaResult,
+  type SavedQa,
   type SermonCard,
 } from "@/lib/bibleQa/client";
+
+/**
+ * 다른 AI 로 이어가기 — 떠나기 **전에** 띄우는 안내(지휘부 2026-09-18).
+ * 예전에는 새 창을 연 뒤 떠나온 창에 안내를 띄워 교인이 보지 못했고, Gemini 는 빈 대화창으로만 넘어갔다.
+ */
+interface HandoffState {
+  column: ColumnKey;
+  label: string;
+  url: string | null;
+  text: string;
+  copied: boolean;
+  truncated: boolean;
+}
+
+/** 저장해 둔 답을 카드가 읽는 꼴로 */
+function savedToAnswer(a: SavedQa["ai_question_answers"][number]): QaAnswer {
+  const col = QA_COLUMNS.find((c) => c.key === a.column_key);
+  return {
+    column: (col?.key ?? "gemini") as ColumnKey,
+    label: col?.label ?? a.column_key,
+    ok: a.ok,
+    content: a.content,
+    model: a.model,
+    error: null,
+    elapsed_ms: 0,
+    refs: [],
+  };
+}
 
 /** 마지막에 고른 AI 를 기억한다 — 처음 쓰는 교인은 Gemini(지휘부). */
 const PICK_KEY = "yebom_qa_ai";
@@ -113,7 +144,19 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  /** 이어가기 안내 — 떠나기 전에 보인다. 열린 동안 뒤로가기는 안내만 닫는다. */
+  const [handoff, setHandoff] = useState<HandoffState | null>(null);
+
+  /**
+   * 이 절에 이미 저장해 둔 질문(지휘부 2026-09-18 — "이미 응답이 저장된 구절에서 질문을 눌렀을 때,
+   * 기존 저장된 응답을 물고 들어가야"). 묻기 전 화면 맨 위에 접어서 보인다.
+   * 앱은 한 번만 답한다 — 저장한 답은 다시 읽거나 그 AI 로 이어가는 데 쓴다.
+   */
+  const [savedHere, setSavedHere] = useState<SavedQa[]>([]);
+  const [savedOpen, setSavedOpen] = useState<Set<number>>(new Set());
+
   useHardwareBack(true, onClose);
+  useHardwareBack(!!handoff, () => setHandoff(null));
 
   // 창이 닫히면 카드·답 요청을 끊는다. 서버는 답을 끝까지 만들어 기록에 남긴다.
   useEffect(
@@ -169,6 +212,28 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       dropped: verses.length - same.length,
     };
   }, [verses]);
+
+  // 이 절에 저장해 둔 질문 — 창이 열릴 때 한 번 읽는다(장 단위로 읽고 고른 범위와 겹치는 것만).
+  // 검색 결과 화면처럼 본문 화면이 아닌 곳에서 열려도 보이도록 창이 스스로 읽는다.
+  useEffect(() => {
+    if (!target) return;
+    let alive = true;
+    const from = target.verseStart;
+    const to = target.verseEnd ?? target.verseStart;
+    fetchChapterQas(target.bookCode, target.chapter).then((items) => {
+      if (!alive) return;
+      setSavedHere(
+        items.filter((q) => {
+          const qs = q.verse_start;
+          const qe = q.verse_end ?? q.verse_start;
+          return qs <= to && qe >= from;
+        }),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [target]);
 
   /**
    * 누른 AI 에게 곧바로 묻는다. AI 단추가 곧 '묻기' 다(지휘부 2026-09-18) — 예전에는 위에서 AI 를
@@ -282,28 +347,48 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
     }
   }, [result, flash, onSaved]);
 
-  const handleReport = useCallback(
-    async (answer: QaAnswer) => {
-      if (!result || result.kind !== "pending") return;
-      const ok = await reportQaAnswer(result.id, answer.column);
+  /**
+   * '이 답이 이상합니다'. 지금 받은 답이면 이번 질문 id, 저장해 둔 답이면 그 질문 id 로 보낸다
+   * (서버가 자기 질문인지 확인한다). `key` 는 화면에서 '알렸습니다' 를 칠할 자리다.
+   */
+  const reportAnswer = useCallback(
+    async (questionId: number, answer: QaAnswer, key: string) => {
+      const ok = await reportQaAnswer(questionId, answer.column);
       if (ok) {
-        setReported((prev) => ({ ...prev, [answer.column]: true }));
+        setReported((prev) => ({ ...prev, [key]: true }));
         flash("알려 주셔서 고맙습니다. 관리자가 확인합니다.");
       } else {
         flash("신고를 보내지 못했습니다.");
       }
     },
-    [result, flash],
+    [flash],
   );
 
-  const handleHandoff = useCallback(
+  const handleReport = useCallback(
     async (answer: QaAnswer) => {
+      if (!result || result.kind !== "pending") return;
+      await reportAnswer(result.id, answer, answer.column);
+    },
+    [result, reportAnswer],
+  );
+
+  /**
+   * 이어가기 1단계 — 복사하고 **안내를 먼저 띄운다**. 창은 아직 열지 않는다.
+   *
+   * 예전에는 복사 뒤 곧바로 새 창을 열고 안내 토스트를 **떠나온 창에** 띄워 교인이 보지 못했다
+   * (지휘부 2026-09-18 — "조용히 공백의 대화창으로 인도한다"). 게다가 `await` 뒤에 창을 열면
+   * 아이폰 사파리는 사용자 동작이 끊긴 것으로 보고 새 창을 막는다 — 창은 안내의 '열기' 를 누를 때 연다.
+   *
+   * `questionText` 는 저장해 둔 질문으로 이어갈 때 넘긴다(없으면 지금 입력한 질문).
+   */
+  const handleHandoff = useCallback(
+    async (answer: QaAnswer, questionText?: string) => {
       if (!target) return;
       const text = handoffText({
         versesRef: target.ref,
         versionName: getVersionLabel(version as never),
         versesText: target.text,
-        question: question.trim(),
+        question: (questionText ?? question).trim(),
         answer: answer.content ?? "",
         label: answer.label,
       });
@@ -315,18 +400,23 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       } catch {
         copied = false;
       }
-      const url = handoffUrl(answer.column, text);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
-      if (supportsPrefill(answer.column)) {
-        flash(`${answer.label} 창에 옮겼습니다.`);
-      } else if (copied) {
-        flash(`${answer.label} 는 주소로 못 옮겨 복사해 두었습니다. 붙여넣기 해 주세요.`);
-      } else {
-        flash(`${answer.label} 창을 열었습니다. 내용을 직접 옮겨 주세요.`);
-      }
+      setHandoff({
+        column: answer.column,
+        label: answer.label,
+        url: handoffUrl(answer.column, text),
+        text,
+        copied,
+        truncated: supportsPrefill(answer.column) && isHandoffTruncated(text),
+      });
     },
-    [target, question, version, flash],
+    [target, question, version],
   );
+
+  /** 이어가기 2단계 — 안내의 '열기' 에서 **동기로** 연다(아이폰 팝업 차단을 피한다). */
+  const openHandoff = useCallback(() => {
+    if (handoff?.url) window.open(handoff.url, "_blank", "noopener,noreferrer");
+    setHandoff(null);
+  }, [handoff]);
 
   if (!target) return null;
 
@@ -347,7 +437,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       <div
         // 폰은 아래에서 올라오는 80% 시트, PC 는 화면의 가로·세로 90%(지휘부 2026-09-18 —
         // "PC 풀스크린에서도 좌우 여백이 많다"). 크기 조절(resize)은 그대로 둔다.
-        className="w-full h-[80vh] sm:w-[90vw] sm:max-w-none sm:h-[90vh] sm:min-h-[420px] sm:max-h-[90vh] sm:resize-y sm:overflow-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col"
+        className="w-full h-[80vh] sm:w-[90vw] sm:max-w-none sm:h-[90vh] sm:min-h-[420px] sm:max-h-[90vh] sm:resize-y sm:overflow-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col relative"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -387,6 +477,73 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
           {/* 묻기 전 — 입력 */}
           {!result && (
             <>
+              {/* 이 절에 저장해 둔 질문 — 접혀 있다. 앱은 한 번만 답하므로 여기서 이어 묻지는 않고,
+                  다시 읽거나 그 AI 로 이어간다(지휘부 2026-09-18). */}
+              {savedHere.length > 0 && (
+                <div className="mb-3 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 overflow-hidden">
+                  <div className="px-3 py-2 text-[11.5px] font-semibold text-violet-700 dark:text-violet-300">
+                    이 절에 저장한 질문 {savedHere.length}개
+                  </div>
+                  {savedHere.map((q) => {
+                    const open = savedOpen.has(q.id);
+                    const shown = (q.ai_question_answers ?? []).filter((a) => a.ok && a.content);
+                    return (
+                      <div key={q.id} className="border-t border-violet-100 dark:border-violet-900/40">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSavedOpen((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(q.id)) next.delete(q.id);
+                              else next.add(q.id);
+                              return next;
+                            })
+                          }
+                          className="w-full text-left px-3 py-2 flex items-start gap-1.5"
+                          aria-expanded={open}
+                        >
+                          <span className="shrink-0" aria-hidden>
+                            ❓
+                          </span>
+                          <span
+                            className={`min-w-0 flex-1 text-[12.5px] leading-snug text-gray-700 dark:text-gray-200 ${
+                              open ? "whitespace-pre-wrap break-words" : "truncate"
+                            }`}
+                          >
+                            {q.question}
+                          </span>
+                          <span className="shrink-0 text-violet-400 select-none" aria-hidden>
+                            {open ? "▾" : "▸"}
+                          </span>
+                        </button>
+                        {open && (
+                          <div className="px-3 pb-3">
+                            {shown.length === 0 && (
+                              <p className="text-[11.5px] text-gray-400">남아 있는 답이 없습니다.</p>
+                            )}
+                            {shown.map((raw) => {
+                              const a = savedToAnswer(raw);
+                              const key = `s${q.id}:${a.column}`;
+                              return (
+                                <AnswerCard
+                                  key={key}
+                                  answer={a}
+                                  open
+                                  onToggle={() => {}}
+                                  collapsible={false}
+                                  reported={!!reported[key]}
+                                  onReport={() => reportAnswer(q.id, a, key)}
+                                  onHandoff={() => handleHandoff(a, q.question)}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value.slice(0, QUESTION_MAX_LENGTH))}
@@ -700,6 +857,11 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
         )}
       </div>
 
+      {/* 이어가기 안내 — 떠나기 **전에** 보인다. 창은 '열기' 를 누를 때 연다. */}
+      {handoff && (
+        <HandoffNotice handoff={handoff} onOpen={openHandoff} onCancel={() => setHandoff(null)} />
+      )}
+
       {toast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-3 py-2 bg-amber-600 text-white text-[12.5px] rounded-lg shadow-lg z-[200]">
           {toast}
@@ -742,7 +904,7 @@ function AnswerCard({
           <small className="text-[10px] text-gray-400 truncate">{answer.model}</small>
         )}
         <span className="flex-1" />
-        {answer.ok && (
+        {answer.ok && answer.elapsed_ms > 0 && (
           <small className="text-[10px] text-gray-400 tabular-nums">
             {(answer.elapsed_ms / 1000).toFixed(1)}초
           </small>
@@ -831,5 +993,96 @@ function AnswerCard({
         </button>
       </div>
     </article>
+  );
+}
+
+// ─── 이어가기 안내 ─────────────────────────────────────────────────
+
+/**
+ * 다른 AI 로 넘어가기 **전에** 무엇을 하면 되는지 알려 준다(지휘부 2026-09-18).
+ *
+ *  - Gemini 는 주소로 내용을 미리 채울 수 없다 → 붙여넣기를 분명히 안내한다
+ *  - ChatGPT·Claude 는 채워 주지만 가끔 빈 창으로 열린다는 보고가 있고, 글이 길면 앞부분만 채운다
+ *  - 폰에서 'Ctrl+V' 는 뜻이 없다 — 폰은 '입력칸을 길게 눌러 붙여넣기'
+ *  - 복사가 막힌 기기(권한·오래된 브라우저)에서는 글을 직접 보여 주어 손으로 복사하게 한다
+ *  - 그 사이트에 로그인해야 이어서 물을 수 있다(계정이 없는 어르신이 많다)
+ */
+function HandoffNotice({
+  handoff,
+  onOpen,
+  onCancel,
+}: {
+  handoff: HandoffState;
+  onOpen: () => void;
+  onCancel: () => void;
+}) {
+  const touch =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  const paste = touch ? "입력칸을 길게 눌러 '붙여넣기'" : "입력칸을 누르고 Ctrl+V 로 붙여넣기";
+  const prefill = supportsPrefill(handoff.column);
+
+  let how: string;
+  if (!prefill) {
+    how = `${handoff.label} 는 내용을 미리 채워 줄 수 없습니다. 창이 열리면 ${paste} 하세요.`;
+  } else if (handoff.truncated) {
+    how = `글이 길어 앞부분만 채워 둡니다. 창이 열리면 채워진 글을 지우고 ${paste} 하세요.`;
+  } else {
+    how = `창이 열리면 입력칸에 채워져 있습니다. 비어 있으면 ${paste} 하세요.`;
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-10 bg-black/40 flex items-end sm:items-center justify-center p-3 rounded-t-2xl sm:rounded-2xl"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${handoff.label} 로 이어가기`}
+        className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-xl p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-[15px] font-bold text-gray-900 dark:text-gray-100">
+          {handoff.label} 로 이어가기
+        </p>
+        <p className="mt-2 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200">
+          {handoff.copied
+            ? "질문과 답을 복사해 두었습니다."
+            : "복사하지 못했습니다. 아래 글을 길게 눌러 모두 선택해 복사해 주세요."}
+        </p>
+        {!handoff.copied && (
+          <textarea
+            readOnly
+            value={handoff.text}
+            rows={5}
+            onFocus={(e) => e.currentTarget.select()}
+            className="mt-2 w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2 text-[11.5px] text-gray-700 dark:text-gray-200 resize-none"
+          />
+        )}
+        <p className="mt-2 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200">{how}</p>
+        <p className="mt-2 text-[11.5px] leading-snug text-gray-400">
+          {handoff.label} 사이트에 로그인돼 있어야 이어서 물을 수 있습니다.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onOpen}
+            disabled={!handoff.url}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)] disabled:opacity-40"
+          >
+            {handoff.label} 열기 ↗
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

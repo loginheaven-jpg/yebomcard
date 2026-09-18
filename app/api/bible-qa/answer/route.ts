@@ -39,6 +39,9 @@ export const maxDuration = 120;
 /** 칸을 기다리는 시간 — maxDuration(120초) 안에서 기록할 몫을 남긴다. */
 const COLUMN_TIMEOUT_MS = 100_000;
 
+/** 답 아래에 본문을 붙이는 구절 수(교리 기준 §4 — 한 답에 세 개까지). */
+const MAX_ATTACHED_REFS = 3;
+
 async function getSession(): Promise<SessionData | null> {
   try {
     const cookieStore = await cookies();
@@ -162,7 +165,10 @@ export async function POST(request: NextRequest) {
     if (found.length > 0) {
       const { resolved, missing } = await verifyRefs(found, version);
       if (missing.length > 0) shownContent = stripMissingRefs(answer.content, missing);
-      refs = resolved.map((r) => ({
+      // 없는 구절 지우기(§B-5)는 **전부** 검사하고, 본문을 붙이는 것(§B-9)은 **앞의 셋까지만**.
+      // 교리 기준 §4 가 "한 답에 세 개까지" 인데 모델이 어긴다 — 2026-09-18 비교 측정에서
+      // ChatGPT 가 한 답에 6개를 달았고, 앱이 여섯 본문을 다 붙여 카드가 답보다 길어졌다.
+      refs = resolved.slice(0, MAX_ATTACHED_REFS).map((r) => ({
         ref:
           r.verseEnd > r.verseStart
             ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`

@@ -19,6 +19,33 @@ export interface ChatResult {
   usage: { input_tokens: number; output_tokens: number };
 }
 
+/**
+ * 게이트웨이 오류 몸통을 사람이 읽을 한 줄로.
+ *
+ * 게이트웨이는 끝점마다 오류 꼴이 다르다(2026-09-18 게이트웨이 코드 조사):
+ *  - chat: `{detail: "문자열"}` · 422 는 `{detail: [..]}` 배열 · 폴백 전부 실패는 503 `{detail: {error, last_reason, …}}` 객체
+ *  - 이미지 생성: `{error, code}` — detail 이 **없다**
+ *  - 이미지 편집: `{detail, error, code}`
+ * `${err.detail}` 로만 찍으면 객체는 `[object Object]`, 이미지 생성은 `undefined` 가 된다(실제로 그랬다).
+ */
+function describeGatewayError(body: unknown): string {
+  if (!body || typeof body !== "object") return String(body ?? "Unknown");
+  const b = body as Record<string, unknown>;
+  const d = b.detail;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    return d
+      .map((x) => (x && typeof x === "object" && "msg" in x ? String((x as { msg: unknown }).msg) : String(x)))
+      .join("; ");
+  }
+  if (d && typeof d === "object") {
+    const o = d as Record<string, unknown>;
+    return [o.error, o.last_reason].filter(Boolean).map(String).join(": ") || JSON.stringify(o).slice(0, 300);
+  }
+  if (typeof b.error === "string") return b.code ? `${b.code} ${b.error}` : b.error;
+  return JSON.stringify(b).slice(0, 300);
+}
+
 export interface CallAIOptions {
   provider?: string;
   system_prompt?: string;
@@ -57,7 +84,7 @@ export async function callAI(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Unknown" }));
-    throw new Error(`AI_ERROR: ${res.status} ${err.detail}`);
+    throw new Error(`AI_ERROR: ${res.status} ${describeGatewayError(err)}`);
   }
 
   return res.json();
@@ -95,7 +122,7 @@ export async function callImage(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Unknown" }));
-    throw new Error(`IMAGE_ERROR: ${res.status} ${err.detail}`);
+    throw new Error(`IMAGE_ERROR: ${res.status} ${describeGatewayError(err)}`);
   }
 
   return res.json();
@@ -124,7 +151,7 @@ export async function callImageEdit(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Unknown" }));
-    throw new Error(`IMAGE_EDIT_ERROR: ${res.status} ${err.detail}`);
+    throw new Error(`IMAGE_EDIT_ERROR: ${res.status} ${describeGatewayError(err)}`);
   }
 
   return res.json();

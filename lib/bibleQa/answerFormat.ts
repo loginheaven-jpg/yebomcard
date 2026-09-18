@@ -175,3 +175,8 @@ export function handoffUrl(column: string, text: string): string | null {
 export function supportsPrefill(column: string): boolean {
   return column === "chatgpt" || column === "claude";
 }
+
+/** 주소창에 다 못 싣고 앞부분만 채우는가 — 그러면 '전체는 붙여넣기' 를 안내해야 한다. */
+export function isHandoffTruncated(text: string): boolean {
+  return text.length > URL_TEXT_LIMIT;
+}
