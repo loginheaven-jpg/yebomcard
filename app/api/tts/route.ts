@@ -1,95 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as crypto from "crypto";
 import { markEngineDown, clearEngineDown, isEngineDown } from "@/lib/tts/engineHealth";
 import { getR2Audio, putR2Audio } from "@/lib/tts/r2Cache";
 // 정제/키 규칙은 lib/tts/verseText 한 곳에 둔다 — 로컬 스튜디오(voice/engine.py)와
 // 문자 단위로 같아야 하고, 어긋나면 에러 없이 조용히 캐시 미스가 난다.
 import { cleanForTts, ttsCacheKey } from "@/lib/tts/verseText";
+import { getGoogleAccessToken, SCOPE_CLOUD_PLATFORM } from "@/lib/google/accessToken";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TTS_API_URL = "https://texttospeech.googleapis.com/v1/text:synthesize";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-interface ServiceAccountCredentials {
-  client_email: string;
-  private_key: string;
-}
-
-function getCredentials(): ServiceAccountCredentials {
-  if (process.env.GCP_SERVICE_ACCOUNT_JSON) {
-    const json = Buffer.from(
-      process.env.GCP_SERVICE_ACCOUNT_JSON,
-      "base64",
-    ).toString("utf-8");
-    const parsed = JSON.parse(json);
-    return { client_email: parsed.client_email, private_key: parsed.private_key };
-  }
-  const clientEmail = process.env.GCP_CLIENT_EMAIL ?? "";
-  let privateKey = "";
-  if (process.env.GCP_PRIVATE_KEY_BASE64) {
-    privateKey = Buffer.from(
-      process.env.GCP_PRIVATE_KEY_BASE64,
-      "base64",
-    ).toString("utf-8");
-  } else {
-    privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, "\n") ?? "";
-  }
-  return { client_email: clientEmail, private_key: privateKey };
-}
-
-function base64url(input: string | Buffer): string {
-  const buf = typeof input === "string" ? Buffer.from(input) : input;
-  return buf
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
-  }
-  const { client_email, private_key } = getCredentials();
-  if (!client_email || !private_key) {
-    throw new Error("GCP credentials not configured");
-  }
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64url(
-    JSON.stringify({
-      iss: client_email,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-      aud: TOKEN_URL,
-      iat: now,
-      exp: now + 3600,
-    }),
-  );
-  const signInput = `${header}.${payload}`;
-  const sign = crypto.createSign("RSA-SHA256");
-  sign.update(signInput);
-  const signature = base64url(sign.sign(private_key));
-  const jwt = `${signInput}.${signature}`;
-
-  const tokenResponse = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-  if (!tokenResponse.ok) {
-    throw new Error(`Token exchange failed: ${tokenResponse.status}`);
-  }
-  const tokenData = await tokenResponse.json();
-  cachedToken = {
-    token: tokenData.access_token,
-    expiresAt: Date.now() + (tokenData.expires_in - 60) * 1000,
-  };
-  return cachedToken.token;
-}
+// 서비스 계정 JWT → 액세스 토큰은 lib/google/accessToken.ts 로 옮겼다.
+// 설교 들여오기가 같은 열쇠로 드라이브를 읽어야 해서다(scope 만 다르다).
 
 // ── 한국어 AI 성우 — 성우별 엔진 라우팅 ──────────────────────────────
 // m1 천사장/f1 김단아 = ElevenLabs, m2 쾌활/f2 생생 = GCP Chirp3-HD(새번역·개역·통독),
@@ -363,7 +286,7 @@ export async function POST(req: NextRequest) {
               : ["en-US-Chirp3-HD-Aoede", "en-US-Neural2-F"]))
       : [koChirp, koNeural, koWave];
 
-    const token = await getAccessToken();
+    const token = await getGoogleAccessToken(SCOPE_CLOUD_PLATFORM);
 
     let audioContent: string | null = null;
     let usedVoice = "";
