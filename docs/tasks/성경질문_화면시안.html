@@ -1,0 +1,712 @@
+<title>성경 질문 화면 시안</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700&family=Noto+Serif+KR:wght@400;600&family=Playfair+Display:ital@1&display=swap">
+<style>
+  /* 예봄성경 앱 토큰을 그대로 가져왔다 — app/globals.css */
+  :root {
+    --canvas: #DBD5C8;
+    --paper: #FBF9F4;
+    --paper-2: #F4EFE4;
+    --ink: #2B2A26;
+    --ink-soft: #6E675B;
+    --ink-faint: #938B7C;
+    --line: #EBE5D8;
+    --line-soft: #F1ECE1;
+    --amber: #B97E2C;
+    --amber-tint: #F6EBD6;
+    --amber-deep: #8E5E18;
+    --bad: #C0563E;
+    --bad-tint: #F6E4DE;
+    /* 세 AI 칸 — 앰버와 다투지 않게 채도를 낮췄다 */
+    --gemini: #3A6B93;
+    --gemini-tint: #E7EDF3;
+    --chatgpt: #3C6E58;
+    --chatgpt-tint: #E6EEEA;
+    --claude: #A85A34;
+    --claude-tint: #F6E9E1;
+    --bezel: #2B2A26;
+    --shadow: 0 18px 40px rgba(43, 42, 38, .18);
+    --sans: "Gothic A1", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --serif: "Noto Serif KR", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #14110D;
+      --paper: #232019;
+      --paper-2: #2A2620;
+      --ink: #E8E2D4;
+      --ink-soft: #B0A998;
+      --ink-faint: #7F7869;
+      --line: #3A352A;
+      --line-soft: #2E2A22;
+      --amber: #D29245;
+      --amber-tint: #3B2F1C;
+      --amber-deep: #F2C079;
+      --bad: #D86E55;
+      --bad-tint: #3B201A;
+      --gemini: #7FA9CD;
+      --gemini-tint: #1E2A35;
+      --chatgpt: #7FB69C;
+      --chatgpt-tint: #1C2823;
+      --claude: #D98F63;
+      --claude-tint: #332117;
+      --bezel: #0B0907;
+      --shadow: 0 18px 40px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas: #14110D;
+    --paper: #232019;
+    --paper-2: #2A2620;
+    --ink: #E8E2D4;
+    --ink-soft: #B0A998;
+    --ink-faint: #7F7869;
+    --line: #3A352A;
+    --line-soft: #2E2A22;
+    --amber: #D29245;
+    --amber-tint: #3B2F1C;
+    --amber-deep: #F2C079;
+    --bad: #D86E55;
+    --bad-tint: #3B201A;
+    --gemini: #7FA9CD;
+    --gemini-tint: #1E2A35;
+    --chatgpt: #7FB69C;
+    --chatgpt-tint: #1C2823;
+    --claude: #D98F63;
+    --claude-tint: #332117;
+    --bezel: #0B0907;
+    --shadow: 0 18px 40px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.65;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; padding-block: 28px 56px; }
+
+  /* ─── 페이지 머리 ─── */
+  .page-head { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; }
+  .eyebrow { font-size: 11px; letter-spacing: 2.5px; color: var(--ink-faint); text-transform: uppercase; }
+  h1 { font-size: 26px; font-weight: 700; margin: 6px 0 8px; letter-spacing: -.3px; text-wrap: balance; }
+  .lede { margin: 0; max-width: 62ch; color: var(--ink-soft); }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .pill {
+    font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    background: var(--paper-2); color: var(--ink-soft); border: 1px solid var(--line);
+  }
+  .pill.warn { background: var(--bad-tint); color: var(--bad); border-color: transparent; }
+
+  /* ─── 상태 바꾸는 단추 ─── */
+  .switcher { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+  .switcher button {
+    font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--paper); color: var(--ink-soft); transition: background .15s, color .15s;
+  }
+  .switcher button:hover { background: var(--paper-2); }
+  .switcher button[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .switcher button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* ─── 무대 ─── */
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; align-items: start; }
+  @media (min-width: 900px) { .stage { grid-template-columns: 412px minmax(0, 1fr); } }
+
+  /* ─── 폰 프레임 ─── */
+  .phone { width: 100%; max-width: 412px; margin: 0 auto; }
+  .bezel {
+    background: var(--bezel); border-radius: 44px; padding: 11px;
+    box-shadow: var(--shadow);
+  }
+  .screen {
+    position: relative; height: 780px; border-radius: 34px; overflow: hidden;
+    background: var(--paper); display: flex; flex-direction: column;
+  }
+  @media (max-width: 420px) { .screen { height: 640px; } }
+
+  /* 뒤에 깔린 본문 화면 */
+  .behind { position: absolute; inset: 0; padding: 14px 12px; filter: saturate(.9); }
+  .behind::after { content: ""; position: absolute; inset: 0; background: rgba(43, 42, 38, .34); }
+  .app-bar { display: flex; align-items: center; gap: 6px; }
+  .app-title { flex: 1; min-width: 0; }
+  .app-title b { display: block; font-size: 17px; font-weight: 700; line-height: 1.2; }
+  .app-title span { font-size: 12px; color: var(--ink-soft); }
+  .chip-dark { height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 9px; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 700; }
+  .chip-out { height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 9px; border: 1px dashed var(--ink-faint); color: var(--ink-faint); font-size: 12px; font-weight: 700; }
+  .chip-amber { height: 34px; width: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--amber-tint); border: 1px solid var(--amber); color: var(--amber-deep); }
+  .behind .verse { font-family: var(--serif); font-size: 13.5px; line-height: 1.8; border-bottom: 1px solid var(--line); padding: 9px 2px; }
+  .behind .verse.on { background: var(--amber-tint); border-left: 3px solid var(--amber); padding-left: 8px; }
+  .behind .verse i { font-style: normal; color: var(--ink-faint); font-family: var(--sans); font-size: 12px; margin-right: 5px; }
+
+  /* ─── 시트 ─── */
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 80%;
+    background: var(--paper); border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -10px 30px rgba(43, 42, 38, .16);
+    display: flex; flex-direction: column;
+  }
+  .grip { width: 40px; height: 4px; border-radius: 99px; background: var(--line); margin: 8px auto 4px; flex: none; }
+  .sheet-head { display: flex; align-items: flex-start; gap: 8px; padding: 4px 13px 9px; border-bottom: 1px solid var(--line); flex: none; }
+  .sheet-head .ref { flex: 1; min-width: 0; }
+  .sheet-head .ref b { font-size: 14.5px; font-weight: 700; }
+  .sheet-head .ref em { font-style: normal; font-size: 11.5px; color: var(--ink-faint); margin-left: 5px; }
+  .sheet-head .ref p { margin: 3px 0 0; font-family: var(--serif); font-size: 12.5px; line-height: 1.75; color: var(--ink-soft); }
+  .x { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 0; background: var(--paper-2); color: var(--ink-soft); font-size: 15px; cursor: pointer; }
+  .sheet-body { flex: 1; overflow-y: auto; padding: 12px 13px 4px; }
+  .sheet-foot { flex: none; border-top: 1px solid var(--line); padding: 9px 13px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--paper); }
+
+  /* 질문칸 */
+  .composer { border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); padding: 9px 10px; }
+  .composer .ph { color: var(--ink-faint); font-size: 13px; }
+  .composer-row { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
+  .mic { width: 34px; height: 34px; border-radius: 99px; border: 1px solid var(--line); background: var(--paper); display: grid; place-items: center; font-size: 15px; }
+  .send { flex: 1; height: 34px; border-radius: 9px; border: 0; background: var(--amber); color: #fff; font: inherit; font-size: 13px; font-weight: 700; }
+  .notice { margin: 7px 2px 0; font-size: 10.5px; line-height: 1.55; color: var(--ink-faint); }
+
+  /* AI 고르는 줄 */
+  .ai-row { display: flex; gap: 5px; margin-bottom: 10px; }
+  .ai-chip { flex: 1; text-align: center; font-size: 11.5px; font-weight: 700; padding: 6px 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink-faint); }
+  .ai-chip.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .ai-chip.chorus.on { background: var(--amber-deep); border-color: var(--amber-deep); }
+
+  /* 내 질문 */
+  .mine { background: var(--amber-tint); border-radius: 12px; padding: 10px 11px; margin-bottom: 12px; }
+  .mine .who { font-size: 10.5px; font-weight: 700; letter-spacing: 1px; color: var(--amber-deep); }
+  .mine p { margin: 3px 0 0; font-size: 13.5px; line-height: 1.7; }
+
+  /* 답 카드 */
+  .card { border: 1px solid var(--line); border-radius: 13px; background: var(--paper); margin-bottom: 11px; overflow: hidden; }
+  .card > header { display: flex; align-items: center; gap: 6px; padding: 8px 11px; border-bottom: 1px solid var(--line-soft); }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .card.g .badge { background: var(--gemini-tint); color: var(--gemini); }
+  .card.c .badge { background: var(--chatgpt-tint); color: var(--chatgpt); }
+  .card.a .badge { background: var(--claude-tint); color: var(--claude); }
+  .card.g { border-top: 3px solid var(--gemini); }
+  .card.c { border-top: 3px solid var(--chatgpt); }
+  .card.a { border-top: 3px solid var(--claude); }
+  .card > header small { color: var(--ink-faint); font-size: 10.5px; }
+  .card > header .spacer { flex: 1; }
+  .ans { padding: 10px 11px 4px; }
+  .ans dt { font-size: 10.5px; font-weight: 700; letter-spacing: .6px; color: var(--amber-deep); margin-top: 9px; }
+  .ans dt:first-child { margin-top: 0; }
+  .ans dd { margin: 2px 0 0; font-size: 13px; line-height: 1.78; }
+  .refs { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0 2px; }
+  .ref-chip { font-size: 11px; font-weight: 700; color: var(--amber-deep); background: var(--amber-tint); border-radius: 7px; padding: 2px 7px; }
+  .pasted { margin: 8px 0 0; border-left: 2px solid var(--line); padding: 2px 0 2px 9px; }
+  .pasted p { margin: 0 0 5px; font-family: var(--serif); font-size: 12px; line-height: 1.75; color: var(--ink-soft); }
+  .pasted p b { font-family: var(--sans); font-size: 10.5px; font-weight: 700; color: var(--ink-faint); display: block; }
+  .card-foot { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-top: 1px solid var(--line-soft); background: var(--paper-2); }
+  .go { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px solid currentColor; background: transparent; }
+  .card.g .go { color: var(--gemini); }
+  .card.c .go { color: var(--chatgpt); }
+  .card.a .go { color: var(--claude); }
+  .flag { margin-left: auto; font-size: 11px; color: var(--ink-faint); text-decoration: underline; text-underline-offset: 2px; }
+
+  .split-note { font-size: 11.5px; color: var(--ink-soft); background: var(--paper-2); border-radius: 9px; padding: 8px 10px; margin: 2px 0 12px; }
+  .disclaimer { font-size: 10.5px; line-height: 1.6; color: var(--ink-faint); border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 4px; }
+
+  .foot-actions { display: flex; gap: 8px; }
+  .btn-keep { flex: 1; height: 40px; border-radius: 10px; border: 0; background: var(--amber); color: #fff; font: inherit; font-size: 14px; font-weight: 700; }
+  .btn-drop { width: 96px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); font: inherit; font-size: 14px; font-weight: 700; }
+
+  /* 거절 */
+  .refuse { border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); padding: 12px; font-size: 13px; line-height: 1.75; }
+  .refuse b { display: block; font-size: 11px; letter-spacing: 1px; color: var(--ink-faint); margin-bottom: 5px; }
+
+  /* 위기 */
+  .crisis-head { background: var(--bad-tint); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .crisis-head p { margin: 0; font-size: 13.5px; line-height: 1.75; }
+  .call-card { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 11px; }
+  .call-card header { padding: 8px 11px; background: var(--paper-2); font-size: 11.5px; font-weight: 700; color: var(--ink-soft); border-bottom: 1px solid var(--line); }
+  .call { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-bottom: 1px solid var(--line-soft); }
+  .call:last-child { border-bottom: 0; }
+  .call .name { flex: 1; font-size: 13px; }
+  .call .name small { display: block; color: var(--ink-faint); font-size: 10.5px; }
+  .call .num { font-size: 13px; font-weight: 700; color: var(--bad); font-variant-numeric: tabular-nums; }
+  .call .num.tbd { color: var(--ink-faint); font-weight: 500; font-size: 11.5px; }
+  .btn-pastor { width: 100%; height: 40px; border-radius: 10px; border: 0; background: var(--ink); color: var(--paper); font: inherit; font-size: 13.5px; font-weight: 700; }
+
+  /* 음성 */
+  .rec { border: 1px solid var(--amber); border-radius: 12px; background: var(--amber-tint); padding: 14px 12px; text-align: center; }
+  .rec b { font-size: 14px; }
+  .wave { display: flex; align-items: flex-end; justify-content: center; gap: 3px; height: 34px; margin: 10px 0 6px; }
+  .wave span { width: 4px; border-radius: 2px; background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { height: 30%; } 50% { height: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .wave span { animation: none; height: 60%; } }
+  .rec small { color: var(--amber-deep); font-size: 11.5px; font-weight: 700; }
+
+  /* ─── 주석 ─── */
+  .notes { min-width: 0; }
+  .notes h2 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+  .notes .sub { margin: 0 0 14px; color: var(--ink-soft); font-size: 13px; }
+  .notes ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 11px; }
+  .notes li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 9px; }
+  .notes .n { width: 22px; height: 22px; border-radius: 99px; background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .notes li > div > b { display: block; font-size: 13.5px; }
+  .notes p b { display: inline; font-size: inherit; }
+  .notes p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--ink-soft); }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--paper-2); color: var(--ink-faint); border: 1px solid var(--line); margin-left: 5px; vertical-align: 2px; }
+  .tag.ask { background: var(--bad-tint); color: var(--bad); border-color: transparent; }
+
+  /* ─── PC ─── */
+  .pc-stage { margin-top: 34px; }
+  .pc-frame { border: 1px solid var(--line); border-radius: 12px; background: var(--paper-2); padding: 10px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+  .pc-bar { display: flex; align-items: center; gap: 6px; padding: 0 2px 9px; }
+  .dot { width: 9px; height: 9px; border-radius: 99px; background: var(--line); }
+  .pc-bar span { margin-left: 6px; font-size: 11.5px; color: var(--ink-faint); }
+  .pc-window { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
+  .pc-window > .sheet-head { border-bottom: 1px solid var(--line); padding: 0 0 10px; margin-bottom: 12px; }
+  .cols { display: grid; gap: 11px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 760px) { .cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .resize { position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; color: var(--ink-faint); }
+  .pc-note { font-size: 12px; color: var(--ink-soft); margin: 9px 2px 0; }
+
+  /* ─── 맺음 ─── */
+  .closing { margin-top: 34px; border-top: 1px solid var(--line); padding-top: 20px; display: grid; gap: 18px; }
+  @media (min-width: 760px) { .closing { grid-template-columns: 1fr 1fr; } }
+  .closing h2 { font-size: 15px; margin: 0 0 8px; }
+  .closing ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  .closing li { font-size: 13px; color: var(--ink-soft); }
+  .closing li b { color: var(--ink); }
+  .brand { font-family: "Playfair Display", var(--serif); font-style: italic; }
+</style>
+
+<main class="wrap">
+  <header class="page-head">
+    <div class="eyebrow">예봄성경 · 화면 시안</div>
+    <h1>성경 질문 창</h1>
+    <p class="lede">
+      본문에서 절을 고르고 <b>질문</b>을 누르면 열리는 창이다. 아래 답은 꾸며 쓴 말이 아니라
+      <b>교리 기준 초안(docs/BIBLE_QA_DOCTRINE.md)을 시스템 프롬프트로 넣어 실제로 받은 답</b>이고,
+      네 줄 형식·구절 표기·금지 목록을 지켰는지 검사까지 통과한 것이다. 성경 본문은 새번역 실제 본문이다.
+    </p>
+    <div class="pills">
+      <span class="pill">시안 · 2026-09-18</span>
+      <span class="pill warn">교리 기준 재가 전</span>
+      <span class="pill">로그인 교인 전용</span>
+      <span class="pill">앱에서는 한 번만 답함</span>
+    </div>
+  </header>
+
+  <div class="switcher" role="tablist" aria-label="화면 상태">
+    <button role="tab" aria-selected="true" data-state="chorus">합창 — 세 AI</button>
+    <button role="tab" aria-selected="false" data-state="single">하나만 — Gemini</button>
+    <button role="tab" aria-selected="false" data-state="ask">묻기 전</button>
+    <button role="tab" aria-selected="false" data-state="voice">음성으로 묻는 중</button>
+    <button role="tab" aria-selected="false" data-state="refuse">성경과 무관한 질문</button>
+    <button role="tab" aria-selected="false" data-state="crisis">위기 신호</button>
+  </div>
+
+  <section class="stage">
+    <!-- ───────── 폰 ───────── -->
+    <div class="phone">
+      <div class="bezel">
+        <div class="screen">
+          <!-- 뒤에 깔린 본문 -->
+          <div class="behind" aria-hidden="true">
+            <div class="app-bar">
+              <div class="app-title"><b>로마서 8</b><span>총 16장</span></div>
+              <div class="chip-dark">새번역 ▾</div>
+              <div class="chip-out">대역 ▾</div>
+              <div class="chip-amber">◁))</div>
+            </div>
+            <div style="margin-top:10px">
+              <div class="verse"><i>27</i>사람의 마음을 살피시는 하나님께서는 성령의 생각이 어떠한지를 아십니다.</div>
+              <div class="verse on"><i>28</i>하나님을 사랑하는 사람들, 곧 하나님의 뜻대로 부르심을 받은 사람들에게는, 모든 일이 서로 협력해서 선을 이룬다는 것을 우리는 압니다.</div>
+              <div class="verse"><i>29</i>하나님께서는 미리 아신 사람들을 택하셔서, 자기 아들의 형상과 같은 모습이 되도록 미리 정하셨으니…</div>
+            </div>
+          </div>
+
+          <!-- 시트 -->
+          <div class="sheet">
+            <div class="grip"></div>
+            <div class="sheet-head">
+              <div class="ref">
+                <b>로마서 8:28</b><em>새번역</em>
+                <p>하나님을 사랑하는 사람들, 곧 하나님의 뜻대로 부르심을 받은 사람들에게는, 모든 일이 서로 협력해서 선을 이룬다는 것을 우리는 압니다.</p>
+              </div>
+              <button class="x" aria-label="닫기">✕</button>
+            </div>
+
+            <!-- 상태: 합창 -->
+            <div class="sheet-body" data-body="chorus">
+              <div class="ai-row" aria-hidden="true">
+                <div class="ai-chip">Gemini</div>
+                <div class="ai-chip">ChatGPT</div>
+                <div class="ai-chip">Claude</div>
+                <div class="ai-chip chorus on">합창</div>
+              </div>
+              <div class="mine">
+                <div class="who">내 질문</div>
+                <p>모든 것이 선을 이룬다고 하는데, 제가 작년에 겪은 그 일도 하나님이 계획하신 것입니까? 그러면 하나님이 제 고통을 원하신 겁니까?</p>
+              </div>
+              <div class="split-note">세 답이 갈리는 대목이 바로 목회자와 나눌 자리입니다.</div>
+
+              <article class="card g">
+                <header><span class="badge">Gemini</span><small>Gemini 3 Pro</small><span class="spacer"></span><small>7.2초</small></header>
+                <dl class="ans">
+                  <dt>한 줄 요약</dt>
+                  <dd>하나님이 만사를 다스리신다는 고백은, 하나님이 그 고통을 원하셨다는 말이 아닙니다.</dd>
+                  <dt>성경이 말하는 것</dt>
+                  <dd>본문은 모든 일이 선하다는 말이 아니라, 하나님이 선으로 이끄신다는 말입니다 (로마서 8:28). 개혁주의 장로교회는 섭리(하나님이 만사를 그 뜻대로 다스리시는 일)를 고백합니다. 그러나 성경은 하나님이 악의 저자는 아니시라고 분명히 말합니다 (야고보서 1:13). 십자가에서도 사람의 악한 손과 하나님의 정하신 뜻이 함께 있었습니다 (사도행전 2:23). 이 두 가지가 어떻게 맞물리는지는 성경이 우리에게 다 알려 주지 않았습니다. 다만 그리스도께서 먼저 고난을 지나가셨으니, 하나님은 그 아픔을 모르는 분이 아닙니다.</dd>
+                  <dt>조심할 점</dt>
+                  <dd>“다 뜻이 있으니 아파하지 말라”는 성경이 하는 말이 아닙니다. 작년 그 일의 까닭은 성경이 알려 주지 않은 자리입니다. 하나님의 다스림을 이렇게 고백하지 않는 다른 교단도 있습니다.</dd>
+                  <dt>목회자와 나눠 볼 질문</dt>
+                  <dd>작년 그 일을 하나님의 섭리 안에서 어떻게 기도로 들고 가야 할까요?</dd>
+                </dl>
+                <div class="pasted">
+                  <p><b>야고보서 1:13 · 새번역 — 앱이 붙인 본문</b>시험을 당할 때에, 아무도 “내가 하나님께 시험을 당하고 있다” 하고 말하지 마십시오. 하나님께서는 악에게 시험을 받지도 않으시고, 또 시험하지도 않으십니다.</p>
+                  <p><b>사도행전 2:23 · 새번역</b>이 예수께서 버림을 받으신 것은 하나님이 정하신 계획을 따라 미리 알고 계신 대로 된 일이지만, 여러분은 그를 무법자들의 손을 빌어서 십자가에 못 박아 죽였습니다.</p>
+                </div>
+                <div class="card-foot">
+                  <button class="go">Gemini 로 이어가기 ↗</button>
+                  <a class="flag" href="#notes">이 답이 이상합니다</a>
+                </div>
+              </article>
+
+              <article class="card c">
+                <header><span class="badge">ChatGPT</span><small>GPT 5.1</small><span class="spacer"></span><small>6.4초</small></header>
+                <dl class="ans">
+                  <dt>한 줄 요약</dt>
+                  <dd>하나님은 모든 일을 다스리시지만, 성경은 하나님이 악과 고통을 기뻐하신다고 말하지 않습니다.</dd>
+                  <dt>성경이 말하는 것</dt>
+                  <dd>성경은 이런 물음을 나무라지 않고, 욥기와 시편에 그 부르짖음을 그대로 담아 두었습니다. 개혁주의 장로교회는 하나님이 만사를 그 뜻대로 정하시고 다스리신다고 고백합니다. 동시에 성경은 하나님이 악을 지어내는 분이 아니라고 못 박습니다 (야고보서 1:13). 십자가에는 하나님의 정하신 뜻과 사람의 악한 손이 함께 있었습니다 (사도행전 2:23). 이 말씀은 그 일이 좋은 일이었다는 뜻이 아닙니다. 하나님이 그 일까지 선으로 이끄신다는 약속입니다 (로마서 8:28).</dd>
+                  <dt>조심할 점</dt>
+                  <dd>작년의 그 일이 왜 있었는지, 그 까닭은 성경이 우리에게 알려 주지 않습니다. 그래서 “하나님이 이것을 원하셔서 그랬다”고 제가 대신 말할 수 없습니다. 하나님의 다스림과 사람의 책임이 어떻게 맞물리는지는 우리가 다 알지 못합니다. 이 섭리 고백을 우리와 다르게 보는 교단도 있습니다.</dd>
+                  <dt>목회자와 나눠 볼 질문</dt>
+                  <dd>작년에 겪은 그 일을 하나님의 다스림 안에서 어떻게 받아들이며 기도하면 좋을까요?</dd>
+                </dl>
+                <div class="refs"><span class="ref-chip">야고보서 1:13</span><span class="ref-chip">사도행전 2:23</span><span class="ref-chip">로마서 8:28</span></div>
+                <div class="card-foot">
+                  <button class="go">ChatGPT 로 이어가기 ↗</button>
+                  <a class="flag" href="#notes">이 답이 이상합니다</a>
+                </div>
+              </article>
+
+              <article class="card a">
+                <header><span class="badge">Claude</span><small>Sonnet 4.5</small><span class="spacer"></span><small>8.1초</small></header>
+                <dl class="ans">
+                  <dt>한 줄 요약</dt>
+                  <dd>하나님이 모든 일을 다스리신다는 고백은, 그 고통을 하나님이 기뻐하셨다는 말이 아닙니다.</dd>
+                  <dt>성경이 말하는 것</dt>
+                  <dd>개혁주의 장로교회는 하나님이 만사를 그 뜻대로 정하시고 다스리신다고 고백합니다. 동시에 성경은 하나님이 죄와 악의 저자가 아니시며, 사람의 책임도 없어지지 않는다고 말합니다. 베드로는 십자가를 하나님이 정하신 뜻이라 하면서도, 그 일을 한 사람들의 책임을 함께 말했습니다. 성경은 사람을 괴롭게 하는 것이 하나님의 본심이 아니라고도 말합니다. 이 둘이 어떻게 맞물리는지는 성경이 우리에게 다 알려 주지 않았습니다 (사도행전 2:23, 야고보서 1:13, 예레미야애가 3:33).</dd>
+                  <dt>조심할 점</dt>
+                  <dd>하나님이 모든 일을 선으로 이끄신다는 말은, 그 일 자체가 선했다는 뜻이 아닙니다. 작년의 그 일이 왜 있었는지, 그 까닭은 저도 알지 못합니다. 성경은 아픈 사람에게 슬퍼하지 말라고 하지 않습니다. 하나님의 작정을 이렇게 고백하지 않는 다른 교단도 있습니다.</dd>
+                  <dt>목회자와 나눠 볼 질문</dt>
+                  <dd>작년의 그 일을 두고 저는 하나님을 어떻게 붙들어야 할까요?</dd>
+                </dl>
+                <div class="pasted">
+                  <p><b>예레미야애가 3:33 · 새번역</b>우리를 괴롭히거나 근심하게 하는 것은, 그분의 본심이 아니다.</p>
+                </div>
+                <div class="card-foot">
+                  <button class="go">Claude 로 이어가기 ↗</button>
+                  <a class="flag" href="#notes">이 답이 이상합니다</a>
+                </div>
+              </article>
+
+              <p class="disclaimer">AI 가 성경을 찾아 답한 것입니다. 교회의 공식 가르침이 아니며, 중요한 일은 목회자와 나누십시오.</p>
+            </div>
+
+            <!-- 상태: 하나만 -->
+            <div class="sheet-body" data-body="single" hidden>
+              <div class="ai-row" aria-hidden="true">
+                <div class="ai-chip on">Gemini</div>
+                <div class="ai-chip">ChatGPT</div>
+                <div class="ai-chip">Claude</div>
+                <div class="ai-chip chorus">합창</div>
+              </div>
+              <div class="mine">
+                <div class="who">내 질문</div>
+                <p>모든 것이 선을 이룬다고 하는데, 제가 작년에 겪은 그 일도 하나님이 계획하신 것입니까?</p>
+              </div>
+              <article class="card g">
+                <header><span class="badge">Gemini</span><small>Gemini 3 Pro</small><span class="spacer"></span><small>7.2초</small></header>
+                <dl class="ans">
+                  <dt>한 줄 요약</dt>
+                  <dd>하나님이 만사를 다스리신다는 고백은, 하나님이 그 고통을 원하셨다는 말이 아닙니다.</dd>
+                  <dt>성경이 말하는 것</dt>
+                  <dd>본문은 모든 일이 선하다는 말이 아니라, 하나님이 선으로 이끄신다는 말입니다 (로마서 8:28). 개혁주의 장로교회는 섭리(하나님이 만사를 그 뜻대로 다스리시는 일)를 고백합니다. 그러나 성경은 하나님이 악의 저자는 아니시라고 분명히 말합니다 (야고보서 1:13). 십자가에서도 사람의 악한 손과 하나님의 정하신 뜻이 함께 있었습니다 (사도행전 2:23). 이 두 가지가 어떻게 맞물리는지는 성경이 우리에게 다 알려 주지 않았습니다.</dd>
+                  <dt>조심할 점</dt>
+                  <dd>“다 뜻이 있으니 아파하지 말라”는 성경이 하는 말이 아닙니다. 작년 그 일의 까닭은 성경이 알려 주지 않은 자리입니다.</dd>
+                  <dt>목회자와 나눠 볼 질문</dt>
+                  <dd>작년 그 일을 하나님의 섭리 안에서 어떻게 기도로 들고 가야 할까요?</dd>
+                </dl>
+                <div class="card-foot">
+                  <button class="go">Gemini 로 이어가기 ↗</button>
+                  <a class="flag" href="#notes">이 답이 이상합니다</a>
+                </div>
+              </article>
+              <div class="split-note">이어서 더 묻고 싶으시면 <b>Gemini 로 이어가기</b>를 누르십시오. 지금까지의 구절과 질문, 답을 가지고 그 사이트가 열립니다.</div>
+              <p class="disclaimer">AI 가 성경을 찾아 답한 것입니다. 교회의 공식 가르침이 아니며, 중요한 일은 목회자와 나누십시오.</p>
+            </div>
+
+            <!-- 상태: 묻기 전 -->
+            <div class="sheet-body" data-body="ask" hidden>
+              <div class="ai-row" aria-hidden="true">
+                <div class="ai-chip on">Gemini</div>
+                <div class="ai-chip">ChatGPT</div>
+                <div class="ai-chip">Claude</div>
+                <div class="ai-chip chorus">합창</div>
+              </div>
+              <p style="font-size:12.5px;color:var(--ink-soft);margin:0 2px 12px">
+                이 구절에 대해 궁금한 것을 물어보십시오. 성경과 신앙에 관한 질문에 답합니다.
+                마지막에 고른 AI 가 다음에도 먼저 나옵니다.
+              </p>
+              <div class="composer">
+                <div class="ph">예: 이 구절이 제 형편에는 어떻게 적용됩니까?</div>
+                <div class="composer-row">
+                  <div class="mic">🎤</div>
+                  <button class="send">질문</button>
+                </div>
+              </div>
+              <p class="notice">적으신 내용은 답을 만들기 위해 외부 AI 로 전송됩니다. 이름·연락처나 남의 이야기는 적지 마십시오.</p>
+            </div>
+
+            <!-- 상태: 음성 -->
+            <div class="sheet-body" data-body="voice" hidden>
+              <div class="ai-row" aria-hidden="true">
+                <div class="ai-chip">Gemini</div>
+                <div class="ai-chip">ChatGPT</div>
+                <div class="ai-chip">Claude</div>
+                <div class="ai-chip chorus on">합창</div>
+              </div>
+              <div class="rec">
+                <b>듣고 있습니다</b>
+                <div class="wave" aria-hidden="true">
+                  <span style="animation-delay:0s"></span><span style="animation-delay:.1s"></span><span style="animation-delay:.2s"></span>
+                  <span style="animation-delay:.3s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.05s"></span>
+                  <span style="animation-delay:.25s"></span><span style="animation-delay:.35s"></span><span style="animation-delay:.2s"></span>
+                </div>
+                <small>0:12 / 1:00 · 다 말하셨으면 한 번 더 누르십시오</small>
+              </div>
+              <p class="notice" style="margin-top:12px">
+                말씀하신 것을 글로 바꾼 뒤 보여 드립니다. 고치고 나서 질문을 누르시면 됩니다.
+                한 번에 1분까지 받습니다.
+              </p>
+            </div>
+
+            <!-- 상태: 거절 -->
+            <div class="sheet-body" data-body="refuse" hidden>
+              <div class="ai-row" aria-hidden="true">
+                <div class="ai-chip on">Gemini</div>
+                <div class="ai-chip">ChatGPT</div>
+                <div class="ai-chip">Claude</div>
+                <div class="ai-chip chorus">합창</div>
+              </div>
+              <div class="mine">
+                <div class="who">내 질문</div>
+                <p>오늘 서울 날씨 어때요? 우산 가져가야 하나요?</p>
+              </div>
+              <div class="refuse">
+                <b>이 창의 답</b>
+                이 창은 성경을 읽다가 생긴 질문에 답하는 자리입니다. 그 질문은 여기서 답하지 않습니다.
+                성경이나 신앙에 대해 알고 싶은 것을 물어 주세요.
+              </div>
+              <p class="notice">값싼 모델이 먼저 갈라내므로 큰 AI 는 부르지 않았습니다. 이 화면의 문구는 앱이 고정으로 씁니다.</p>
+            </div>
+
+            <!-- 상태: 위기 -->
+            <div class="sheet-body" data-body="crisis" hidden>
+              <div class="mine">
+                <div class="who">내 질문</div>
+                <p>사는 게 다 끝난 것 같습니다. 그냥 사라지고 싶습니다.</p>
+              </div>
+              <div class="crisis-head">
+                <p>많이 힘드셨겠습니다. 그 말씀을 여기 적어 주신 것만으로도 큰 용기입니다.
+                  오늘 안에 꼭 한 사람에게 연락해 주십시오. 지금 연락할 곳이 아래에 있습니다.</p>
+              </div>
+              <div class="call-card">
+                <header>지금 연락할 곳</header>
+                <div class="call"><span class="name">자살예방 상담<small>24시간</small></span><span class="num tbd">재가 후 확정</span></div>
+                <div class="call"><span class="name">응급 · 즉시 위험<small>구조·구급 / 범죄</small></span><span class="num tbd">재가 후 확정</span></div>
+                <div class="call"><span class="name">가정폭력 · 아동학대<small>24시간</small></span><span class="num tbd">재가 후 확정</span></div>
+              </div>
+              <button class="btn-pastor">목사님께 연락 부탁하기</button>
+              <p class="notice" style="margin-top:12px">
+                위기 신호가 보이면 <b>AI 를 부르지 않습니다.</b> 이 화면은 앱이 고정으로 띄웁니다 —
+                번호를 AI 가 쓰면 옛 번호를 섞기 때문입니다. 번호는 기관 공식 안내로 확인한 뒤 코드에 박습니다.
+              </p>
+            </div>
+
+            <!-- 바닥 -->
+            <div class="sheet-foot">
+              <div class="foot-actions" data-foot="answered">
+                <button class="btn-drop">버리기</button>
+                <button class="btn-keep">이 구절에 저장</button>
+              </div>
+              <div class="foot-actions" data-foot="asking" hidden>
+                <button class="btn-drop" style="width:100%">닫기</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────── 주석 ───────── -->
+    <aside class="notes" id="notes">
+      <h2>이 화면에서 정한 것</h2>
+      <p class="sub">숫자는 왼쪽 화면의 위에서 아래 순서다.</p>
+      <ol>
+        <li><span class="n">1</span><div>
+          <b>맨 위에 고른 구절이 그대로 있다</b>
+          <p>새번역 본문을 함께 보인다. 여러 절을 고르면 범위로(로마서 8:28–30) 적고 길면 접는다.</p>
+        </div></li>
+        <li><span class="n">2</span><div>
+          <b>AI 를 고르는 줄 — 마지막에 고른 것을 기억</b>
+          <p>처음 쓰는 교인은 Gemini 다. <b>합창</b>은 셋이 동시에 답한다. 답은 합치지 않는다 —
+            값싼 모델이 합치면 내용이 새고, 두 답이 교리에서 엇갈릴 때 모순을 나란히 싣게 된다.</p>
+        </div></li>
+        <li><span class="n">3</span><div>
+          <b>세 답이 갈릴 때의 한 줄</b>
+          <p>“세 답이 갈리는 대목이 바로 목회자와 나눌 자리입니다.” 교인이 “그럼 어느 게 맞나요”로
+            막히는 것을 앱이 먼저 받아 준다.</p>
+        </div></li>
+        <li><span class="n">4</span><div>
+          <b>답은 네 줄로 고정</b>
+          <p>한 줄 요약 · 성경이 말하는 것 · 조심할 점 · 목회자와 나눠 볼 질문.
+            세 AI 를 나란히 놓고 비교하려면 형식이 흔들리지 않아야 한다.</p>
+        </div></li>
+        <li><span class="n">5</span><div>
+          <b>성경 본문은 앱이 붙인다</b>
+          <p>AI 는 주소만 적는다(최대 세 개). 앱이 그 주소를 성경 데이터에서 찾아 본문을 붙이고,
+            <b>없는 주소는 지운다</b> — 지어낸 구절 하나가 이 창의 신뢰를 다 깎는다.</p>
+        </div></li>
+        <li><span class="n">6</span><div>
+          <b>이어가기는 그 AI 사이트로</b>
+          <p>앱에서는 한 번만 답한다. 카드마다 그 AI 로 넘어가는 단추를 둔다 — 구절·질문·답을 가지고 간다.
+            Claude·ChatGPT 는 주소로 미리 채울 수 있고 Gemini 는 안 되므로, 세 곳 모두 복사해 두고 사이트를 연다.</p>
+        </div></li>
+        <li><span class="n">7</span><div>
+          <b>답마다 '이 답이 이상합니다'</b>
+          <p>교회가 잘못된 답을 알 방법이 없으면 기준은 종이로만 남는다. 눌린 건은 관리자 화면에서 따로 본다.
+            <span class="tag">검증에서 나온 지적</span></p>
+        </div></li>
+        <li><span class="n">8</span><div>
+          <b>맨 아래 고정 문구</b>
+          <p>“AI 가 성경을 찾아 답한 것입니다…” 모델에게 맡기면 빼먹거나 세 번 나온다.</p>
+        </div></li>
+        <li><span class="n">9</span><div>
+          <b>버리기 · 이 구절에 저장</b>
+          <p>저장하면 그 구절을 다시 열 때 내 질문이 보인다. 버리면 화면에서 사라진다
+            <span class="tag">기록은 서버에 남는다</span></p>
+        </div></li>
+        <li><span class="n">10</span><div>
+          <b>입력창 아래 외부 전송 고지</b>
+          <p>질문은 게이트웨이를 거쳐 외부 AI 로 나간다. 이름·연락처·남의 이야기를 적지 말라고 한 줄로 알린다.
+            <span class="tag ask">동의 절차는 재가 필요</span></p>
+        </div></li>
+      </ol>
+    </aside>
+  </section>
+
+  <!-- ───────── PC ───────── -->
+  <section class="pc-stage">
+    <h2 style="font-size:15px;margin:0 0 10px">PC — 좌우 폭이 넉넉하면 세 답을 나란히</h2>
+    <div class="pc-frame">
+      <div class="pc-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>예봄성경 · 성경 질문</span></div>
+      <div class="pc-window">
+        <div class="sheet-head">
+          <div class="ref"><b>로마서 8:28</b><em>새번역</em>
+            <p>하나님을 사랑하는 사람들, 곧 하나님의 뜻대로 부르심을 받은 사람들에게는, 모든 일이 서로 협력해서 선을 이룬다는 것을 우리는 압니다.</p>
+          </div>
+          <button class="x" aria-label="닫기">✕</button>
+        </div>
+        <div class="mine" style="margin-bottom:12px">
+          <div class="who">내 질문</div>
+          <p>모든 것이 선을 이룬다고 하는데, 제가 작년에 겪은 그 일도 하나님이 계획하신 것입니까?</p>
+        </div>
+        <div class="cols">
+          <article class="card g">
+            <header><span class="badge">Gemini</span><small>Gemini 3 Pro</small></header>
+            <dl class="ans">
+              <dt>한 줄 요약</dt><dd>하나님이 만사를 다스리신다는 고백은, 하나님이 그 고통을 원하셨다는 말이 아닙니다.</dd>
+              <dt>성경이 말하는 것</dt><dd>본문은 모든 일이 선하다는 말이 아니라, 하나님이 선으로 이끄신다는 말입니다 (로마서 8:28). 그러나 성경은 하나님이 악의 저자는 아니시라고 분명히 말합니다 (야고보서 1:13). 십자가에서도 사람의 악한 손과 하나님의 정하신 뜻이 함께 있었습니다 (사도행전 2:23).</dd>
+              <dt>조심할 점</dt><dd>“다 뜻이 있으니 아파하지 말라”는 성경이 하는 말이 아닙니다.</dd>
+              <dt>목회자와 나눠 볼 질문</dt><dd>작년 그 일을 하나님의 섭리 안에서 어떻게 기도로 들고 가야 할까요?</dd>
+            </dl>
+            <div class="card-foot"><button class="go">Gemini 로 이어가기 ↗</button><a class="flag" href="#notes">이상합니다</a></div>
+          </article>
+          <article class="card c">
+            <header><span class="badge">ChatGPT</span><small>GPT 5.1</small></header>
+            <dl class="ans">
+              <dt>한 줄 요약</dt><dd>하나님은 모든 일을 다스리시지만, 성경은 하나님이 악과 고통을 기뻐하신다고 말하지 않습니다.</dd>
+              <dt>성경이 말하는 것</dt><dd>성경은 이런 물음을 나무라지 않고, 욥기와 시편에 그 부르짖음을 그대로 담아 두었습니다. 동시에 성경은 하나님이 악을 지어내는 분이 아니라고 못 박습니다 (야고보서 1:13). 이 말씀은 그 일이 좋은 일이었다는 뜻이 아니라, 하나님이 그 일까지 선으로 이끄신다는 약속입니다 (로마서 8:28).</dd>
+              <dt>조심할 점</dt><dd>“하나님이 이것을 원하셔서 그랬다”고 제가 대신 말할 수 없습니다.</dd>
+              <dt>목회자와 나눠 볼 질문</dt><dd>작년에 겪은 그 일을 하나님의 다스림 안에서 어떻게 받아들이며 기도하면 좋을까요?</dd>
+            </dl>
+            <div class="card-foot"><button class="go">ChatGPT 로 이어가기 ↗</button><a class="flag" href="#notes">이상합니다</a></div>
+          </article>
+          <article class="card a">
+            <header><span class="badge">Claude</span><small>Sonnet 4.5</small></header>
+            <dl class="ans">
+              <dt>한 줄 요약</dt><dd>하나님이 모든 일을 다스리신다는 고백은, 그 고통을 하나님이 기뻐하셨다는 말이 아닙니다.</dd>
+              <dt>성경이 말하는 것</dt><dd>성경은 하나님이 죄와 악의 저자가 아니시며, 사람의 책임도 없어지지 않는다고 말합니다. 성경은 사람을 괴롭게 하는 것이 하나님의 본심이 아니라고도 말합니다 (사도행전 2:23, 야고보서 1:13, 예레미야애가 3:33).</dd>
+              <dt>조심할 점</dt><dd>작년의 그 일이 왜 있었는지, 그 까닭은 저도 알지 못합니다.</dd>
+              <dt>목회자와 나눠 볼 질문</dt><dd>작년의 그 일을 두고 저는 하나님을 어떻게 붙들어야 할까요?</dd>
+            </dl>
+            <div class="card-foot"><button class="go">Claude 로 이어가기 ↗</button><a class="flag" href="#notes">이상합니다</a></div>
+          </article>
+        </div>
+        <p class="disclaimer">AI 가 성경을 찾아 답한 것입니다. 교회의 공식 가르침이 아니며, 중요한 일은 목회자와 나누십시오.</p>
+      </div>
+      <svg class="resize" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M15 5 5 15M15 10l-5 5" stroke-linecap="round" />
+      </svg>
+    </div>
+    <p class="pc-note">창 오른쪽 아래를 끌어 크기를 바꾼다. 바꾼 크기는 기억한다. 좁아지면 폰과 같이 위에서 아래로 쌓인다.</p>
+  </section>
+
+  <!-- ───────── 맺음 ───────── -->
+  <section class="closing">
+    <div>
+      <h2>이 시안으로 정한 것</h2>
+      <ul>
+        <li><b>한 번 묻고 한 번 답한다.</b> 이어가기는 그 AI 사이트로 넘어간다</li>
+        <li><b>합쳐 주지 않는다.</b> 세 답을 그대로 나란히 둔다</li>
+        <li><b>네 줄 형식</b>을 세 AI 모두에게 강제한다</li>
+        <li><b>구절 본문은 앱이 붙이고, 없는 주소는 지운다</b></li>
+        <li><b>위기 신호면 AI 를 부르지 않는다.</b> 앱의 고정 화면이 먼저 뜬다</li>
+        <li><b>전화번호·면책 문구는 앱이 쓴다.</b> AI 에게 맡기지 않는다</li>
+      </ul>
+    </div>
+    <div>
+      <h2>재가가 필요한 자리</h2>
+      <ul>
+        <li><b>교리 기준</b> — <span class="brand">docs/BIBLE_QA_DOCTRINE.md</span> §C 의 여덟 항목</li>
+        <li><b>위기 상담 창구</b> — 번호·기관을 공식 안내로 확인한 뒤 코드에 박는다</li>
+        <li><b>목회자 연락 경로</b> — 위기 화면의 '목사님께 연락 부탁하기' 가 실제로 닿을 자리</li>
+        <li><b>외부 전송 동의</b> — 첫 사용 때 한 번 받을지, 고지 한 줄로 둘지</li>
+        <li><b>미성년</b> — 만 14세 미만은 법정대리인 동의가 걸린다</li>
+        <li><b>기록 열람</b> — super_admin 한 사람으로 좁히고, 열어 본 사실도 남긴다</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.switcher button'));
+    var bodies = Array.prototype.slice.call(document.querySelectorAll('[data-body]'));
+    var foots = Array.prototype.slice.call(document.querySelectorAll('[data-foot]'));
+    var asking = { ask: 1, voice: 1, crisis: 1 };
+
+    function show(state) {
+      tabs.forEach(function (t) { t.setAttribute('aria-selected', String(t.dataset.state === state)); });
+      bodies.forEach(function (b) { b.hidden = b.dataset.body !== state; });
+      foots.forEach(function (f) {
+        var want = asking[state] ? 'asking' : 'answered';
+        f.hidden = f.dataset.foot !== want;
+      });
+    }
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { show(t.dataset.state); });
+    });
+  })();
+</script>
