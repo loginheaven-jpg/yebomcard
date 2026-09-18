@@ -24,6 +24,7 @@ import { stripNotes, type BibleVersion } from "@/lib/types";
 import { gateQuestion, shouldCallModels } from "@/lib/bibleQa/gate";
 import { buildAnswerPrompt, type QaListRow } from "@/lib/bibleQa/prompt";
 import { QA_COLUMNS, askColumns, type ColumnKey, type QaColumn } from "@/lib/bibleQa/columns";
+import { extractRefs, stripMissingRefs, verifyRefs } from "@/lib/bibleQa/verseRefs";
 import {
   CRISIS_BODY,
   CRISIS_FALLBACK,
@@ -233,14 +234,42 @@ export async function POST(request: NextRequest) {
     useCache: !retry,
   });
 
+  // ── 구절 검증과 본문 붙이기 (§B-5 · §B-9) ─────────────────────────
+  // 없는 구절은 프롬프트로 다 막지 못한다. 답에 적힌 주소를 실제로 찾아보고,
+  // 없는 것은 **표시만** 지운다(글을 다시 쓰지 않는다).
+  const shown = await Promise.all(
+    answers.map(async (a) => {
+      if (!a.ok || !a.content) return { ...a, content: a.content, refs: [], removed: [] as string[] };
+      const found = extractRefs(a.content);
+      if (found.length === 0) return { ...a, refs: [], removed: [] as string[] };
+      const { resolved, missing } = await verifyRefs(found, version);
+      const cleaned = missing.length > 0 ? stripMissingRefs(a.content, missing) : a.content;
+      return {
+        ...a,
+        content: cleaned,
+        refs: resolved.map((r) => ({
+          ref:
+            r.verseEnd > r.verseStart
+              ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`
+              : `${r.bookName} ${r.chapter}:${r.verseStart}`,
+          text: r.text,
+        })),
+        removed: missing.map((r) => r.raw),
+      };
+    }),
+  );
+
   const { error: answerError } = await supabaseAdmin.from("ai_question_answers").insert(
-    answers.map((a) => ({
+    answers.map((a, i) => ({
       question_id: questionId,
       column_key: a.columnKey,
       provider_alias: a.providerAlias,
       model: a.model,
       ok: a.ok,
+      // **모델이 실제로 준 글을 그대로 남긴다** — 화면에 보인 것은 주소를 지운 판이지만,
+      // "모델이 없는 구절을 지어냈다" 는 사실은 기록에 남아야 잡을 수 있다.
       content: a.content,
+      removed_refs: shown[i].removed.length > 0 ? shown[i].removed : null,
       error: a.error,
       input_tokens: a.inputTokens,
       output_tokens: a.outputTokens,
@@ -258,15 +287,17 @@ export async function POST(request: NextRequest) {
     mode,
     disclaimer: DISCLAIMER,
     gate: gate.verdict,
-    answers: answers.map((a) => ({
+    answers: shown.map((a) => ({
       column: a.columnKey,
       label: QA_COLUMNS.find((c) => c.key === a.columnKey)?.label ?? a.columnKey,
       ok: a.ok,
+      // 없는 구절의 표시를 지운 판을 보낸다(§B-5)
       content: a.content,
       // 화면 라벨의 진실은 model 뿐이다(응답 provider 는 계열명으로 정규화돼 온다).
       model: a.model,
       error: a.ok ? null : a.error,
       elapsed_ms: a.elapsedMs,
+      refs: a.refs,
     })),
   });
 }

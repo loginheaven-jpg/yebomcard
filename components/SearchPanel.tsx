@@ -36,6 +36,7 @@ import { syncOnLogin, pushBookmarks, pushRecent } from "@/lib/userSync";
 import FullscreenReader, { type FullscreenVerseItem } from "./FullscreenReader";
 import QuickNavFab from "./QuickNavFab";
 import HomeBlankContent from "./HomeBlankContent";
+import BibleQaSheet from "./BibleQaSheet";
 import TTSButton from "./TTSButton";
 import TTSMiniPlayer from "./TTSMiniPlayer";
 import { promptAppInstall } from "@/lib/pwaInstall";
@@ -380,6 +381,8 @@ export default function SearchPanel({
   const [reportToast, setReportToast] = useState<string | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<number>>(new Set());
   const [reportTarget, setReportTarget] = useState<number | null>(null); // 신고 확인 팝업 대상 note id
+  // 성경 질문 창 — 고른 절을 그대로 넘긴다(docs/BIBLE_QA_DOCTRINE.md)
+  const [qaOpen, setQaOpen] = useState(false);
   useHardwareBack(!!noteEditorVerse, () => setNoteEditorVerse(null));
   useHardwareBack(reportTarget !== null, () => setReportTarget(null));
 
@@ -3283,7 +3286,8 @@ export default function SearchPanel({
       )}
 
       {/* ─── 플로팅 액션 카드 (선택 절이 있을 때) — 시안 F: 통합 카드 + 윤곽선 아이콘 ─── */}
-      {selectedVerses.length > 0 && (
+      {/* 질문 창이 열린 동안에는 감춘다 — 그때는 쓸 일이 없고, 시트 위로 비쳐 보이는 일도 막는다 */}
+      {selectedVerses.length > 0 && !qaOpen && (
         <div className="fixed bottom-24 right-4 sm:right-6 z-40 pointer-events-none">
           <div className="pointer-events-auto w-[156px] bg-white dark:bg-gray-800 border border-[var(--line)] dark:border-gray-700 rounded-2xl shadow-lg dark:shadow-none overflow-hidden">
             {/* 본문으로 (검색 결과에서만) */}
@@ -3315,6 +3319,19 @@ export default function SearchPanel({
               </svg>
               {copied ? "복사됨" : "복사"}
             </button>
+            {/* 질문 (로그인 전용) — 고른 절을 두고 AI 에게 묻는다.
+                자리가 좁아 비로그인에게는 그리지 않는다(메모·하이라이트와 같은 관습). */}
+            {isLoggedIn && (
+              <button
+                onClick={() => setQaOpen(true)}
+                className="w-full flex items-center justify-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300 border-b border-[var(--line)] dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-700 transition-colors"
+              >
+                <svg className="w-[17px] h-[17px] shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                </svg>
+                질문
+              </button>
+            )}
             {/* 메모 (로그인 + 단일) */}
             {isLoggedIn && selectedVerses.length === 1 && (
               <button
@@ -3405,6 +3422,15 @@ export default function SearchPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 성경 질문 창 — 고른 절이 없어지면 함께 닫는다 */}
+      {qaOpen && selectedVerses.length > 0 && (
+        <BibleQaSheet
+          verses={selectedVerses}
+          version={mainVersion}
+          onClose={() => setQaOpen(false)}
+        />
       )}
 
       {/* 묵상 메모 에디터 */}

@@ -102,7 +102,11 @@ create table if not exists public.ai_question_answers (
   model          varchar(80),
 
   ok             boolean     not null default false,
+  -- **모델이 실제로 준 글을 그대로 남긴다.** 화면에 보인 것은 없는 구절 표시를 지운 판이지만,
+  -- 모델이 없는 구절을 지어냈다는 사실은 기록에 남아야 잡을 수 있다(§B-5).
   content        text,
+  -- 지운 주소. 이 값이 늘면 그 모델이 구절을 지어내고 있다는 뜻이다.
+  removed_refs   text[],
   -- 실패 사유. MODEL_MISMATCH · EMPTY_RESPONSE · TIMEOUT · AI_ERROR 400 …
   error          text,
 
