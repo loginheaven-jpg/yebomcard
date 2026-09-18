@@ -23,6 +23,7 @@
 [docs/BIBLE_QA_DOCTRINE.md](docs/BIBLE_QA_DOCTRINE.md) ·
 [docs/BIBLE_QA_HERESY_LIST.md](docs/BIBLE_QA_HERESY_LIST.md) ·
 [docs/BIBLE_QA_HOUSECHURCH.md](docs/BIBLE_QA_HOUSECHURCH.md) ·
+[docs/BIBLE_QA_SERMONS.md](docs/BIBLE_QA_SERMONS.md) ·
 [docs/tasks/성경질문_화면시안.html](docs/tasks/성경질문_화면시안.html).
 
 - **원칙 문서의 자리(지휘부 결정)** — 교리 기준 본문은 저장소에서 읽어 `system_prompt` 로 보내고
@@ -31,8 +32,12 @@
 - **사람이 확인해야 남는 것** — ① 이단 목록의 '무엇이 갈라지는가' 문구를 합신 결의문으로 맞추기(특히 인터콥·다락방)
   ② 가정교회 세 축·네 기둥 문구를 사역원 표현으로 맞추기 ③ 삶공부 과정 이름 ④ VIP 표기 여부
   ⑤ 위기 창구의 문자·채팅 가능 여부(전화를 못 거는 사람이 위기에 더 많다)
-- **만드는 순서** — 서버(선별·답변·기록) → 질문창 UI → 저장과 본문 표시 → 관리자 기록 화면 → 음성 → 다른 AI 로 이어가기
-- **새 테이블** — 질문 기록(`ai_questions`)과 관리자 열람 기록. 마이그레이션 SQL 을 만들어 올리고 지휘부가 실행한다
+- **지난 설교(드라이브 .txt 50 편)** — 1단계는 **AI 에게 설교를 주지 않는다.** 앱이 구절→설교 색인으로
+  '이 구절을 다룬 우리 교회 설교' 카드를 답 옆에 붙인다(`sermons`·`sermon_refs`). 들여오기는 사람이 한 번
+  돌리는 스크립트로 시작하고, Drive API 자동화는 2단계 — [docs/BIBLE_QA_SERMONS.md](docs/BIBLE_QA_SERMONS.md)
+- **만드는 순서** — 서버(선별·답변·기록) → 질문창 UI → 저장과 본문 표시 → 관리자 기록 화면 → 음성 → 다른 AI 로 이어가기 → 설교 카드
+- **새 테이블** — 질문 기록(`ai_questions`)과 관리자 열람 기록, 그리고 설교 색인(`sermons`·`sermon_refs`).
+  마이그레이션 SQL 을 만들어 올리고 지휘부가 실행한다
 
 ## 본문 상단 한 줄 개편 — 남은 몫 (2026-09-12)
 
