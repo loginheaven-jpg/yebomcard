@@ -153,6 +153,152 @@ def _rework_report():
     return out
 
 
+# ───────────────────────── 기계 상태 ─────────────────────────
+# PC 앞에 가지 않고도 '왜 느린가' 를 보려고 싣는다(2026-09-18). 3080 Ti 가 41시간에 195절만 만들었는데
+# 그래픽 메모리가 넘친 것인지, 다른 프로그램이 쓰는 것인지, 과열인지 원격으로 알 길이 없었다.
+#
+# · 그래픽카드 — nvidia-smi: 메모리·사용률·온도·전력·클럭·클럭을 깎는 이유(전력 제한·과열)
+# · 스튜디오가 잡은 그래픽 메모리 — 윈도우 GPU 성능 카운터의 **공유 메모리(Shared)** 가 핵심이다.
+#   전용 메모리가 모자라면 드라이버가 예외 없이 시스템 메모리로 흘려보내고(§4.3), 그 양이 여기 잡힌다
+# · 그래픽 메모리를 많이 쓰는 프로그램 · CPU 를 많이 쓰는 프로그램 · CPU·RAM 사용률
+#
+# psutil 은 설치본에 없을 수 있어 쓰지 않는다 — 윈도우 WMI(이름이 한글판에서도 영문 그대로다.
+# Get-Counter 는 카운터 이름이 현지화돼 한글 윈도우에서 깨진다)를 파워셸 한 번으로 읽는다.
+# 한 번에 수 초 걸려 10초마다 하지 않고 뒤에서 2분마다 한다. 무엇이 실패해도 보고는 멈추지 않는다.
+SYS_SAMPLE_EVERY_SEC = 120
+_sys = {"at": 0.0, "data": {}, "busy": False}
+
+_NVSMI_FIELDS = ("memory.used,memory.total,utilization.gpu,temperature.gpu,power.draw,power.limit,"
+                 "clocks.sm,clocks.max.sm,pstate")
+# 드라이버에 따라 이름이 다르다(새 이름 clocks_event_reasons, 옛 이름 clocks_throttle_reasons)
+_NVSMI_REASONS = ("clocks_event_reasons.active", "clocks_throttle_reasons.active")
+# 클럭을 깎는 이유 — 쉬는 중(0x1)과 앱 설정(0x2)은 뺀다. 사람이 손쓸 일만 적는다
+_REASON_BITS = ((0x4, "전력 제한"), (0x8, "하드웨어 감속"), (0x40, "과열(소프트웨어)"),
+                (0x80, "과열(하드웨어)"), (0x100, "전원 부족"))
+
+_WIN_PROBE = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$names = @{}
+Get-Process | ForEach-Object { $names[[int]$_.Id] = $_.ProcessName }
+$g = @(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUProcessMemory |
+  Where-Object { $_.DedicatedUsage -gt 50MB -or $_.SharedUsage -gt 50MB } | ForEach-Object {
+    $id = 0; if ($_.Name -match '^pid_(\d+)_') { $id = [int]$Matches[1] }
+    @{ pid = $id; name = $names[$id]; d = [int64]$_.DedicatedUsage; s = [int64]$_.SharedUsage } })
+$p = @(Get-CimInstance Win32_PerfFormattedData_PerfProc_Process |
+  Where-Object { $_.Name -ne '_Total' -and $_.Name -ne 'Idle' } |
+  Sort-Object PercentProcessorTime -Descending | Select-Object -First 6 | ForEach-Object {
+    @{ pid = [int]$_.IDProcess; name = $_.Name; cpu = [int]$_.PercentProcessorTime } })
+$c = (Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
+$o = Get-CimInstance Win32_OperatingSystem
+@{ gpu = $g; top = $p; cpu = [int]$c; free = [int64]$o.FreePhysicalMemory; total = [int64]$o.TotalVisibleMemorySize } |
+  ConvertTo-Json -Depth 4 -Compress
+"""
+
+
+def _nvsmi():
+    import subprocess as sp
+    flags = getattr(sp, "CREATE_NO_WINDOW", 0)
+    for extra in _NVSMI_REASONS + ("",):
+        q = _NVSMI_FIELDS + ("," + extra if extra else "")
+        try:
+            r = sp.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader,nounits"],
+                       capture_output=True, text=True, timeout=15, creationflags=flags)
+        except Exception:
+            return {}
+        if r.returncode != 0 or not r.stdout.strip():
+            continue                     # 모르는 칸이 있으면 통째로 실패한다 — 칸을 빼고 다시
+        v = [x.strip() for x in r.stdout.strip().splitlines()[0].split(",")]
+
+        def f(i):
+            try:
+                return float(v[i])
+            except (IndexError, ValueError):
+                return None
+        out = {"memUsedMb": f(0), "memTotalMb": f(1), "util": f(2), "tempC": f(3),
+               "powerW": f(4), "powerLimitW": f(5), "clockMhz": f(6), "clockMaxMhz": f(7),
+               "pstate": v[8] if len(v) > 8 else ""}
+        if extra and len(v) > 9:
+            try:
+                bits = int(v[9], 16)
+                out["limits"] = [name for bit, name in _REASON_BITS if bits & bit]
+            except ValueError:
+                pass
+        return {k: x for k, x in out.items() if x is not None}
+    return {}
+
+
+def _win_probe():
+    if os.name != "nt":
+        return {}
+    import base64
+    import subprocess as sp
+    enc = base64.b64encode(_WIN_PROBE.encode("utf-16-le")).decode("ascii")
+    try:
+        r = sp.run(["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", enc],
+                   capture_output=True, timeout=90, creationflags=getattr(sp, "CREATE_NO_WINDOW", 0))
+        return json.loads(r.stdout.decode("utf-8", "replace").strip() or "{}")
+    except Exception:
+        return {}
+
+
+def _torch_mem():
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return {}
+        mb = 1024 * 1024
+        return {"reservedMb": round(torch.cuda.memory_reserved(0) / mb),
+                "peakMb": round(torch.cuda.max_memory_reserved(0) / mb)}
+    except Exception:
+        return {}
+
+
+def _sample_sys():
+    try:
+        me = os.getpid()
+        cores = os.cpu_count() or 1
+        w = _win_probe()
+        procs = []
+        for g in w.get("gpu") or []:
+            procs.append({"name": (g.get("name") or "?")[:40], "pid": int(g.get("pid") or 0),
+                          "dedicatedMb": round((g.get("d") or 0) / 1048576),
+                          "sharedMb": round((g.get("s") or 0) / 1048576)})
+        procs.sort(key=lambda x: x["dedicatedMb"] + x["sharedMb"], reverse=True)
+        studio = next((p for p in procs if p["pid"] == me), None)
+        # 프로세스 CPU% 는 코어 하나 기준(100 을 넘는다). 생성은 코어 하나에 묶이므로(§7) 전체 대비 %
+        # 로만 보이면 20코어 PC 에서 5% 로 한가해 보인다 — 코어 수(cores = 1.0 이면 코어 하나를 다 씀)로 싣는다
+        top = [{"name": (t.get("name") or "?")[:40], "pid": int(t.get("pid") or 0),
+                "cores": round((t.get("cpu") or 0) / 100, 1)} for t in (w.get("top") or [])]
+        data = {
+            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "gpu": _nvsmi(),
+            "studio": {**_torch_mem(),
+                       **({"dedicatedMb": studio["dedicatedMb"], "sharedMb": studio["sharedMb"]}
+                          if studio else {})},
+            "gpuProcs": [{**p, "self": p["pid"] == me} for p in procs[:5]],
+            "topCpu": [{**t, "self": t["pid"] == me} for t in top if t["cores"] >= 0.1][:4],
+            "cores": cores,
+        }
+        if w.get("total"):
+            data["cpu"] = w.get("cpu")
+            data["ramTotalMb"] = round(w["total"] / 1024)
+            data["ramUsedMb"] = round((w["total"] - (w.get("free") or 0)) / 1024)
+        _sys["data"] = data
+    except Exception as e:
+        print(f"[기계 상태] 읽지 못했습니다: {str(e)[:80]}", flush=True)
+    finally:
+        _sys["at"] = time.time()
+        _sys["busy"] = False
+
+
+def _sys_report():
+    """기계 상태 — 묵었으면 뒤에서 다시 잰다(보고는 기다리지 않고 지난 값을 싣는다)."""
+    if not _sys["busy"] and time.time() - _sys["at"] >= SYS_SAMPLE_EVERY_SEC:
+        _sys["busy"] = True
+        threading.Thread(target=_sample_sys, daemon=True, name="fleet-sys").start()
+    return _sys["data"]
+
+
 # ───────────────────────── 현황 ─────────────────────────
 def _gpu():
     try:
@@ -282,6 +428,7 @@ def snapshot():
         "leases": st.get("leases", []),
         "polite": bool(st.get("polite")),
         "lastError": _last_error,
+        "sys": _sys_report(),
     }
 
 

@@ -85,8 +85,43 @@ export interface FleetPc {
   /** 빌려 간 책들 */
   leases: string[];
   lastError: string;
+  /** 기계 상태 — 그래픽카드·메모리·CPU. PC 가 2분마다 잰다(옛 코드 PC 는 없다) */
+  sys?: FleetSys;
   /** PC 가 찍은 시각(ISO) */
   at: string;
+}
+
+/**
+ * 생성 PC 의 기계 상태(`voice/fleet.py` `_sample_sys`). PC 앞에 가지 않고 '왜 느린가' 를 보려고 싣는다.
+ * 핵심은 `studio.sharedMb` — 전용 그래픽 메모리가 모자라면 드라이버가 예외 없이 시스템 메모리로
+ * 흘려보내 생성이 기어가는데, 그 양이 여기 잡힌다.
+ */
+export interface FleetSys {
+  /** PC 가 잰 시각(ISO) */
+  at: string;
+  gpu: {
+    memUsedMb?: number;
+    memTotalMb?: number;
+    util?: number;
+    tempC?: number;
+    powerW?: number;
+    powerLimitW?: number;
+    clockMhz?: number;
+    clockMaxMhz?: number;
+    pstate?: string;
+    /** 클럭을 깎는 이유 — 전력 제한·과열 등. 비어 있으면 없음 */
+    limits?: string[];
+  };
+  /** 스튜디오 프로세스가 잡은 그래픽 메모리 */
+  studio: { dedicatedMb?: number; sharedMb?: number; reservedMb?: number; peakMb?: number };
+  /** 그래픽 메모리를 많이 쓰는 프로그램(많은 순) */
+  gpuProcs: { name: string; pid: number; dedicatedMb: number; sharedMb: number; self: boolean }[];
+  /** CPU 를 많이 쓰는 프로그램 — cores 는 쓰는 코어 수(1.0 = 코어 하나를 다 씀. 생성은 코어 하나에 묶인다) */
+  topCpu: { name: string; pid: number; cores: number; self: boolean }[];
+  cores?: number;
+  cpu?: number;
+  ramUsedMb?: number;
+  ramTotalMb?: number;
 }
 
 export interface ReworkItem {

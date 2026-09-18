@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { isAdmin } from "@/lib/admin";
+import type { FleetSys } from "@/lib/voiceStudio/fleet";
 
 interface BookProgress {
   book: string;
@@ -68,6 +69,7 @@ interface Pc {
   leases: string[];
   polite: boolean;
   lastError: string;
+  sys?: FleetSys;
   at: string;
 }
 interface Lease {
@@ -632,9 +634,10 @@ ${books.join(" · ")}`)) return;
             </div>
             <p className="mt-1.5 text-sm">{p.note || (p.jobTitle ? p.jobTitle : "쉬는 중")}</p>
             <p className="text-xs text-[var(--ink-faint)]">
-              남은 절 {p.pending.toLocaleString()} · 대기 작업 {p.queued} · 보류 {p.heldTotal} ·
+              작업 파일의 남은 절 {p.pending.toLocaleString()} · 대기 작업 {p.queued} · 보류 {p.heldTotal} ·
               업로드 {p.uploadedTotal.toLocaleString()} · {p.gpu}
             </p>
+            <PcSys sys={p.sys} />
             {p.leases.length > 0 && (
               <p className="text-xs text-[var(--ink-faint)]">맡은 책: {p.leases.join(", ")}</p>
             )}
@@ -968,6 +971,73 @@ function BookNames({
         {books.map((b) => b.book).join(" · ")}
       </span>
     </p>
+  );
+}
+
+const gb = (mb?: number) => (mb === undefined ? "?" : (mb / 1024).toFixed(1));
+
+/**
+ * PC 의 기계 상태 — '왜 느린가' 를 PC 앞에 가지 않고 본다(2026-09-18).
+ * 경고는 실제로 속도를 떨어뜨리는 것만 붉게 한다: 그래픽 메모리 넘침(공유 메모리로 흘러감)과 과열.
+ */
+function PcSys({ sys }: { sys?: FleetSys }) {
+  if (!sys) {
+    return (
+      <p className="text-[11px] text-[var(--ink-faint)]">
+        기계 상태 — 아직 보고 없음(새 코드로 다시 켜지면 2분 안에 나옵니다)
+      </p>
+    );
+  }
+  const g = sys.gpu || {};
+  const memPct = g.memUsedMb && g.memTotalMb ? Math.round((100 * g.memUsedMb) / g.memTotalMb) : undefined;
+  const shared = sys.studio?.sharedMb ?? 0;
+  const others = (sys.gpuProcs || []).filter((x) => !x.self);
+  const othersMb = others.reduce((s, x) => s + x.dedicatedMb + x.sharedMb, 0);
+  const hot = (g.limits || []).some((l) => l.includes("과열")) || (g.tempC ?? 0) >= 85;
+
+  const warn: { text: string; red?: boolean }[] = [];
+  if (shared >= 512) {
+    warn.push({ text: `그래픽 메모리 넘침 ${gb(shared)}GB — 시스템 메모리로 흘러가 생성이 기어갑니다(배치를 줄이세요)`, red: true });
+  } else if (memPct !== undefined && memPct >= 97) {
+    warn.push({ text: `그래픽 메모리 ${memPct}% — 거의 찼습니다` });
+  }
+  if (hot) warn.push({ text: `과열 ${g.tempC ?? "?"}℃ — 클럭이 깎입니다`, red: true });
+  if (othersMb >= 1536) warn.push({ text: `다른 프로그램이 그래픽 메모리 ${gb(othersMb)}GB 사용` });
+  if ((sys.cpu ?? 0) >= 85) warn.push({ text: `CPU ${sys.cpu}% — 다른 일로 바쁩니다` });
+
+  return (
+    <div className="mt-1 text-[11px] text-[var(--ink-faint)] leading-relaxed">
+      {warn.map((w) => (
+        <p key={w.text} className={w.red ? "text-red-600 font-medium" : "text-amber-700 dark:text-amber-500"}>
+          ! {w.text}
+        </p>
+      ))}
+      <p>
+        그래픽 {gb(g.memUsedMb)}/{gb(g.memTotalMb)}GB{memPct !== undefined ? ` (${memPct}%)` : ""}
+        {g.util !== undefined && ` · 사용률 ${g.util}%`}
+        {g.tempC !== undefined && ` · ${g.tempC}℃`}
+        {g.powerW !== undefined && ` · ${g.powerW}/${g.powerLimitW ?? "?"}W`}
+        {g.clockMhz !== undefined && ` · 클럭 ${g.clockMhz}/${g.clockMaxMhz ?? "?"}MHz`}
+        {(g.limits || []).length > 0 && ` · 제한: ${g.limits!.join(", ")}`}
+      </p>
+      <p>
+        스튜디오 그래픽 메모리 {gb(sys.studio?.dedicatedMb)}GB · 넘침 {gb(shared)}GB
+        {others.length > 0 &&
+          ` · 다른 프로그램: ${others
+            .slice(0, 3)
+            .map((x) => `${x.name} ${gb(x.dedicatedMb + x.sharedMb)}GB`)
+            .join(", ")}`}
+      </p>
+      <p>
+        CPU {sys.cpu ?? "?"}%{sys.cores ? `(${sys.cores}코어)` : ""} · RAM {gb(sys.ramUsedMb)}/
+        {gb(sys.ramTotalMb)}GB
+        {(sys.topCpu || []).length > 0 &&
+          ` · CPU 많이 쓰는 것: ${sys.topCpu
+            .map((x) => `${x.self ? "스튜디오" : x.name} ${x.cores.toFixed(1)}코어`)
+            .join(", ")}`}
+        {` · ${ago(sys.at)} 측정`}
+      </p>
+    </div>
   );
 }
 

@@ -66,6 +66,54 @@ def _age(iso):
     return f"{s/3600:.1f}시간 전"
 
 
+def _gb(mb):
+    return "?" if mb is None else f"{mb / 1024:.1f}"
+
+
+def _sys_lines(s):
+    """기계 상태 — 웹 화면(PcSys)과 같은 기준으로 경고한다."""
+    if not s:
+        return ["기계 상태: 아직 보고 없음(새 코드로 다시 켜지면 2분 안에)"]
+    g = s.get("gpu") or {}
+    st = s.get("studio") or {}
+    used, total = g.get("memUsedMb"), g.get("memTotalMb")
+    pct = round(100 * used / total) if used and total else None
+    shared = st.get("sharedMb") or 0
+    others = [x for x in s.get("gpuProcs") or [] if not x.get("self")]
+    others_mb = sum(x["dedicatedMb"] + x["sharedMb"] for x in others)
+    out = []
+    if shared >= 512:
+        out.append(f"! 그래픽 메모리 넘침 {_gb(shared)}GB — 시스템 메모리로 흘러가 기어갑니다")
+    elif pct is not None and pct >= 97:
+        out.append(f"! 그래픽 메모리 {pct}% — 거의 찼습니다")
+    if any("과열" in x for x in g.get("limits") or []) or (g.get("tempC") or 0) >= 85:
+        out.append(f"! 과열 {g.get('tempC')}℃")
+    if others_mb >= 1536:
+        out.append(f"! 다른 프로그램이 그래픽 메모리 {_gb(others_mb)}GB 사용")
+    if (s.get("cpu") or 0) >= 85:
+        out.append(f"! CPU {s['cpu']}% — 다른 일로 바쁩니다")
+    line = f"그래픽 {_gb(used)}/{_gb(total)}GB" + (f" ({pct}%)" if pct is not None else "")
+    for k, fmt in (("util", " · 사용률 {}%"), ("tempC", " · {}℃")):
+        if g.get(k) is not None:
+            line += fmt.format(g[k])
+    if g.get("powerW") is not None:
+        line += f" · {g['powerW']}/{g.get('powerLimitW', '?')}W"
+    if g.get("clockMhz") is not None:
+        line += f" · 클럭 {g['clockMhz']}/{g.get('clockMaxMhz', '?')}MHz"
+    if g.get("limits"):
+        line += " · 제한: " + ", ".join(g["limits"])
+    out.append(line)
+    out.append(f"스튜디오 그래픽 메모리 {_gb(st.get('dedicatedMb'))}GB · 넘침 {_gb(shared)}GB"
+               + (" · 다른 프로그램: " + ", ".join(f"{x['name']} {_gb(x['dedicatedMb'] + x['sharedMb'])}GB"
+                                                  for x in others[:3]) if others else ""))
+    top = ", ".join(f"{'스튜디오' if x.get('self') else x['name']} {x['cores']:.1f}코어"
+                    for x in s.get("topCpu") or [])
+    out.append(f"CPU {s.get('cpu', '?')}%({s.get('cores', '?')}코어) · RAM {_gb(s.get('ramUsedMb'))}/"
+               f"{_gb(s.get('ramTotalMb'))}GB" + (f" · CPU 많이 쓰는 것: {top}" if top else "")
+               + f" · {_age(s.get('at', ''))} 측정")
+    return out
+
+
 def cmd_status(a):
     st = server.fleet_status()
     if st is None:
@@ -114,6 +162,8 @@ def cmd_status(a):
             print(f"    맡은 책: {', '.join(p['leases'])}")
         if p.get("lastError"):
             print(f"    ! {p['lastError']}")
+        for line in _sys_lines(p.get("sys")):
+            print(f"    {line}")
         # 앞에서 여섯 권만 찍으면 앞쪽은 대개 이미 끝난 책이라 **다 끝난 것처럼 보인다**
         # (2026-09-13 지휘부 지적). 지금 움직이는 책만 진행률로 쓰고 나머지는 이름만 적는다.
         bs = p.get("books") or []

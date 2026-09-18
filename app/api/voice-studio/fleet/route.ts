@@ -21,6 +21,7 @@ import {
   putPc,
   type FleetPc,
   type FleetBookProgress,
+  type FleetSys,
   type ReworkKind,
 } from "@/lib/voiceStudio/fleet";
 
@@ -35,6 +36,63 @@ function str(v: unknown, max = 200): string {
 
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
+}
+
+/** 없으면 undefined — 0 과 '모름' 을 가른다(옛 드라이버는 전력 칸이 없다) */
+function opt(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : undefined;
+}
+
+/** 기계 상태 — 모양을 맞춰 받는다. 옛 코드 PC 는 보내지 않는다 */
+function sysOf(raw: unknown): FleetSys | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const s = raw as Record<string, unknown>;
+  if (!s.at) return undefined;
+  const g = (s.gpu || {}) as Record<string, unknown>;
+  const st = (s.studio || {}) as Record<string, unknown>;
+  const arr = (v: unknown, n: number) =>
+    (Array.isArray(v) ? v : []).slice(0, n).map((x) => (x || {}) as Record<string, unknown>);
+  return {
+    at: str(s.at, 30),
+    gpu: {
+      memUsedMb: opt(g.memUsedMb),
+      memTotalMb: opt(g.memTotalMb),
+      util: opt(g.util),
+      tempC: opt(g.tempC),
+      powerW: opt(g.powerW),
+      powerLimitW: opt(g.powerLimitW),
+      clockMhz: opt(g.clockMhz),
+      clockMaxMhz: opt(g.clockMaxMhz),
+      pstate: str(g.pstate, 8),
+      limits: (Array.isArray(g.limits) ? g.limits : []).slice(0, 6).map((x) => str(x, 30)),
+    },
+    studio: {
+      dedicatedMb: opt(st.dedicatedMb),
+      sharedMb: opt(st.sharedMb),
+      reservedMb: opt(st.reservedMb),
+      peakMb: opt(st.peakMb),
+    },
+    gpuProcs: arr(s.gpuProcs, 5).map((p) => ({
+      name: str(p.name, 40),
+      pid: num(p.pid),
+      dedicatedMb: num(p.dedicatedMb),
+      sharedMb: num(p.sharedMb),
+      self: !!p.self,
+    })),
+    topCpu: arr(s.topCpu, 4).map((p) => ({
+      name: str(p.name, 40),
+      pid: num(p.pid),
+      cores:
+        typeof p.cores === "number" && Number.isFinite(p.cores)
+          ? Math.max(0, Math.round(p.cores * 10) / 10)
+          : 0,
+      self: !!p.self,
+    })),
+    cores: opt(s.cores),
+    cpu: opt(s.cpu),
+    ramUsedMb: opt(s.ramUsedMb),
+    ramTotalMb: opt(s.ramTotalMb),
+  };
 }
 
 export async function POST(req: Request) {
@@ -112,6 +170,7 @@ export async function POST(req: Request) {
       ? (body.leases as unknown[]).slice(0, MAX_BOOKS).map((b) => str(b, 40))
       : [],
     lastError: str(body.lastError, 300),
+    sys: sysOf(body.sys),
     at: new Date().toISOString(),
   };
 
