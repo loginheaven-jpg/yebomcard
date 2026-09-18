@@ -17,6 +17,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
+import { useQaVoiceInput } from "@/hooks/useQaVoiceInput";
 import { stripNotes, type BibleVerse } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 import { QA_COLUMNS, type ColumnKey } from "@/lib/bibleQa/columns";
@@ -82,6 +83,8 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   const [toast, setToast] = useState<string | null>(null);
   const [reported, setReported] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // 말로 물었는지 기록에 남긴다(관리자 화면에서 '음성' 으로 보인다)
+  const [usedVoice, setUsedVoice] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useHardwareBack(true, onClose);
@@ -90,6 +93,23 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
     setToast(msg);
     window.setTimeout(() => setToast(null), 2200);
   }, []);
+
+  /**
+   * 말로 묻기. 받은 글은 입력창에 **이어 붙인다** — 덮어쓰면 앞서 적어 둔 것이 사라지고,
+   * 두 번 말해 보태는 길도 막힌다.
+   */
+  const voice = useQaVoiceInput(
+    useCallback(
+      (text: string) => {
+        setUsedVoice(true);
+        setQuestion((prev) => {
+          const joined = prev.trim() ? `${prev.trim()} ${text.trim()}` : text.trim();
+          return joined.slice(0, QUESTION_MAX_LENGTH);
+        });
+      },
+      [],
+    ),
+  );
 
   // ── 고른 절 정리 — 첫 절과 같은 책·장만, 절 번호로 정렬 ──────────────
   // 탭한 순서가 아니라 읽는 순서를 따른다(3절→1절로 눌러도 1절부터).
@@ -139,6 +159,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
         question: q,
         columns,
         retry,
+        inputKind: usedVoice ? "voice" : "text",
       });
       setResult(res);
       setSaved(false);
@@ -146,7 +167,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       // 답이 오면 위부터 읽도록 되돌린다
       bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [target, asking, question, columns, version, flash],
+    [target, asking, question, columns, version, flash, usedVoice],
   );
 
   const handleSave = useCallback(async () => {
@@ -300,7 +321,57 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                 placeholder="이 말씀을 읽다가 생긴 질문을 적어 주세요."
                 className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-3 text-sm text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-[var(--amber)]"
               />
-              <div className="mt-1 flex items-center justify-between">
+              {/* 말로 묻기 — 글을 잘 못 쓰시는 어르신도 물을 수 있어야 한다.
+                  들은 글은 입력창에 넣어 주고, 보내는 것은 교인이 누른다. */}
+              {voice.supported && (
+                <div className="mt-2">
+                  {voice.state === "idle" && (
+                    <button
+                      onClick={() => voice.start()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:brightness-95"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                      </svg>
+                      말로 묻기
+                    </button>
+                  )}
+                  {voice.state === "recording" && (
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-[12px] font-semibold text-red-600 dark:text-red-400">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden />
+                        듣고 있습니다 {voice.seconds}초
+                      </span>
+                      <button
+                        onClick={voice.stop}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[var(--amber)] text-white"
+                      >
+                        다 말했습니다
+                      </button>
+                      <button
+                        onClick={voice.cancel}
+                        className="px-2.5 py-1.5 rounded-lg text-[12px] text-gray-500 dark:text-gray-400"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  {voice.state === "sending" && (
+                    <p className="text-[12px] text-gray-500 dark:text-gray-400">
+                      말씀을 글로 옮기고 있습니다…
+                    </p>
+                  )}
+                  {voice.error && (
+                    <p
+                      className="mt-1 text-[11.5px] text-red-600 dark:text-red-400 cursor-pointer"
+                      onClick={voice.clearError}
+                    >
+                      {voice.error}
+                    </p>
+                  )}
+                </div>
+              )}
+              <div className="mt-1.5 flex items-center justify-between">
                 <p className="text-[10.5px] leading-snug text-gray-400 pr-2">{EXTERNAL_NOTICE}</p>
                 <span className="shrink-0 text-[10.5px] text-gray-400 tabular-nums">
                   {question.length}/{QUESTION_MAX_LENGTH}
