@@ -45,26 +45,46 @@ export async function GET(request: NextRequest) {
   }
 
   // 표가 준비됐는가 (마이그레이션 적용 여부). 건수는 세지 않는다 — 있음/없음만.
-  const tables = ["ai_questions", "ai_question_answers", "qa_lists", "sermons"] as const;
+  //
+  // **`head: true` 를 쓰면 안 된다.** HEAD 요청에는 본문이 없어서 supabase-js 가 PostgREST 의
+  // 404 를 에러 객체로 만들지 못하고 `error` 가 null 로 온다 → 없는 표를 '있다' 고 답한다.
+  // 2026-09-18 프로덕션에서 실제로 그렇게 거짓을 말했다(표 7개가 하나도 없는데 전부 true).
+  const tables = [
+    "ai_questions",
+    "ai_question_answers",
+    "ai_question_views",
+    "qa_lists",
+    "sermons",
+    "sermon_refs",
+    "sermon_ingest_runs",
+  ] as const;
   const ready: Record<string, boolean> = {};
   for (const t of tables) {
-    const { error } = await supabaseAdmin.from(t).select("id", { head: true, count: "exact" });
+    const { error } = await supabaseAdmin.from(t).select("id").limit(1);
     ready[t] = !error;
   }
   out.tables = ready;
 
   // 목록이 심겼는가 — 이단 목록이 비면 답이 스스로 이단을 규정하려 든다(§9 를 지키는 장치가 목록이다)
-  const { count: heresyCount } = await supabaseAdmin
-    .from("qa_lists")
-    .select("id", { head: true, count: "exact" })
-    .eq("kind", "heresy")
-    .eq("enabled", true);
-  const { count: crisisCount } = await supabaseAdmin
-    .from("qa_lists")
-    .select("id", { head: true, count: "exact" })
-    .eq("kind", "crisis")
-    .eq("enabled", true);
-  out.lists = { heresy: heresyCount ?? null, crisis: crisisCount ?? null };
+  if (ready.qa_lists) {
+    const { data: listRows } = await supabaseAdmin
+      .from("qa_lists")
+      .select("kind")
+      .eq("enabled", true);
+    const tally: Record<string, number> = {};
+    for (const r of listRows ?? []) {
+      const kind = (r as { kind: string }).kind;
+      tally[kind] = (tally[kind] ?? 0) + 1;
+    }
+    out.lists = {
+      heresy: tally.heresy ?? 0,
+      crisis: tally.crisis ?? 0,
+      housechurch: tally.housechurch ?? 0,
+      lifestudy: tally.lifestudy ?? 0,
+    };
+  } else {
+    out.lists = null;
+  }
 
   const okAll =
     (out.doctrine as { ok: boolean }).ok &&
