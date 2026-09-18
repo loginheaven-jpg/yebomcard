@@ -166,6 +166,46 @@ PK `(group_id, user_id)` — 복합 PK 가 곧 "한 그룹에 한 번만" 제약
 합계가 1,000행을 넘는 순간 PostgREST 가 경고 없이 자르고 **잘린 부분집합으로 순위가 계산된다.**
 1인 평균 28장이므로 36명이면 닿는다.
 
+## 5d. 성경 질문 테이블 (2026-09-18 신설 · 적용 대기)
+
+`scripts/migration-bible-qa.sql` — 기준 문서는 [BIBLE_QA_DOCTRINE.md](BIBLE_QA_DOCTRINE.md) §B-10 ·
+[BIBLE_QA_SERMONS.md](BIBLE_QA_SERMONS.md). 일곱 표 모두 **RLS enable + 정책 없음**.
+
+### `ai_questions` — 질문 한 건 = 한 행
+`(user_id, user_name, book_code, chapter, verse_start, verse_end?, version, verses_ref, question,
+input_kind, gate_result, is_crisis, crisis_reviewed?, crisis_note?, mode, housechurch,
+prompt_version, lists_synced_at?, saved, saved_at?, asked_at)`
+**위기·거절 질문도 남긴다**(§B-10). 모델을 부르기 **전에** 이 행을 먼저 넣는다 — 표가 없으면
+돈을 쓰기 전에 503 으로 멈추고, 답이 늦게 실패해도 기록은 남는다.
+`gate_result='error'` 는 '선별이 고장나서 통과시킨 건' 이다. 이 값이 늘면 게이트가 죽은 것이다.
+
+### `ai_question_answers` — 모델 하나가 준 한 칸
+`(question_id→ai_questions, column_key, provider_alias, model, ok, content?, error?,
+input_tokens?, output_tokens?, elapsed_ms?, reported, report_reason?, reported_at?, created_at)`
+UNIQUE `(question_id, column_key)`. 실패한 칸도 행으로 남긴다.
+**칸 라벨의 진실은 `model` 뿐이다** — 게이트웨이 응답의 `provider` 는 계열명으로 정규화돼 와서
+정상 응답과 강등된 응답이 같은 문자열이다(2026-09-18 실측).
+
+### `ai_question_views` — 관리자 열람 기록
+`(viewer_user_id, viewer_name, action, question_id?, detail?, viewed_at)`
+"열어 본 사실도 남긴다"(§B-10). `question_id` 에 **FK 를 걸지 않는다** — 질문이 지워진 뒤에도
+'지웠다' 는 기록이 남아야 한다.
+
+### `qa_lists` — 관리자 화면에서 고치는 네 목록
+`(kind, sort_order, title, body?, note?, enabled, updated_at, updated_by?)`
+`kind` = `heresy` · `housechurch` · `crisis` · `lifestudy`. UNIQUE `(kind, title)`.
+교리 기준 본문은 **DB 가 아니라 저장소 문서**에 둔다(§B-11) — 이 표에는 자주 바뀌는 것만.
+마이그레이션이 이단 10건·위기 창구 7건을 `on conflict do nothing` 으로 심는다(관리자가 고친 값을 되돌리지 않는다).
+
+### `sermons` · `sermon_refs` · `sermon_ingest_runs` — 설교 색인
+`sermons (preached_on, title, preacher?, video_url?, summary?, applications[], source_file_id?,
+source_name?, source_modified_at?, ingested_at)` — UNIQUE `(preached_on, title)`
+`sermon_refs (sermon_id, kind, book_code, chapter, verse_start?, verse_end?)` —
+`kind` = `main`(머리글 본문) · `quoted`(요약·적용 속 인용). 조회 인덱스 `(book_code, chapter)` 가
+**없으면 카드가 빠르다는 전제가 깨진다**.
+`sermon_ingest_runs (ran_at, trigger, scanned, inserted, updated, skipped, failures jsonb, elapsed_ms, error)`
+— 못 읽은 파일을 버리지 않고 남긴다.
+
 ## 6. iron-session 쿠키
 
 `SessionData` (lib/auth/session.ts):
@@ -185,12 +225,18 @@ TTL: 7일. 만료 시 다음 페이지 로드의 `/api/auth/session` 이 `{ sess
 - `scraps`: 자신 데이터만 SELECT/INSERT/UPDATE/DELETE (server-side service role 우회 권장)
 - `bible_verses`, `bible_audio`: public READ (anon key OK)
 - `user_photos`: 자신 데이터만 접근
+- `ai_questions`, `ai_question_answers`, `ai_question_views`, `qa_lists`, `sermons`, `sermon_refs`,
+  `sermon_ingest_runs`: **RLS enable + 정책 없음** (2026-09-18 신설). `sermons` 는 공개 자료지만
+  정책을 열지 않는다 — 카드 조회도 서버 라우트를 거친다
+- `verse_note_amens`, `verse_note_reports`: **RLS 미적용**(2026-09-18 확인) — 파일 없이 MCP 로 적용되며
+  그 한 줄이 빠졌다. anon 키로 '누가 누구의 메모를 신고했는가' 가 읽힌다. plan.md 의 RLS 점검 항목 참조
 - `reading_progress`, `verse_notes`, `user_state`, `reading_unit_checks`, `reading_groups`, `reading_group_members`: **RLS enable + 정책 없음** → anon/authenticated 직접 접근 전면 차단. 앱이 iron-session(Supabase Auth 미사용)이라 `auth.uid()` 가 항상 null. API 의 `supabaseAdmin`(service_role)만 우회하며 항상 `user_id` 스코프
 
 ## 8. 마이그레이션 이력
 
 | 일자 | 변경 |
 |---|---|
+| 2026-09-18 | 성경 질문 7종 신설 (`ai_questions`/`ai_question_answers`/`ai_question_views`/`qa_lists`/`sermons`/`sermon_refs`/`sermon_ingest_runs`) — `scripts/migration-bible-qa.sql` · **적용 대기** |
 | 2026-09-09 | 말씀의삶 그룹 2종 신설 (`reading_groups`/`reading_group_members`) — `scripts/migration-reading-groups.sql` |
 | 2026-09-09 | 말씀의삶 회차 수동 체크 (`reading_unit_checks`) — `scripts/migration-reading-plan.sql` |
 | 2026-06-11 | 로그인 전용 기능 테이블 3종 신설 (`reading_progress`/`verse_notes`/`user_state`) — `scripts/migration-login-features.sql` |

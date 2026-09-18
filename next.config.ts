@@ -7,6 +7,14 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/voice-studio/code": ["./voice/*.py", "./voice/README.md"],
     "/api/voice-studio/bootstrap": ["./voice/bootstrap.py"],
+    // 성경 질문 — 교리 기준 본문(§1~§10)과 선별 프롬프트(§A)를 문서에서 읽어
+    // system_prompt 로 보낸다(docs/BIBLE_QA_DOCTRINE.md §B-11). 재가받은 글이라
+    // DB 가 아니라 저장소에 두고 git 에 이력을 남긴다.
+    // 이 줄을 빠뜨리면 로컬에서는 되고 **배포에서만** 문서를 못 찾는다.
+    "/api/bible-qa": [
+      "./docs/BIBLE_QA_DOCTRINE.md",
+      "./docs/BIBLE_QA_HOUSECHURCH.md",
+    ],
   },
   env: {
     NEXT_PUBLIC_BUILD_ID:
