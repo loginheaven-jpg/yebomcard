@@ -345,7 +345,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-3xl h-[80vh] sm:h-[78vh] sm:min-h-[420px] sm:max-h-[90vh] sm:resize-y sm:overflow-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col"
+        // 폰은 아래에서 올라오는 80% 시트, PC 는 화면의 가로·세로 90%(지휘부 2026-09-18 —
+        // "PC 풀스크린에서도 좌우 여백이 많다"). 크기 조절(resize)은 그대로 둔다.
+        className="w-full h-[80vh] sm:w-[90vw] sm:max-w-none sm:h-[90vh] sm:min-h-[420px] sm:max-h-[90vh] sm:resize-y sm:overflow-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -379,6 +381,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
 
         {/* 몸 */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-3">
+          {/* 합창(세 칸)은 넓어진 폭을 다 쓴다. 하나만 묻거나 입력 중일 때는 **읽기 좋은 폭**으로
+              가운데 둔다 — 90% 폭에서 한 줄이 150자를 넘으면 눈이 줄을 놓친다. */}
+          <div className={isChorus ? "" : "sm:mx-auto sm:max-w-4xl"}>
           {/* 묻기 전 — 입력 */}
           {!result && (
             <>
@@ -566,7 +571,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                 </p>
               )}
               {/* 먼저 끝난 칸이 먼저 놓인다(도착 순서). 아직 안 온 칸은 뒤에 '찾고 있습니다' 로. */}
-              <div className={isChorus ? "sm:grid sm:grid-cols-3 sm:gap-2.5" : ""}>
+              {/* 세 칸 나란히는 **폭이 넉넉할 때만**(1024px 이상) — 지휘부 "PC 에서 좌우폭이 충분하면
+                  병렬로". 태블릿 폭에서 세 칸이면 한 칸이 200px 안팎이라 읽히지 않는다. */}
+              <div className={isChorus ? "lg:grid lg:grid-cols-3 lg:gap-3 lg:items-start" : ""}>
                 {arrival.map((key) => {
                   const a = answers[key];
                   if (!a) return null;
@@ -656,6 +663,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
               <p className="mt-2.5 text-[10.5px] leading-snug text-gray-400">{DISCLAIMER}</p>
             </>
           )}
+          </div>
         </div>
 
         {/* 발 — 답을 받았을 때만 저장·버리기.

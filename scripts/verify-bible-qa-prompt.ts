@@ -13,6 +13,7 @@
  *
  * 3번은 외부 호출이라 `--live` 를 줄 때만 한다.
  */
+import { parseAnswer } from "../lib/bibleQa/answerFormat";
 import {
   buildAnswerPrompt,
   loadDoctrinePrompt,
@@ -80,6 +81,22 @@ async function main() {
   }
 
   // ── 3. 실제 조립 ────────────────────────────────────────────────
+  // ── 파서: 옛 제목으로 저장된 답도 새 제목으로 읽는가 ─────────────────
+  const legacy = parseAnswer(
+    ["한 줄 요약 — 가.", "성경이 말하는 것 — 나.", "조심할 점 — 다.", "목회자와 나눠 볼 질문 — 라?"].join(
+      "\n",
+    ),
+  );
+  check("옛 제목으로 저장된 답을 네 칸으로 읽는다", legacy.wellFormed);
+  check(
+    "옛 제목 줄의 본문이 사라지지 않는다",
+    legacy.sections.find((x) => x.heading === "더 깊은 묵상")?.body === "라?",
+  );
+  const fresh = parseAnswer(
+    ["한 줄 요약 — 가.", "성경이 말하는 것 — 나.", "조심할 점 — 다.", "더 깊은 묵상 — 라?"].join("\n"),
+  );
+  check("새 제목 답을 네 칸으로 읽는다", fresh.wellFormed);
+
   const built = await buildAnswerPrompt({
     versesRef: "누가복음 5:1-11",
     versesText:
@@ -137,9 +154,15 @@ async function main() {
       console.log("       ────────────────");
       check("모델이 답을 돌려줬다", text.length > 50);
       // §4 네 줄 틀
-      for (const head of ["한 줄 요약", "성경이 말하는 것", "조심할 점", "목회자와 나눠 볼 질문"]) {
+      for (const head of ["한 줄 요약", "성경이 말하는 것", "조심할 점", "더 깊은 묵상"]) {
         check(`§4 네 줄 틀: ${head}`, text.includes(head));
       }
+      check("옛 제목('목회자와 나눠 볼 질문')을 쓰지 않았다", !text.includes("목회자와 나눠 볼 질문"));
+      // 마지막 줄 — 교인이 스스로 묵상하거나 목장에서 나눌 물음(지휘부 2026-09-18)
+      const last = (text.split("\n").find((l) => l.includes("더 깊은 묵상")) ?? "").trim();
+      console.log(`       마지막 줄: ${last}`);
+      check("마지막 줄이 물음표로 끝난다", /[?？]\s*$/.test(last));
+      check("마지막 줄이 '목회자에게 물어보라' 로 돌리지 않는다", !/목회자|목사님|교역자/.test(last));
       // §4 구절 주소는 3개까지
       const refs = text.match(/[가-힣]+(?:전서|후서|기|서|음|록|가|엘|야|서)?\s*\d+:\d+/g) ?? [];
       check(`구절 주소 3개 이하 (${refs.length}개)`, refs.length <= 3, refs.join(", "));

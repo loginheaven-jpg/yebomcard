@@ -13,8 +13,13 @@
 import { readFile } from "fs/promises";
 import path from "path";
 
-/** 기록에 함께 남기는 판 번호. 교리 문서의 마커 안쪽을 고쳤으면 올린다(§B-10). */
-export const PROMPT_VERSION = "v1";
+/**
+ * 기록에 함께 남기는 판 번호. 교리 문서의 마커 안쪽을 고쳤으면 올린다(§B-10).
+ *  - v1 — 첫 판(2026-09-18)
+ *  - v2 — 마지막 줄을 '목회자와 나눠 볼 질문' → '더 깊은 묵상' 으로. 교인이 스스로 묵상하거나
+ *         목장에서 나눌 수 있는 물음으로 바꿨다(지휘부 2026-09-18)
+ */
+export const PROMPT_VERSION = "v2";
 
 const DOCTRINE_FILE = "docs/BIBLE_QA_DOCTRINE.md";
 const DOCTRINE_START = "<!-- 프롬프트 시작 -->";

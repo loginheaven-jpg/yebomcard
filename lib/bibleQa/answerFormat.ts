@@ -1,7 +1,7 @@
 /**
  * 성경 질문 — 답을 네 줄로 나눈다
  *
- * 답은 `한 줄 요약 / 성경이 말하는 것 / 조심할 점 / 목회자와 나눠 볼 질문` 네 줄로 온다
+ * 답은 `한 줄 요약 / 성경이 말하는 것 / 조심할 점 / 더 깊은 묵상` 네 줄로 온다
  * (docs/BIBLE_QA_DOCTRINE.md §4). 화면은 그 네 칸을 따로 그려야 하고,
  * **모델이 틀을 어겼을 때 글을 잃어버리지 않아야 한다** — 못 나누면 통째로 한 덩이로 보인다.
  *
@@ -12,10 +12,24 @@ export const ANSWER_HEADINGS = [
   "한 줄 요약",
   "성경이 말하는 것",
   "조심할 점",
-  "목회자와 나눠 볼 질문",
+  "더 깊은 묵상",
 ] as const;
 
 export type AnswerHeading = (typeof ANSWER_HEADINGS)[number];
+
+/**
+ * 옛 제목 → 지금 제목. 2026-09-18 에 마지막 줄을 '목회자와 나눠 볼 질문' 에서
+ * '더 깊은 묵상' 으로 바꿨다(지휘부). 이미 저장된 답과, 모델이 옛 꼴로 쓰는 경우를 함께 읽는다.
+ */
+const LEGACY_HEADINGS: Record<string, AnswerHeading> = {
+  "목회자와 나눠 볼 질문": "더 깊은 묵상",
+};
+
+/** 지금 제목과 옛 제목을 모두 — 긴 것부터 맞춘다 */
+const ALL_HEADINGS: { text: string; heading: AnswerHeading }[] = [
+  ...ANSWER_HEADINGS.map((h) => ({ text: h as string, heading: h })),
+  ...Object.entries(LEGACY_HEADINGS).map(([text, heading]) => ({ text, heading })),
+].sort((a, b) => b.text.length - a.text.length);
 
 export interface AnswerSection {
   heading: AnswerHeading;
@@ -30,33 +44,36 @@ export interface ParsedAnswer {
   wellFormed: boolean;
 }
 
-/** `**한 줄 요약**` · `## 한 줄 요약` · `한 줄 요약 —` · `한 줄 요약:` 을 모두 받는다. */
-function headingAt(line: string): AnswerHeading | null {
+/**
+ * `**한 줄 요약**` · `## 한 줄 요약` · `한 줄 요약 —` · `한 줄 요약:` 을 모두 받는다.
+ * 맞춘 **글자**(`text`)도 함께 돌려준다 — 옛 제목으로 온 줄은 옛 글자를 기준으로 본문을 잘라야 한다.
+ */
+function headingAt(line: string): { heading: AnswerHeading; text: string } | null {
   const bare = line
     .replace(/^\s*#{1,6}\s*/, "")
     .replace(/^\s*[-*]\s+/, "")
     .replace(/\*\*/g, "")
     .replace(/^\s*\d+\.\s*/, "")
     .trim();
-  for (const h of ANSWER_HEADINGS) {
-    if (bare === h) return h;
+  for (const { text, heading } of ALL_HEADINGS) {
+    if (bare === text) return { heading, text };
     // "한 줄 요약 — 본문" 처럼 한 줄에 붙어 오는 것이 기본이다
-    const re = new RegExp(`^${h}\\s*[—–\\-:·]`);
-    if (re.test(bare)) return h;
+    const re = new RegExp(`^${text}\\s*[—–\\-:·]`);
+    if (re.test(bare)) return { heading, text };
   }
   return null;
 }
 
-function bodyAfterHeading(line: string, heading: string): string {
+function bodyAfterHeading(line: string, headingText: string): string {
   const bare = line
     .replace(/^\s*#{1,6}\s*/, "")
     .replace(/^\s*[-*]\s+/, "")
     .replace(/\*\*/g, "")
     .trim();
-  const idx = bare.indexOf(heading);
+  const idx = bare.indexOf(headingText);
   if (idx < 0) return "";
   return bare
-    .slice(idx + heading.length)
+    .slice(idx + headingText.length)
     .replace(/^\s*[—–\-:·]\s*/, "")
     .trim();
 }
@@ -71,10 +88,10 @@ export function parseAnswer(text: string): ParsedAnswer {
   let current: { heading: AnswerHeading; body: string[] } | null = null;
 
   for (const line of lines) {
-    const heading = headingAt(line);
-    if (heading) {
+    const hit = headingAt(line);
+    if (hit) {
       if (current) sections.push({ heading: current.heading, body: current.body.join("\n").trim() });
-      current = { heading, body: [bodyAfterHeading(line, heading)].filter(Boolean) };
+      current = { heading: hit.heading, body: [bodyAfterHeading(line, hit.text)].filter(Boolean) };
       continue;
     }
     if (current) current.body.push(line);
