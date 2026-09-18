@@ -86,6 +86,40 @@ export async function GET(request: NextRequest) {
     out.lists = null;
   }
 
+  // 설교 자동 들여오기가 **정말 돌 수 있는 상태인가.**
+  //  - `CRON_SECRET` 이 없으면 Vercel cron 은 인증 헤더 없이 오고 라우트가 403 으로 막는다.
+  //    즉 날마다 부르기는 하지만 **한 번도 들어오지 못한다** — 오류도 안 나서 모르고 지나간다.
+  //  - 폴더가 서비스 계정에 공유되지 않으면 목록이 0편으로 나온다(이것도 오류가 아니다).
+  //    그래서 마지막 실행 결과를 함께 보인다.
+  const cron: Record<string, unknown> = { secret_set: !!process.env.CRON_SECRET };
+  if (ready.sermon_ingest_runs) {
+    const { data: runs } = await supabaseAdmin
+      .from("sermon_ingest_runs")
+      .select("ran_at, trigger, scanned, inserted, updated, skipped, failures, error")
+      .order("ran_at", { ascending: false })
+      .limit(1);
+    const last = runs?.[0] ?? null;
+    cron.last_run = last
+      ? {
+          ran_at: last.ran_at,
+          trigger: last.trigger,
+          scanned: last.scanned,
+          inserted: last.inserted,
+          updated: last.updated,
+          skipped: last.skipped,
+          failures: Array.isArray(last.failures) ? last.failures.length : 0,
+          error: last.error ?? null,
+        }
+      : null;
+    if (last && last.scanned === 0 && !last.error) {
+      cron.hint = "설교를 한 편도 못 찾았습니다 — 드라이브 폴더를 서비스 계정에 공유해야 합니다.";
+    }
+  }
+  if (!cron.secret_set) {
+    cron.hint_secret = "CRON_SECRET 이 없어 자동 들여오기가 막힙니다(수퍼어드민이 손으로만 돌릴 수 있습니다).";
+  }
+  out.cron = cron;
+
   const okAll =
     (out.doctrine as { ok: boolean }).ok &&
     (out.gate as { ok: boolean }).ok &&
