@@ -14,6 +14,8 @@
  *
  * 화면은 폰에서 위에서 아래로 세 카드, PC 에서 좌우로 세 칸(지휘부 2026-09-18).
  * **앱은 한 번만 답한다** — 이어서 묻고 싶으면 그 AI 로 넘긴다.
+ * **AI 단추가 곧 '묻기'** 다(지휘부 2026-09-18, 시안에서 바뀜) — 질문을 적고 AI 를 누르면 바로 묻는다.
+ * 예전에는 위에서 AI 를 고르고 아래 '묻기' 를 한 번 더 눌러야 했다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
@@ -56,6 +58,12 @@ function loadPick(): Pick {
   }
   return "gemini";
 }
+
+/** 입력창 아래 묻기 단추 — 세 AI 와 합창(셋이 함께) */
+const ASK_BUTTONS: { key: Pick; label: string }[] = [
+  ...QA_COLUMNS.map((c) => ({ key: c.key as Pick, label: c.label })),
+  { key: "chorus", label: "합창" },
+];
 
 function savePick(pick: Pick) {
   try {
@@ -143,19 +151,22 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
     };
   }, [verses]);
 
-  const columns: ColumnKey[] = useMemo(
-    () => (pick === "chorus" ? QA_COLUMNS.map((c) => c.key) : [pick]),
-    [pick],
-  );
-
+  /**
+   * 누른 AI 에게 곧바로 묻는다. AI 단추가 곧 '묻기' 다(지휘부 2026-09-18) — 예전에는 위에서 AI 를
+   * 고르고 아래 '묻기' 를 한 번 더 눌러야 했다. 누른 AI 는 기억해 다음에 채워진 단추로 보인다.
+   */
   const ask = useCallback(
-    async (retry = false) => {
+    async (choice: Pick, retry = false) => {
       if (!target || asking) return;
       const q = question.trim();
       if (!q) {
         flash("질문을 적어 주세요.");
         return;
       }
+      setPick(choice);
+      savePick(choice);
+      const columns: ColumnKey[] =
+        choice === "chorus" ? QA_COLUMNS.map((c) => c.key) : [choice];
       setAsking(true);
       if (!retry) setResult(null);
 
@@ -199,7 +210,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       // 답이 오면 위부터 읽도록 되돌린다
       bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [target, asking, question, columns, version, flash, usedVoice],
+    [target, asking, question, version, flash, usedVoice],
   );
 
   const handleSave = useCallback(async () => {
@@ -305,43 +316,6 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
 
         {/* 몸 */}
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-3">
-          {/* AI 고르기 — 답을 받은 뒤에는 바꿀 수 없다(앱은 한 번만 답한다) */}
-          {!result && (
-            <div className="flex gap-1.5 mb-3" role="group" aria-label="AI 고르기">
-              {QA_COLUMNS.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => {
-                    setPick(c.key);
-                    savePick(c.key);
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
-                    pick === c.key
-                      ? "bg-[var(--amber)] text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:brightness-95"
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setPick("chorus");
-                  savePick("chorus");
-                }}
-                className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
-                  pick === "chorus"
-                    ? "bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:brightness-95"
-                }`}
-              >
-                합창
-              </button>
-            </div>
-          )}
-
           {/* 묻기 전 — 입력 */}
           {!result && (
             <>
@@ -409,19 +383,40 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                   {question.length}/{QUESTION_MAX_LENGTH}
                 </span>
               </div>
-              <button
-                onClick={() => ask(false)}
-                disabled={asking || question.trim().length === 0}
-                className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)] disabled:opacity-40 disabled:hover:bg-[var(--amber)]"
-              >
+              {/* AI 단추가 곧 '묻기' — 누르면 그 AI 에게 바로 묻는다(지휘부 2026-09-18).
+                  입력창 바로 아래에 둔다: 창 맨 아래에 붙이면 폰 키보드에 가린다.
+                  답을 받은 뒤에는 보이지 않는다(앱은 한 번만 답한다). */}
+              <p className="mt-3 mb-1.5 text-[11.5px] font-semibold text-gray-500 dark:text-gray-400">
                 {asking
                   ? pick === "chorus"
                     ? "세 AI 가 찾고 있습니다…"
-                    : "찾고 있습니다…"
-                  : pick === "chorus"
-                    ? "세 AI 에게 묻기"
-                    : `${QA_COLUMNS.find((c) => c.key === pick)?.label} 에게 묻기`}
-              </button>
+                    : `${QA_COLUMNS.find((c) => c.key === pick)?.label} 가 찾고 있습니다…`
+                  : "누구에게 물을까요? 누르면 바로 묻습니다"}
+              </p>
+              <div className="flex gap-1.5" role="group" aria-label="물을 AI">
+                {ASK_BUTTONS.map((b) => {
+                  const last = pick === b.key;
+                  const chorus = b.key === "chorus";
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => ask(b.key)}
+                      disabled={asking || question.trim().length === 0}
+                      aria-label={chorus ? "세 AI 에게 함께 묻기" : `${b.label} 에게 묻기`}
+                      className={`flex-1 min-w-0 py-2.5 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-40 ${
+                        last
+                          ? chorus
+                            ? "bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900"
+                            : "bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)] disabled:hover:bg-[var(--amber)]"
+                          : "border border-[var(--amber)]/60 text-[var(--amber-deep)] dark:text-amber-300 bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      {asking && last ? "…" : b.label}
+                    </button>
+                  );
+                })}
+              </div>
               {asking && (
                 <p className="mt-2 text-center text-[11px] text-gray-400">
                   성경을 찾아 답을 만드는 데 10초쯤 걸립니다.

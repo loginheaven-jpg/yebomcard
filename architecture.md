@@ -13,6 +13,18 @@
 
 ## 📜 변경 이력 (최신 위)
 
+### 2026-09-18 — 성경 질문: 표 적용 · AI 단추가 곧 '묻기'
+- **계기**: 지휘부가 질문하면 `Could not find the table 'public.ai_questions' in the schema cache` 가 난다고 알렸다.
+  배포는 끝났는데 `scripts/migration-bible-qa.sql` 이 **적용 대기**인 채였다(`/api/bible-qa/health` 의 표 7개 모두 false)
+- **표 적용**: 같은 파일을 Supabase 에 적용(`bible_qa_questions_lists_sermons`) + `notify pgrst, 'reload schema'`.
+  표 7개 모두 RLS 켬·정책 0 을 쿼리로 확인, 이단 10건·위기 창구 7건이 들어갔다. 점검 창구 `ok: true`
+- **AI 고르기 → 묻기 한 번으로**(지휘부 제안, `components/BibleQaSheet.tsx`): 위의 AI 고르기 줄과 아래 '묻기' 를
+  합쳐 입력창 **바로 아래** [Gemini][ChatGPT][Claude][합창] 을 두고, 누르면 그 AI 에게 바로 묻는다.
+  마지막에 누른 것이 채워진 단추로 보인다(기억은 그대로 `yebom_qa_ai`). 창 맨 아래에 붙이지 않은 것은
+  폰 키보드에 가리기 때문이다. 360·390px 폭에서 네 단추가 한 줄에 드는 것을 화면으로 확인
+- **남은 사람 손**: 드라이브 설교 폴더를 서비스 계정에 공유 · Vercel 에 `CRON_SECRET`
+  (없으면 설교 자동 들여오기가 막힌다 — 점검 창구가 알린다)
+
 ### 2026-09-18 — 성경 질문 완성: 질문창 · 저장 · 기록 화면 · 음성 · 설교 카드
 - **질문창**(`components/BibleQaSheet.tsx`) — 80% 시트(PC resize), AI 고르기(마지막 값 기억·처음 Gemini),
   세 칸 답(폰 세로 · PC 3분할), 면책 한 줄·갈리는 대목 한 줄·답마다 신고, 다른 AI 로 이어가기
