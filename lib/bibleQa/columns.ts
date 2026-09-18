@@ -41,11 +41,14 @@ export function columnOf(key: string): QaColumn | undefined {
 }
 
 /**
- * 답 하나당 시간 상한. 게이트웨이가 스스로 잰 provider 소요는 0.65~3.7초였지만
- * 앞단·네트워크가 더해진다(2026-09-18 실측). 라우트 전체 상한(60초) 안에서
- * 한 칸이 늦어도 나머지 칸이 살아 돌아오게 잡은 값이다.
+ * 답 하나당 시간 상한(기본값).
+ *
+ * 처음에는 40초였다. **운영에서 Claude 가 두 번 다 잘렸다**(2026-09-18) — 교리 본문이 길어
+ * Claude 입력이 16.8K 토큰이고, 게이트웨이가 잰 모델 시간만 31~36초였다. 여기에 게이트웨이
+ * 앞단이 10초 안팎 더한다. 이제 칸마다 **따로 요청**하므로(`/api/bible-qa/answer`) 칸 하나가
+ * 라우트 상한을 통째로 쓸 수 있다 — 한 칸이 늦어도 다른 칸은 먼저 화면에 뜬다.
  */
-const ANSWER_TIMEOUT_MS = 40_000;
+export const ANSWER_TIMEOUT_MS = 100_000;
 
 /**
  * Gemini 는 thinking 토큰이 max_tokens 를 먹는다 — 작게 주면 HTTP 200 에
@@ -74,6 +77,8 @@ export interface AskColumnInput {
   question: string;
   /** '다시 묻기' 는 캐시를 끈다 — 켜 두면 한 시간 동안 같은 답이 재생된다. */
   useCache: boolean;
+  /** 이 칸을 기다리는 시간. 없으면 ANSWER_TIMEOUT_MS */
+  timeoutMs?: number;
 }
 
 /** 한 칸에 묻는다. **던지지 않는다** — 실패도 결과로 돌려주어 그 칸만 비운다. */
@@ -81,7 +86,8 @@ export async function askColumn(input: AskColumnInput): Promise<AnswerResult> {
   const { column } = input;
   const startedAt = Date.now();
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ANSWER_TIMEOUT_MS);
+  const timeoutMs = input.timeoutMs ?? ANSWER_TIMEOUT_MS;
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
 
   const base = {
     columnKey: column.key,
@@ -142,7 +148,7 @@ export async function askColumn(input: AskColumnInput): Promise<AnswerResult> {
       ok: false,
       content: null,
       model: null,
-      error: ac.signal.aborted ? `TIMEOUT ${ANSWER_TIMEOUT_MS}ms` : msg.slice(0, 300),
+      error: ac.signal.aborted ? `TIMEOUT ${timeoutMs}ms` : msg.slice(0, 300),
       elapsedMs: Date.now() - startedAt,
     };
   } finally {

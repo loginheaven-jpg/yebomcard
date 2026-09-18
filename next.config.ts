@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
     ],
     // 점검 창구도 같은 문서를 읽는다. 여기에 안 넣으면 점검만 실패해서
     // 있는 문제를 없다고 하거나(반대로) 없는 문제를 있다고 한다.
+    // 2단계(칸마다 답)가 실제로 교리 본문을 읽는 곳이다. 1단계는 이제 선별 프롬프트만 읽는다.
+    "/api/bible-qa/answer": [
+      "./docs/BIBLE_QA_DOCTRINE.md",
+      "./docs/BIBLE_QA_HOUSECHURCH.md",
+    ],
     "/api/bible-qa/health": [
       "./docs/BIBLE_QA_DOCTRINE.md",
       "./docs/BIBLE_QA_HOUSECHURCH.md",

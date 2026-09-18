@@ -15,6 +15,12 @@
     "jsx": "react-jsx",
     "plugins": []
   },
-  "include": ["scripts/verify-sermon-parse.ts", "scripts/verify-bible-qa-prompt.ts", "lib/**/*.ts"],
+  "include": [
+    "scripts/verify-sermon-parse.ts",
+    "scripts/verify-bible-qa-prompt.ts",
+    "scripts/verify-crisis-signal.ts",
+    "scripts/ingest-sermons.ts",
+    "lib/**/*.ts"
+  ],
   "exclude": ["node_modules", ".next", ".verify"]
 }

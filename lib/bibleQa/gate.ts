@@ -21,12 +21,17 @@ export type GateVerdict = "crisis" | "allow" | "deny" | "error";
 const GATE_MAX_TOKENS = 1024;
 
 /**
- * 문서(§A)는 1.5초를 넘으면 통과라고 적었다. 그런데 게이트웨이가 스스로 잰 시간이
- * 중앙값 1.07초 · 최대 7.26초였다(2026-09-18 실측, `gemini-flash`).
- * 1.5초로 자르면 상당수가 **선별 없이** 통과해 위기 신호를 놓친다 —
- * 놓치는 쪽이 기다리는 쪽보다 나쁘므로 8초로 둔다.
+ * 선별을 얼마나 기다리는가.
+ *
+ * 처음에는 8초였다(게이트웨이가 스스로 잰 시간 중앙값 1.07초·최대 7.26초를 보고 잡았다).
+ * **운영에서 틀렸다**(2026-09-18): 그 숫자는 게이트웨이 **안에서** 모델을 부른 시간일 뿐이고,
+ * 게이트웨이 앞단이 따로 느리다 — 모델을 부르지 않는 캐시 적중이 3.9~30.8초, 한 낱말 선별의
+ * 벽시계가 10~14초였다. 그래서 운영의 첫 두 질문은 **둘 다 선별이 시간 초과로 통과**됐다.
+ *
+ * 20초로 늘린다. 더 늘리면 답이 그만큼 늦게 시작한다(선별이 끝나야 모델을 부른다).
+ * 시간 초과가 나도 위기를 놓치지 않게 `crisisSignal.ts` 가 받친다(아래 `decide`).
  */
-const GATE_TIMEOUT_MS = 8000;
+const GATE_TIMEOUT_MS = 20_000;
 
 /** 게이트는 gemini-flash 로 한다 — 목록에서 가장 싸고, 위 실측에서 15/15 였다. */
 const GATE_PROVIDER = "gemini-flash";
@@ -100,4 +105,18 @@ export async function gateQuestion(question: string): Promise<GateResult> {
 /** 게이트가 error 면 모델을 부른다(통과). deny·crisis 만 막는다. */
 export function shouldCallModels(verdict: GateVerdict): boolean {
   return verdict === "allow" || verdict === "error";
+}
+
+/**
+ * 선별 결과와 안전망을 합쳐 최종 판정을 낸다.
+ *
+ *  - 선별이 제때 답했으면 **선별을 따른다**(안전망 말이 있어도 — '욥은 왜 죽고 싶다고 했나요' 는 allow)
+ *  - 선별이 실패했는데 **위기를 시사하는 1인칭 말**이 있으면 → crisis(막는다, 모델을 부르지 않는다)
+ *  - 선별이 실패했고 그런 말도 없으면 → error(문서대로 통과)
+ *
+ * 놓치는 쪽이 잘못 막는 쪽보다 나쁘다. 잘못 막으면 상담 창구가 보일 뿐이다.
+ */
+export function decide(gate: GateVerdict, localSignal: boolean): GateVerdict {
+  if (gate !== "error") return gate;
+  return localSignal ? "crisis" : "error";
 }

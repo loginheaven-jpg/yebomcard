@@ -36,6 +36,7 @@ import {
   supportsPrefill,
 } from "@/lib/bibleQa/answerFormat";
 import {
+  answerColumn,
   askBibleQa,
   fetchSermonCards,
   reportQaAnswer,
@@ -100,10 +101,28 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   const sermonAcRef = useRef<AbortController | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 칸마다 따로 받은 답. **먼저 끝난 칸부터** 그린다(지휘부 2026-09-18 —
+   * "셋 다 동시에 보여 주기보다 완료된 것 먼저 차례로").
+   * `arrival` 은 도착한 순서다 — 이 순서대로 카드를 놓는다.
+   */
+  const [answers, setAnswers] = useState<Partial<Record<ColumnKey, QaAnswer>>>({});
+  const [arrival, setArrival] = useState<ColumnKey[]>([]);
+  const answerAcRef = useRef<AbortController | null>(null);
+  /** 기다린 초를 보여 주려고 — 게이트웨이가 느려 수십 초가 걸리는 일이 있다(운영 실측). */
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
   useHardwareBack(true, onClose);
 
-  // 창이 닫히면 카드 요청도 끊는다.
-  useEffect(() => () => sermonAcRef.current?.abort(), []);
+  // 창이 닫히면 카드·답 요청을 끊는다. 서버는 답을 끝까지 만들어 기록에 남긴다.
+  useEffect(
+    () => () => {
+      sermonAcRef.current?.abort();
+      answerAcRef.current?.abort();
+    },
+    [],
+  );
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -156,7 +175,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
    * 고르고 아래 '묻기' 를 한 번 더 눌러야 했다. 누른 AI 는 기억해 다음에 채워진 단추로 보인다.
    */
   const ask = useCallback(
-    async (choice: Pick, retry = false) => {
+    async (choice: Pick) => {
       if (!target || asking) return;
       const q = question.trim();
       if (!q) {
@@ -168,13 +187,20 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
       const columns: ColumnKey[] =
         choice === "chorus" ? QA_COLUMNS.map((c) => c.key) : [choice];
       setAsking(true);
-      if (!retry) setResult(null);
+      setResult(null);
+      setAnswers({});
+      setArrival([]);
+      setExpanded({});
+      setReported({});
+      setSaved(false);
+      setStartedAt(Date.now());
+      setNow(Date.now());
 
       // **질문과 같은 순간에** 설교 카드를 따로 부른다. 답을 받은 뒤에 부르면
       // (수 초 + 카드 시간)이 되어 라우트를 나눈 이득이 클라이언트에서 사라진다.
       sermonAcRef.current?.abort();
-      const ac = new AbortController();
-      sermonAcRef.current = ac;
+      const sermonAc = new AbortController();
+      sermonAcRef.current = sermonAc;
       const sermonsPromise = fetchSermonCards(
         {
           bookCode: target.bookCode,
@@ -182,9 +208,10 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
           verseStart: target.verseStart,
           verseEnd: target.verseEnd,
         },
-        ac.signal,
+        sermonAc.signal,
       );
 
+      // ── 1단계: 선별·기록 ──────────────────────────────────────────
       const res = await askBibleQa({
         bookCode: target.bookCode,
         chapter: target.chapter,
@@ -193,28 +220,58 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
         version,
         question: q,
         columns,
-        retry,
         inputKind: usedVoice ? "voice" : "text",
       });
       setResult(res);
-      setSaved(false);
       setAsking(false);
-      // **위기 화면에서는 절대 그리지 않는다.** 화면 조건만 두면 요청은 나가고 상태에 남아
-      // 다음 렌더에서 튀어나온다 — 여기서 버린다.
-      if (res.kind === "answered") {
-        setSermons(await sermonsPromise);
-      } else {
-        ac.abort();
+
+      // **위기·거절 화면에서는 설교 카드를 절대 그리지 않는다.** 화면 조건만 두면
+      // 요청은 나가고 상태에 남아 다음 렌더에서 튀어나온다 — 여기서 버린다.
+      if (res.kind !== "pending") {
+        sermonAc.abort();
         setSermons([]);
+        setStartedAt(null);
+        bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+        return;
       }
-      // 답이 오면 위부터 읽도록 되돌린다
+      void sermonsPromise.then((cards) => {
+        if (!sermonAc.signal.aborted) setSermons(cards);
+      });
       bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+
+      // ── 2단계: 칸마다 따로 묻고, 먼저 끝난 것부터 그린다 ─────────────
+      answerAcRef.current?.abort();
+      const answerAc = new AbortController();
+      answerAcRef.current = answerAc;
+      let first = true;
+      await Promise.all(
+        res.columns.map(async ({ column, label }) => {
+          const a = await answerColumn(res.id, column, label, answerAc.signal);
+          if (answerAc.signal.aborted) return;
+          setAnswers((prev) => ({ ...prev, [column]: a }));
+          setArrival((prev) => (prev.includes(column) ? prev : [...prev, column]));
+          // 합창은 요약만 먼저 보이고 나머지를 접는다(§B-8). 다만 **처음 도착한 답은 펼친다** —
+          // 나머지를 기다리는 동안 읽을 것이 있어야 한다.
+          if (first && a.ok) {
+            first = false;
+            setExpanded((prev) => ({ ...prev, [column]: true }));
+          }
+        }),
+      );
+      if (!answerAc.signal.aborted) setStartedAt(null);
     },
     [target, asking, question, version, flash, usedVoice],
   );
 
+  // 기다리는 동안 초를 센다(선별 중, 또는 아직 안 온 칸이 있을 때).
+  useEffect(() => {
+    if (startedAt === null) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [startedAt]);
+
   const handleSave = useCallback(async () => {
-    if (!result || result.kind === "error") return;
+    if (!result || result.kind !== "pending") return;
     const ok = await setQaSaved(result.id, true);
     if (ok) {
       setSaved(true);
@@ -227,7 +284,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
 
   const handleReport = useCallback(
     async (answer: QaAnswer) => {
-      if (!result || result.kind !== "answered") return;
+      if (!result || result.kind !== "pending") return;
       const ok = await reportQaAnswer(result.id, answer.column);
       if (ok) {
         setReported((prev) => ({ ...prev, [answer.column]: true }));
@@ -273,8 +330,14 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
 
   if (!target) return null;
 
-  const answered = result?.kind === "answered" ? result : null;
+  const answered = result?.kind === "pending" ? result : null;
   const isChorus = answered?.mode === "chorus";
+  const waitedSec = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const arrivedCount = arrival.length;
+  /** 아직 오지 않은 칸 — 도착한 카드 뒤에 '찾고 있습니다' 자리로 놓는다 */
+  const waitingColumns = answered
+    ? answered.columns.filter((c) => !arrival.includes(c.column))
+    : [];
 
   return (
     <div
@@ -388,9 +451,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                   답을 받은 뒤에는 보이지 않는다(앱은 한 번만 답한다). */}
               <p className="mt-3 mb-1.5 text-[11.5px] font-semibold text-gray-500 dark:text-gray-400">
                 {asking
-                  ? pick === "chorus"
-                    ? "세 AI 가 찾고 있습니다…"
-                    : `${QA_COLUMNS.find((c) => c.key === pick)?.label} 가 찾고 있습니다…`
+                  ? `질문을 살피고 있습니다… ${waitedSec}초`
                   : "누구에게 물을까요? 누르면 바로 묻습니다"}
               </p>
               <div className="flex gap-1.5" role="group" aria-label="물을 AI">
@@ -419,7 +480,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
               </div>
               {asking && (
                 <p className="mt-2 text-center text-[11px] text-gray-400">
-                  성경을 찾아 답을 만드는 데 10초쯤 걸립니다.
+                  {/* 게이트웨이가 느린 날은 선별에만 10~20초가 걸린다(2026-09-18 운영 실측).
+                      '10초쯤' 이라고 적어 두면 그보다 늦을 때 멈춘 줄 안다. */}
+                  질문이 성경과 이어지는지 먼저 살핍니다. 끝나면 답이 하나씩 도착합니다.
                 </p>
               )}
             </>
@@ -502,23 +565,51 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                   {DIVERGENCE_NOTE}
                 </p>
               )}
+              {/* 먼저 끝난 칸이 먼저 놓인다(도착 순서). 아직 안 온 칸은 뒤에 '찾고 있습니다' 로. */}
               <div className={isChorus ? "sm:grid sm:grid-cols-3 sm:gap-2.5" : ""}>
-                {answered.answers.map((a) => (
-                  <AnswerCard
-                    key={a.column}
-                    answer={a}
-                    // 합창은 요약만 먼저 보이고 나머지를 접는다(§B-8). 하나만 물었으면 다 펼친다.
-                    open={isChorus ? !!expanded[a.column] : true}
-                    onToggle={() =>
-                      setExpanded((prev) => ({ ...prev, [a.column]: !prev[a.column] }))
-                    }
-                    collapsible={isChorus}
-                    reported={!!reported[a.column]}
-                    onReport={() => handleReport(a)}
-                    onHandoff={() => handleHandoff(a)}
-                  />
+                {arrival.map((key) => {
+                  const a = answers[key];
+                  if (!a) return null;
+                  return (
+                    <AnswerCard
+                      key={a.column}
+                      answer={a}
+                      // 합창은 요약만 먼저 보이고 나머지를 접는다(§B-8). 하나만 물었으면 다 펼친다.
+                      open={isChorus ? !!expanded[a.column] : true}
+                      onToggle={() =>
+                        setExpanded((prev) => ({ ...prev, [a.column]: !prev[a.column] }))
+                      }
+                      collapsible={isChorus}
+                      reported={!!reported[a.column]}
+                      onReport={() => handleReport(a)}
+                      onHandoff={() => handleHandoff(a)}
+                    />
+                  );
+                })}
+                {waitingColumns.map((c) => (
+                  <div
+                    key={c.column}
+                    className="mb-2.5 rounded-xl border border-dashed border-[var(--line)] dark:border-gray-700 px-3 py-3 flex items-center gap-2"
+                    aria-live="polite"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full bg-[var(--amber)] animate-pulse shrink-0"
+                      aria-hidden
+                    />
+                    <span className="text-[12px] font-semibold text-gray-600 dark:text-gray-300">
+                      {c.label}
+                    </span>
+                    <span className="text-[11.5px] text-gray-400">
+                      찾고 있습니다… {waitedSec}초
+                    </span>
+                  </div>
                 ))}
               </div>
+              {arrivedCount === 0 && (
+                <p className="mb-2 text-center text-[11px] text-gray-400">
+                  먼저 끝난 AI 의 답부터 차례로 보입니다.
+                </p>
+              )}
               {/* 이 구절을 다룬 우리 교회 설교 — AI 가 쓴 것이 아니다.
                   답 **아래**에 붙인다(늦게 도착해도 읽는 중인 글이 밀리지 않는다).
                   맞는 것이 없으면 아무것도 그리지 않는다 — '관련 설교 없음' 을 쓰지 않는다. */}
@@ -580,7 +671,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
             </button>
             <button
               onClick={handleSave}
-              disabled={saved}
+              // 답이 하나도 오기 전에는 저장할 것이 없다. 하나라도 오면 저장할 수 있고,
+              // 뒤에 오는 답도 같은 질문에 붙어 저장한 곳에서 함께 보인다.
+              disabled={saved || arrivedCount === 0}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)] disabled:opacity-50"
             >
               {saved ? "저장됨" : "저장"}

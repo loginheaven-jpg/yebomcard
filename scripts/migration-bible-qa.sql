@@ -347,3 +347,20 @@ on conflict (kind, title) do nothing;
 --    and c.relname in ('ai_questions','ai_question_answers','ai_question_views',
 --                      'qa_lists','sermons','sermon_refs','sermon_ingest_runs')
 --  order by c.relname;
+
+
+-- ══════════════════════════════════════════════════════════════════
+-- 7. 두 단계로 나누며 더한 열 (2026-09-18, Supabase 에 적용함: bible_qa_two_phase_columns)
+--    1단계(/api/bible-qa)가 선별·기록하고, 2단계(/api/bible-qa/answer)가 칸마다 따로 답한다.
+--    모두 nullable 로 더하기만 한다.
+-- ══════════════════════════════════════════════════════════════════
+-- 1단계가 고른 칸. 2단계는 여기 있는 칸에만 답한다(한 칸만 물었는데 세 칸을 받아 가지 못하게).
+-- 위기·거절이면 비워 둔다 — 2단계가 모델을 부르지 않는 표시다.
+alter table public.ai_questions add column if not exists columns  text[];
+-- 선별이 걸린 시간과 모델이 돌려준 글자. 선별이 왜 실패했는지(시간 초과인지) 뒤에 알 수 있어야 한다.
+alter table public.ai_questions add column if not exists gate_ms  integer;
+alter table public.ai_questions add column if not exists gate_raw text;
+-- 안전망(lib/bibleQa/crisisSignal.ts)이 1인칭 위기 말을 보았는가.
+-- 선별이 실패했는데 이 값이 true 면 위기로 막았다는 뜻이다.
+alter table public.ai_questions add column if not exists local_signal boolean;
+notify pgrst, 'reload schema';

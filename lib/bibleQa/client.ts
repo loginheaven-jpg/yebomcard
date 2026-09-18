@@ -25,7 +25,13 @@ export interface QaCrisisLine {
 }
 
 export type QaResult =
-  | { kind: "answered"; id: number; mode: "single" | "chorus"; disclaimer: string; answers: QaAnswer[] }
+  | {
+      kind: "pending";
+      id: number;
+      mode: "single" | "chorus";
+      disclaimer: string;
+      columns: { column: ColumnKey; label: string }[];
+    }
   | { kind: "refused"; id: number; message: string }
   | { kind: "crisis"; id: number; heading: string; body: string; lines: QaCrisisLine[] }
   | { kind: "error"; message: string };
@@ -67,6 +73,40 @@ export async function askBibleQa(input: AskInput): Promise<QaResult> {
   } catch {
     // 오프라인·중간 끊김. 서버는 이미 기록을 남겼을 수도 있다.
     return { kind: "error", message: "연결이 끊겼습니다. 잠시 뒤 다시 시도해 주세요." };
+  }
+}
+
+/**
+ * 2단계 — 한 칸의 답. 칸마다 **동시에** 부르고 먼저 온 것부터 그린다.
+ * 실패도 값으로 돌려준다(그 칸만 '답하지 못했습니다' 로 보인다).
+ */
+export async function answerColumn(
+  id: number,
+  column: ColumnKey,
+  label: string,
+  signal?: AbortSignal,
+): Promise<QaAnswer> {
+  const failed = (msg: string): QaAnswer => ({
+    column,
+    label,
+    ok: false,
+    content: null,
+    model: null,
+    error: msg,
+    elapsed_ms: 0,
+  });
+  try {
+    const res = await fetch("/api/bible-qa/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, column }),
+      signal,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return failed(json.error || `HTTP ${res.status}`);
+    return json as QaAnswer;
+  } catch {
+    return failed("연결이 끊겼습니다");
   }
 }
 
