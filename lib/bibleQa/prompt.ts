@@ -134,34 +134,54 @@ export function lifeStudyNames(rows: QaListRow[]): string[] {
 }
 
 /**
- * 가정교회 자료 블록. DB 에 자료가 있으면 그것을 쓰고, 없으면 저장소 문서의 마커 블록을 쓴다.
- * 모델은 웹을 보지 못한다 — 사역원 사이트 주소만 적어 주면 기억으로 지어낸다(§B-12).
+ * 가정교회 자료 블록. 모델은 웹을 보지 못한다 — 사역원 사이트 주소만 적어 주면 기억으로 지어낸다(§B-12).
+ *
+ * 블록은 두 몫이다 — **자료**(말과 뜻, 세 축, 네 기둥)와 **쓰는 규칙**(다른 교회 방식과 견주지 않는다,
+ * 교회 살림은 지어내지 않는다 …).
+ *  - 자료는 DB(`qa_lists`, kind `housechurch`)에 있으면 그것을 쓴다 — 수퍼어드민이 편집 화면에서 고친다.
+ *    DB 가 비었으면 저장소 문서의 기본 자료를 쓴다.
+ *  - **규칙은 언제나 문서에서 붙인다.** 예전에는 DB 에 한 줄이라도 있으면 문서 블록을 통째로 대신해
+ *    규칙까지 빠졌다(2026-09-19 편집 화면을 만들며 발견) — 목사님이 한 줄 더하는 순간 규칙이 사라지는 구조였다.
  */
 const HOUSECHURCH_FILE = "docs/BIBLE_QA_HOUSECHURCH.md";
 const HC_START = "<!-- 가정교회 블록 시작 -->";
 const HC_END = "<!-- 가정교회 블록 끝 -->";
+/** 문서 블록 안에서 규칙 절이 시작되는 줄 — 여기부터 끝까지가 규칙이다 */
+const HC_RULES_HEAD = "이 블록을 쓰는 규칙";
 let cachedHouseChurch: string | null = null;
 
-export async function loadHouseChurchBlock(rows: QaListRow[] = []): Promise<string> {
-  const fromDb = rows.filter((r) => r.kind === "housechurch");
-  if (fromDb.length > 0) {
-    return [
-      "[가정교회]",
-      "",
-      "예봄교회는 가정교회사역원의 가정교회 철학을 받는 교회다. 아래 있는 것만 우리 교회의 뜻으로 말한다.",
-      "없는 것은 지어내지 않고 목자·목녀나 교역자께 여쭤 보도록 넘긴다.",
-      "",
-      ...fromDb
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((r) => `- ${r.title} — ${r.body ?? ""}`.trimEnd()),
-    ].join("\n");
-  }
+async function houseChurchDocBlock(): Promise<string> {
   if (cachedHouseChurch) return cachedHouseChurch;
   const raw = toLf(await readFile(path.join(process.cwd(), HOUSECHURCH_FILE), "utf-8"));
   const body = sliceBetweenMarkers(raw, HC_START, HC_END);
   if (body === null || body.length < 200) throw new Error("HOUSECHURCH_MARKER_MISSING");
   cachedHouseChurch = body;
   return body;
+}
+
+export async function loadHouseChurchBlock(rows: QaListRow[] = []): Promise<string> {
+  const doc = await houseChurchDocBlock();
+  const fromDb = rows.filter((r) => r.kind === "housechurch");
+  if (fromDb.length === 0) return doc;
+
+  // 규칙 절은 문서에서 — 줄 머리가 정확히 그 제목인 곳부터 끝까지(서두에 같은 말이 글자로 나와도 헷갈리지 않게).
+  const lines = doc.split("\n");
+  const at = lines.findIndex((l) => l.trim() === HC_RULES_HEAD);
+  if (at < 0) throw new Error("HOUSECHURCH_RULES_MISSING");
+  const rules = lines.slice(at).join("\n").trim();
+
+  return [
+    "[가정교회]",
+    "",
+    "예봄교회는 가정교회사역원의 가정교회 철학을 받는 교회다. 아래는 교인이 쓰는 말과 그 뜻이다.",
+    "'세 축' 은 가정교회가 굴러가는 세 가지 모임, '네 기둥' 은 초대교회의 정신이다.",
+    "",
+    ...fromDb
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((r) => `- ${r.title} — ${r.body ?? ""}`.trimEnd()),
+    "",
+    rules,
+  ].join("\n");
 }
 
 // ─── 가정교회 자료를 언제 붙이는가 (§B-12, 지휘부 2026-09-18) ──────────

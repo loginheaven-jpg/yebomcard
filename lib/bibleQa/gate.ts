@@ -75,19 +75,33 @@ function readVerdict(text: string): { verdict: GateVerdict; kind: GateKind | nul
 }
 
 /**
+ * 선별에 보내는 글 — **고른 구절의 주소 한 줄**을 질문 앞에 붙인다(지휘부 2026-09-19, §A).
+ *
+ * 질문 글만 보내면 '무슨뜻인가?' 처럼 구절에 기대는 짧은 질문을 무관한 질문으로 보고 거절했다
+ * (운영 기록: 요한복음 14:20 "무슨뜻인가?" → deny). 주소를 붙이자 그런 질문 40/40 이 통과했고
+ * 기존 선별 42/42 · 위기 18/18 은 그대로였다.
+ * **본문 글은 붙이지 않는다** — 붙이면 욥기 3:11 에 "무슨 뜻인가요?" 를 위기로 잘못 올렸다
+ * (본문의 죽음 말에 끌려간다). 위기는 교인이 적은 글로만 판단해야 한다.
+ */
+export function gateMessage(question: string, versesRef?: string | null): string {
+  const ref = (versesRef ?? "").trim();
+  return ref ? `고른 본문: ${ref}\n\n질문: ${question}` : question;
+}
+
+/**
  * 질문 하나를 가른다.
  *
  * 실패(빈 응답·오류·시간 초과)는 **통과**로 돌려준다 — 값싼 문이 신앙 질문을 막으면
  * 교인은 다시 쓰지 않는다(§A). 무관한 질문은 답변 프롬프트 §2-4 가 한 번 더 막는다.
  * 다만 통과시킨 사실을 `verdict: "error"` 로 남겨, 기록에서 진짜 allow 와 구별한다.
  */
-export async function gateQuestion(question: string): Promise<GateResult> {
+export async function gateQuestion(question: string, versesRef?: string | null): Promise<GateResult> {
   const startedAt = Date.now();
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), GATE_TIMEOUT_MS);
   try {
     const gatePrompt = await loadGatePrompt();
-    const res = await callAI([{ role: "user", content: question }], {
+    const res = await callAI([{ role: "user", content: gateMessage(question, versesRef) }], {
       provider: GATE_PROVIDER,
       system_prompt: gatePrompt,
       max_tokens: GATE_MAX_TOKENS,

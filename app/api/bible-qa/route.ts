@@ -123,7 +123,8 @@ export async function POST(request: NextRequest) {
   // ── 선별 + 안전망 ───────────────────────────────────────────────
   // 선별과 목록 읽기는 서로 기다릴 까닭이 없다 — 함께 띄운다.
   const localSignal = hasCrisisSignal(question);
-  const [gate, lists] = await Promise.all([gateQuestion(question), loadLists()]);
+  // 선별에는 고른 구절의 주소를 함께 준다 — '무슨 뜻인가?' 가 그 구절에 대한 질문임을 알게(§A).
+  const [gate, lists] = await Promise.all([gateQuestion(question, versesRef), loadLists()]);
   // 선별이 실패했을 때 위기를 시사하는 1인칭 말이 있으면 막는다(crisisSignal.ts).
   const verdict = decide(gate.verdict, localSignal);
   const isCrisis = verdict === "crisis";

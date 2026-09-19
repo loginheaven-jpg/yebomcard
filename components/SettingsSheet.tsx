@@ -331,6 +331,21 @@ export default function SettingsSheet({
                       </span>
                     </a>
                   )}
+                  {/* 이단 목록 · 가정교회 자료 · 위기 창구 · 삶공부 — 성경 질문이 쓰는 네 목록(§B-11) */}
+                  {superAdmin && (
+                    <a
+                      href="/admin/qa-lists"
+                      className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
+                    >
+                      <span>성경 질문 목록 편집</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--paper-2)] dark:bg-gray-700 text-[var(--ink-faint)]">
+                          수퍼어드민
+                        </span>
+                        <span className="text-[var(--ink-faint)]">›</span>
+                      </span>
+                    </a>
+                  )}
                   <a
                     href="/admin/voice-held"
                     className="w-full mt-2 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
