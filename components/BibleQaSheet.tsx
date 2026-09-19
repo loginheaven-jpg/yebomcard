@@ -6,16 +6,17 @@
  * 재가받은 시안: docs/tasks/성경질문_화면시안.html
  * 규칙: docs/BIBLE_QA_DOCTRINE.md §B (앱이 맡는 몫)
  *  - §B-2 면책 문구는 앱이 한 번만 붙인다
- *  - §B-3 합창일 때 '갈리는 대목' 한 줄
+ *  - §B-3 여러 답 위에 '갈리는 대목' 한 줄
  *  - §B-6 답마다 '이 답이 이상합니다'
- *  - §B-7 입력창 아래 외부 전송 고지
+ *  - §B-7 입력창 아래 주의 한 줄 · 외부 전송 고지
  *  - §B-8 긴 답은 한 줄 요약만 먼저 보이고 나머지는 접는다
  *  - §B-9 답에 나온 구절의 본문은 앱이 붙인다(서버가 확인해 보내 준다)
  *
- * 화면은 폰에서 위에서 아래로 세 카드, PC 에서 좌우로 세 칸(지휘부 2026-09-18).
+ * **AI 를 고르지 않는다**(지휘부 2026-09-19, §B-3-1). '묻기' 하나만 있고, 서버가 선별 결과로 칸을 정한다 —
+ * 늘 Gemini · ChatGPT 두 칸, 교리가 걸린 질문이면 Claude 까지 세 칸. (예전에는 AI 단추 넷 — Gemini ·
+ * ChatGPT · Claude · 합창 — 이 곧 '묻기' 였고 마지막에 고른 것을 기억했다.)
+ * 화면은 폰에서 위에서 아래로 카드, PC 에서 좌우로 칸(지휘부 2026-09-18).
  * **앱은 한 번만 답한다** — 이어서 묻고 싶으면 그 AI 로 넘긴다.
- * **AI 단추가 곧 '묻기'** 다(지휘부 2026-09-18, 시안에서 바뀜) — 질문을 적고 AI 를 누르면 바로 묻는다.
- * 예전에는 위에서 AI 를 고르고 아래 '묻기' 를 한 번 더 눌러야 했다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
@@ -24,6 +25,7 @@ import { stripNotes, type BibleVerse } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 import { QA_COLUMNS, type ColumnKey } from "@/lib/bibleQa/columns";
 import {
+  CAUTION_NOTICE,
   DISCLAIMER,
   DIVERGENCE_NOTE,
   EXTERNAL_NOTICE,
@@ -77,34 +79,6 @@ function savedToAnswer(a: SavedQa["ai_question_answers"][number]): QaAnswer {
   };
 }
 
-/** 마지막에 고른 AI 를 기억한다 — 처음 쓰는 교인은 Gemini(지휘부). */
-const PICK_KEY = "yebom_qa_ai";
-type Pick = ColumnKey | "chorus";
-
-function loadPick(): Pick {
-  try {
-    const raw = localStorage.getItem(PICK_KEY);
-    if (raw === "chorus" || QA_COLUMNS.some((c) => c.key === raw)) return raw as Pick;
-  } catch {
-    // 시크릿 창·저장 차단. 기본값으로 간다.
-  }
-  return "gemini";
-}
-
-/** 입력창 아래 묻기 단추 — 세 AI 와 합창(셋이 함께) */
-const ASK_BUTTONS: { key: Pick; label: string }[] = [
-  ...QA_COLUMNS.map((c) => ({ key: c.key as Pick, label: c.label })),
-  { key: "chorus", label: "합창" },
-];
-
-function savePick(pick: Pick) {
-  try {
-    localStorage.setItem(PICK_KEY, pick);
-  } catch {
-    // 못 적어도 이번 질문은 그대로 된다.
-  }
-}
-
 interface Props {
   /** 고른 절. 첫 절의 책·장을 기준으로 삼고 같은 장의 절만 쓴다. */
   verses: BibleVerse[];
@@ -115,9 +89,6 @@ interface Props {
 }
 
 export default function BibleQaSheet({ verses, version, onClose, onSaved }: Props) {
-  // 이 창은 절을 고르고 단추를 눌러야 열린다 — 서버에서 그려지는 일이 없으므로
-  // 첫 렌더에 바로 기억한 값을 읽어도 어긋나지 않는다(loadPick 이 실패를 삼킨다).
-  const [pick, setPick] = useState<Pick>(loadPick);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [result, setResult] = useState<QaResult | null>(null);
@@ -236,21 +207,16 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   }, [target]);
 
   /**
-   * 누른 AI 에게 곧바로 묻는다. AI 단추가 곧 '묻기' 다(지휘부 2026-09-18) — 예전에는 위에서 AI 를
-   * 고르고 아래 '묻기' 를 한 번 더 눌러야 했다. 누른 AI 는 기억해 다음에 채워진 단추로 보인다.
+   * 묻는다. 어느 AI 가 답할지는 서버가 선별 결과로 정한다(§B-3-1) — 1단계 응답의 `columns` 를 따른다.
    */
   const ask = useCallback(
-    async (choice: Pick) => {
+    async () => {
       if (!target || asking) return;
       const q = question.trim();
       if (!q) {
         flash("질문을 적어 주세요.");
         return;
       }
-      setPick(choice);
-      savePick(choice);
-      const columns: ColumnKey[] =
-        choice === "chorus" ? QA_COLUMNS.map((c) => c.key) : [choice];
       setAsking(true);
       setResult(null);
       setAnswers({});
@@ -284,7 +250,6 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
         verseEnd: target.verseEnd,
         version,
         question: q,
-        columns,
         inputKind: usedVoice ? "voice" : "text",
       });
       setResult(res);
@@ -421,7 +386,9 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   if (!target) return null;
 
   const answered = result?.kind === "pending" ? result : null;
-  const isChorus = answered?.mode === "chorus";
+  // 여러 칸이 답하는가 — 이제 늘 그렇다(두 칸, 교리 질문이면 세 칸). 칸 수는 서버가 정한다.
+  const columnCount = answered?.columns.length ?? 0;
+  const isChorus = columnCount > 1;
   const waitedSec = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
   const arrivedCount = arrival.length;
   /** 아직 오지 않은 칸 — 도착한 카드 뒤에 '찾고 있습니다' 자리로 놓는다 */
@@ -602,49 +569,32 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                   )}
                 </div>
               )}
-              <div className="mt-1.5 flex items-center justify-between">
+              {/* §B-7 주의 한 줄(지휘부 2026-09-19) — 묻기 **전에** 읽게 입력창 바로 아래, 외부 전송 고지 위에 둔다 */}
+              <p className="mt-1.5 text-[11px] leading-snug font-medium text-[var(--amber-deep)] dark:text-amber-300">
+                {CAUTION_NOTICE}
+              </p>
+              <div className="mt-1 flex items-center justify-between">
                 <p className="text-[10.5px] leading-snug text-gray-400 pr-2">{EXTERNAL_NOTICE}</p>
                 <span className="shrink-0 text-[10.5px] text-gray-400 tabular-nums">
                   {question.length}/{QUESTION_MAX_LENGTH}
                 </span>
               </div>
-              {/* AI 단추가 곧 '묻기' — 누르면 그 AI 에게 바로 묻는다(지휘부 2026-09-18).
+              {/* '묻기' 하나 — 어느 AI 가 답할지는 서버가 정한다(§B-3-1).
                   입력창 바로 아래에 둔다: 창 맨 아래에 붙이면 폰 키보드에 가린다.
                   답을 받은 뒤에는 보이지 않는다(앱은 한 번만 답한다). */}
-              <p className="mt-3 mb-1.5 text-[11.5px] font-semibold text-gray-500 dark:text-gray-400">
-                {asking
-                  ? `질문을 살피고 있습니다… ${waitedSec}초`
-                  : "누구에게 물을까요? 누르면 바로 묻습니다"}
-              </p>
-              <div className="flex gap-1.5" role="group" aria-label="물을 AI">
-                {ASK_BUTTONS.map((b) => {
-                  const last = pick === b.key;
-                  const chorus = b.key === "chorus";
-                  return (
-                    <button
-                      key={b.key}
-                      type="button"
-                      onClick={() => ask(b.key)}
-                      disabled={asking || question.trim().length === 0}
-                      aria-label={chorus ? "세 AI 에게 함께 묻기" : `${b.label} 에게 묻기`}
-                      className={`flex-1 min-w-0 py-2.5 rounded-xl text-[13px] font-semibold transition-colors disabled:opacity-40 ${
-                        last
-                          ? chorus
-                            ? "bg-gray-900 dark:bg-gray-200 text-white dark:text-gray-900"
-                            : "bg-[var(--amber)] text-white hover:bg-[var(--amber-deep)] disabled:hover:bg-[var(--amber)]"
-                          : "border border-[var(--amber)]/60 text-[var(--amber-deep)] dark:text-amber-300 bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-gray-700"
-                      }`}
-                    >
-                      {asking && last ? "…" : b.label}
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                type="button"
+                onClick={() => ask()}
+                disabled={asking || question.trim().length === 0}
+                className="mt-3 w-full py-2.5 rounded-xl text-[13.5px] font-semibold bg-[var(--amber)] text-white transition-colors hover:bg-[var(--amber-deep)] disabled:opacity-40 disabled:hover:bg-[var(--amber)]"
+              >
+                {asking ? `질문을 살피고 있습니다… ${waitedSec}초` : "묻기"}
+              </button>
               {asking && (
                 <p className="mt-2 text-center text-[11px] text-gray-400">
                   {/* 게이트웨이가 느린 날은 선별에만 10~20초가 걸린다(2026-09-18 운영 실측).
                       '10초쯤' 이라고 적어 두면 그보다 늦을 때 멈춘 줄 안다. */}
-                  질문이 성경과 이어지는지 먼저 살핍니다. 끝나면 답이 하나씩 도착합니다.
+                  질문을 먼저 살핍니다. 끝나면 AI 들의 답이 하나씩 도착합니다.
                 </p>
               )}
             </>
@@ -724,13 +674,29 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
             <>
               {isChorus && (
                 <p className="mb-2.5 text-[11.5px] text-center text-gray-500 dark:text-gray-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg py-1.5 px-2">
+                  {/* Claude 가 더해졌으면 왜 칸이 셋인지 먼저 알린다(§B-3-1) */}
+                  {answered.extended_note ? (
+                    <>
+                      {answered.extended_note}
+                      <br />
+                    </>
+                  ) : null}
                   {DIVERGENCE_NOTE}
                 </p>
               )}
               {/* 먼저 끝난 칸이 먼저 놓인다(도착 순서). 아직 안 온 칸은 뒤에 '찾고 있습니다' 로. */}
-              {/* 세 칸 나란히는 **폭이 넉넉할 때만**(1024px 이상) — 지휘부 "PC 에서 좌우폭이 충분하면
-                  병렬로". 태블릿 폭에서 세 칸이면 한 칸이 200px 안팎이라 읽히지 않는다. */}
-              <div className={isChorus ? "lg:grid lg:grid-cols-3 lg:gap-3 lg:items-start" : ""}>
+              {/* 나란히는 **폭이 넉넉할 때만**(1024px 이상) — 지휘부 "PC 에서 좌우폭이 충분하면
+                  병렬로". 태블릿 폭에서 세 칸이면 한 칸이 200px 안팎이라 읽히지 않는다.
+                  칸 수(둘 · 셋)에 맞춰 나눈다 — 두 칸을 세 칸 격자에 두면 오른쪽 1/3 이 빈다. */}
+              <div
+                className={
+                  !isChorus
+                    ? ""
+                    : columnCount >= 3
+                      ? "lg:grid lg:grid-cols-3 lg:gap-3 lg:items-start"
+                      : "lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start"
+                }
+              >
                 {arrival.map((key) => {
                   const a = answers[key];
                   if (!a) return null;

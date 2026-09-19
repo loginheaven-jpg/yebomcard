@@ -1,7 +1,7 @@
 /**
- * 성경 질문 — 세 칸(모델) 정의와 답 받아 오기
+ * 성경 질문 — 칸(모델) 정의와 답 받아 오기
  *
- * 화면은 Gemini · ChatGPT · Claude 세 칸이고, 답을 합치지 않는다.
+ * 화면은 Gemini · ChatGPT 두 칸(교리 질문이면 Claude 까지 세 칸)이고, 답을 합치지 않는다.
  * 그래서 **칸 라벨이 사실이어야 한다** — Gemini 칸에 Claude 답이 들어가면
  * "답이 갈리는 이유가 모델이 달라서" 라는 전제가 무너진다(docs/BIBLE_QA_DOCTRINE.md §B-4).
  *
@@ -26,9 +26,9 @@ export interface QaColumn {
 }
 
 /**
- * `gemini-pro` 는 2026-09-18 현재 게이트웨이에서 **고장나 있다**
- * (설정된 모델 ID `gemini-3.1-pro` 가 404 NOT_FOUND). 폴백을 끈 상태로 부르면 100% 실패한다.
- * 그래서 Gemini 칸은 `gemini-flash` 로 둔다 — 고쳐지면 이 한 줄만 바꾼다.
+ * 칸마다 게이트웨이 별칭을 부른다 — 모델은 게이트웨이가 정한다(2026-09-19: gemini-3.8-flash ·
+ * gpt-5.6-terra · claude-sonnet-5). Gemini 칸은 6초 안에 답이 없으면 게이트웨이가 같은 Gemini 의
+ * flash-lite 로 바꿔 부른다 — `model` 이 `gemini-` 로 시작하므로 라벨은 그대로 참이다.
  */
 export const QA_COLUMNS: QaColumn[] = [
   { key: "gemini", label: "Gemini", provider: "gemini-flash", modelPrefixes: ["gemini-"] },
@@ -41,12 +41,27 @@ export function columnOf(key: string): QaColumn | undefined {
 }
 
 /**
+ * **어느 칸이 답하는가 — 앱이 정한다**(지휘부 2026-09-19, docs/BIBLE_QA_DOCTRINE.md §B-3-1).
+ * 교인은 AI 를 고르지 않는다. 늘 Gemini · ChatGPT 두 칸이 답하고, 교리가 걸린 질문(선별 `doctrine`,
+ * 또는 선별이 실패해 모를 때)에는 Claude 를 더한다.
+ *
+ * 왜 Claude 를 늘 부르지 않나 — 세 칸을 가린 채 채점해 보니(질문 14개, 대결과 무관한 심사자)
+ * 교리 질문에서도 세 모델이 비슷했고, Claude 는 한 답에 약 $0.04 로 다른 두 칸을 합친 값의 두 배가 넘는다.
+ */
+export const BASE_COLUMNS: ColumnKey[] = ["gemini", "chatgpt"];
+export const DOCTRINE_COLUMNS: ColumnKey[] = ["gemini", "chatgpt", "claude"];
+
+export function columnsFor(doctrine: boolean): ColumnKey[] {
+  return doctrine ? DOCTRINE_COLUMNS : BASE_COLUMNS;
+}
+
+/**
  * 답 하나당 시간 상한(기본값).
  *
- * 처음에는 40초였다. **운영에서 Claude 가 두 번 다 잘렸다**(2026-09-18) — 교리 본문이 길어
- * Claude 입력이 16.8K 토큰이고, 게이트웨이가 잰 모델 시간만 31~36초였다. 여기에 게이트웨이
- * 앞단이 10초 안팎 더한다. 이제 칸마다 **따로 요청**하므로(`/api/bible-qa/answer`) 칸 하나가
- * 라우트 상한을 통째로 쓸 수 있다 — 한 칸이 늦어도 다른 칸은 먼저 화면에 뜬다.
+ * 처음에는 40초였다. **운영에서 Claude 가 두 번 다 잘렸다**(2026-09-18) — 그때는 게이트웨이가
+ * 요청마다 DB 에 동기로 붙어 앞단에서만 10초 안팎을 더했고, Claude 모델 시간도 31~36초였다.
+ * 게이트웨이를 고친 뒤(2026-09-19) 세 칸이 동시에 2.5 · 4.7 · 10.7초(중앙값)에 오고, 게이트웨이도
+ * 칸마다 30초에서 스스로 끊는다. 100초는 이제 여유가 크지만 게이트웨이가 다시 느려지는 날을 위해 둔다.
  */
 export const ANSWER_TIMEOUT_MS = 100_000;
 

@@ -30,7 +30,10 @@ export type QaResult =
       id: number;
       mode: "single" | "chorus";
       disclaimer: string;
+      /** 서버가 정한 칸(§B-3-1) — 두 칸, 교리가 걸리면 세 칸 */
       columns: { column: ColumnKey; label: string }[];
+      /** Claude 가 더해졌을 때의 한 줄(없으면 null) */
+      extended_note?: string | null;
     }
   | { kind: "refused"; id: number; message: string }
   | { kind: "crisis"; id: number; heading: string; body: string; lines: QaCrisisLine[] }
@@ -43,7 +46,6 @@ export interface AskInput {
   verseEnd: number | null;
   version: string;
   question: string;
-  columns: ColumnKey[];
   inputKind?: "text" | "voice";
   retry?: boolean;
 }
@@ -60,7 +62,6 @@ export async function askBibleQa(input: AskInput): Promise<QaResult> {
         verse_end: input.verseEnd,
         version: input.version,
         question: input.question,
-        columns: input.columns,
         input_kind: input.inputKind ?? "text",
         retry: input.retry ?? false,
       }),

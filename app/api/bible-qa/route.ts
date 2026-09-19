@@ -7,7 +7,11 @@
  * 이제는:
  *   1. 이 라우트 — 선별 · 기록 · 위기/거절 판정. 답은 만들지 않는다
  *   2. `/api/bible-qa/answer` — **칸마다 따로** 부른다. 먼저 끝난 칸이 먼저 화면에 뜬다
- * 선별이 끝나야 모델을 부른다는 규칙(§A — crisis 면 세 모델을 부르지 않는다)은 그대로다.
+ * 선별이 끝나야 모델을 부른다는 규칙(§A — crisis 면 모델을 부르지 않는다)은 그대로다.
+ *
+ * **어느 칸이 답할지는 이 라우트가 정한다**(지휘부 2026-09-19, §B-3-1). 교인은 AI 를 고르지 않는다 —
+ * 선별이 `basic` 이면 Gemini · ChatGPT, `doctrine` 이거나 선별이 실패했으면 Claude 까지.
+ * 요청에 `columns` 가 실려 와도(옛 화면) 따르지 않는다.
  *
  * 설교 카드도 이 라우트가 하지 않는다 — 별도 GET(`/api/bible-qa/sermons`)이다.
  */
@@ -19,15 +23,16 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { rateLimit } from "@/lib/rateLimit";
 import { getBookByCode } from "@/lib/books";
 import { type BibleVersion } from "@/lib/types";
-import { decide, gateQuestion, shouldCallModels } from "@/lib/bibleQa/gate";
+import { decide, gateQuestion, shouldCallModels, wantsDoctrineColumns } from "@/lib/bibleQa/gate";
 import { hasCrisisSignal } from "@/lib/bibleQa/crisisSignal";
 import { PROMPT_VERSION, needsHouseChurch, lifeStudyNames, type QaListRow } from "@/lib/bibleQa/prompt";
-import { QA_COLUMNS, type ColumnKey } from "@/lib/bibleQa/columns";
+import { QA_COLUMNS, columnsFor } from "@/lib/bibleQa/columns";
 import {
   CRISIS_BODY,
   CRISIS_FALLBACK,
   CRISIS_HEADING,
   DISCLAIMER,
+  EXTENDED_NOTE,
   QUESTION_MAX_LENGTH,
   REFUSAL_GENERAL,
 } from "@/lib/bibleQa/texts";
@@ -109,18 +114,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 어느 칸에 물을지. 없으면 Gemini 한 칸(첫 교인의 기본값).
-  const requested: ColumnKey[] = Array.isArray(body.columns)
-    ? (body.columns.filter((k: unknown) =>
-        QA_COLUMNS.some((c) => c.key === k),
-      ) as ColumnKey[])
-    : ["gemini"];
-  const columns = QA_COLUMNS.filter((c) => requested.includes(c.key)).map((c) => c.key);
-  if (columns.length === 0) {
-    return NextResponse.json({ error: "AI 를 하나 이상 골라 주세요" }, { status: 400 });
-  }
-  const mode = columns.length > 1 ? "chorus" : "single";
-
   const lastVerse = verseEnd && verseEnd >= verseStart ? verseEnd : verseStart;
   const versesRef =
     lastVerse > verseStart
@@ -137,6 +130,11 @@ export async function POST(request: NextRequest) {
   const housechurch = shouldCallModels(verdict)
     ? needsHouseChurch(question, lifeStudyNames(lists.rows))
     : false;
+  // 어느 칸이 답할지 — 교리가 걸렸으면(또는 선별이 실패해 모르면) Claude 까지(§B-3-1).
+  const extended = wantsDoctrineColumns(verdict, gate.kind);
+  const columns = columnsFor(extended);
+  // 이제 늘 두 칸 이상이다. 기록의 mode 는 옛 값('chorus')을 그대로 쓴다(관리자 화면과 같은 값).
+  const mode = "chorus";
 
   // ── 기록을 먼저 남긴다 (§B-10) ───────────────────────────────────
   const { data: inserted, error: insertError } = await supabaseAdmin
@@ -207,6 +205,8 @@ export async function POST(request: NextRequest) {
       column: key,
       label: QA_COLUMNS.find((c) => c.key === key)?.label ?? key,
     })),
+    // Claude 가 더해졌으면 화면이 왜 칸이 셋인지 한 줄로 알린다
+    extended_note: extended ? EXTENDED_NOTE : null,
     disclaimer: DISCLAIMER,
   });
 }

@@ -53,8 +53,12 @@ async function main() {
   const gate = await loadGatePrompt();
   check("선별 프롬프트를 잘라 왔다", gate.length > 400, `${gate.length}자`);
   check(
-    "선별 프롬프트에 세 낱말이 모두 있다",
-    ["crisis", "allow", "deny"].every((w) => gate.includes(w)),
+    "선별 프롬프트에 네 낱말이 모두 있다(crisis · basic · doctrine · deny — §A, 2026-09-19)",
+    ["crisis", "basic", "doctrine", "deny"].every((w) => gate.includes(w)),
+  );
+  check(
+    "선별 프롬프트 보기에 옛 낱말 allow 가 남지 않았다",
+    !/:\s*allow\b/.test(gate),
   );
   check("선별 프롬프트에 교리 본문이 섞이지 않았다", !gate.includes("합신"));
 
