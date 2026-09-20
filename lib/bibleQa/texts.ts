@@ -68,3 +68,9 @@ export const CRISIS_FALLBACK: { title: string; body: string }[] = [
 
 /** 질문 글자 수 상한(§B-10). 넘으면 서버가 400 으로 돌려준다. */
 export const QUESTION_MAX_LENGTH = 600;
+
+/**
+ * 말로 물었을 때 자동 제출까지 세는 초(§B-13, 지휘부 2026-09-21).
+ * 글은 입력창에 보이는 채로 센다 — 그 동안 '잠깐, 고칠게요' 를 누르거나 입력창을 건드리면 멈춘다.
+ */
+export const AUTO_SEND_SECONDS = 3;

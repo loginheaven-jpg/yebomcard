@@ -25,6 +25,7 @@ import { stripNotes, type BibleVerse } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
 import { QA_COLUMNS, type ColumnKey } from "@/lib/bibleQa/columns";
 import {
+  AUTO_SEND_SECONDS,
   CAUTION_NOTICE,
   DISCLAIMER,
   DIVERGENCE_NOTE,
@@ -146,7 +147,11 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   /**
    * 말로 묻기. 받은 글은 입력창에 **이어 붙인다** — 덮어쓰면 앞서 적어 둔 것이 사라지고,
    * 두 번 말해 보태는 길도 막힌다.
+   *
+   * 글이 오면 **세고 나서 스스로 묻는다**(§B-13, 지휘부 2026-09-21) — 말로 묻는 분이
+   * 다시 화면을 찾아 누르지 않게. 글은 입력창에 보이는 채로 세므로 '보고 있다' 는 지켜진다.
    */
+  const [autoSend, setAutoSend] = useState<number | null>(null);
   const voice = useQaVoiceInput(
     useCallback(
       (text: string) => {
@@ -155,6 +160,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
           const joined = prev.trim() ? `${prev.trim()} ${text.trim()}` : text.trim();
           return joined.slice(0, QUESTION_MAX_LENGTH);
         });
+        setAutoSend(AUTO_SEND_SECONDS);
       },
       [],
     ),
@@ -299,6 +305,32 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, [startedAt]);
+
+  /**
+   * 말로 물었을 때의 자동 제출 셈. 1초마다 줄고 0 이 되면 스스로 묻는다.
+   * `ask` 는 글자를 칠 때마다 새로 만들어지므로 **ref 로 최신 것을 부른다** —
+   * 의존성에 넣으면 한 글자 고칠 때마다 셈이 처음부터 다시 돈다.
+   */
+  const askRef = useRef(ask);
+  useEffect(() => {
+    askRef.current = ask;
+  }, [ask]);
+  useEffect(() => {
+    if (autoSend === null) return;
+    // 셈도 묻는 것도 **타이머 안에서** 한다 — effect 본문에서 곧바로 상태를 바꾸면
+    // 렌더가 연쇄한다(react-hooks/set-state-in-effect, 저장소 공통 규칙).
+    const t = window.setTimeout(() => {
+      if (autoSend <= 1) {
+        setAutoSend(null);
+        void askRef.current();
+      } else {
+        setAutoSend(autoSend - 1);
+      }
+    }, 1000);
+    return () => window.clearTimeout(t);
+  }, [autoSend]);
+  /** 셈을 멈춘다 — '잠깐, 고칠게요' · 입력창을 건드림 · 다시 말하기 */
+  const stopAutoSend = useCallback(() => setAutoSend(null), []);
 
   const handleSave = useCallback(async () => {
     if (!result || result.kind !== "pending") return;
@@ -513,7 +545,11 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
               )}
               <textarea
                 value={question}
-                onChange={(e) => setQuestion(e.target.value.slice(0, QUESTION_MAX_LENGTH))}
+                onChange={(e) => {
+                  stopAutoSend(); // 고치기 시작하면 자동 제출을 멈춘다
+                  setQuestion(e.target.value.slice(0, QUESTION_MAX_LENGTH));
+                }}
+                onFocus={stopAutoSend}
                 rows={5}
                 autoFocus
                 placeholder="이 말씀을 읽다가 생긴 질문을 적어 주세요."
@@ -525,7 +561,10 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                 <div className="mt-2">
                   {voice.state === "idle" && (
                     <button
-                      onClick={() => voice.start()}
+                      onClick={() => {
+                        stopAutoSend(); // 다시 말하려는 것이니 앞서 돌던 셈은 멈춘다
+                        void voice.start();
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:brightness-95"
                     >
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6}>
@@ -535,23 +574,34 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
                     </button>
                   )}
                   {voice.state === "recording" && (
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-[12px] font-semibold text-red-600 dark:text-red-400">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden />
-                        듣고 있습니다 {voice.seconds}초
-                      </span>
-                      <button
-                        onClick={voice.stop}
-                        className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[var(--amber)] text-white"
-                      >
-                        다 말했습니다
-                      </button>
-                      <button
-                        onClick={voice.cancel}
-                        className="px-2.5 py-1.5 rounded-lg text-[12px] text-gray-500 dark:text-gray-400"
-                      >
-                        취소
-                      </button>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-[12px] font-semibold text-red-600 dark:text-red-400">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden />
+                          {/* 말이 끊기면 스스로 마감한다 — 마지막 몇 초는 셈을 보여 줘서
+                              더 말할 분이 말을 이어 시계를 되돌릴 수 있게 한다(§B-13) */}
+                          {voice.countdown !== null
+                            ? `곧 마칩니다 ${voice.countdown}`
+                            : `듣고 있습니다 ${voice.seconds}초`}
+                        </span>
+                        <button
+                          onClick={voice.stop}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-[var(--amber)] text-white"
+                        >
+                          듣기 마감
+                        </button>
+                        <button
+                          onClick={voice.cancel}
+                          className="px-2.5 py-1.5 rounded-lg text-[12px] text-gray-500 dark:text-gray-400"
+                        >
+                          취소
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        {voice.noisy
+                          ? "주변이 시끄러워 자동 마감을 껐습니다. 다 말씀하시면 '듣기 마감' 을 눌러 주세요."
+                          : "말씀을 마치고 잠시 쉬면 저절로 마칩니다."}
+                      </p>
                     </div>
                   )}
                   {voice.state === "sending" && (
@@ -582,9 +632,28 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
               {/* '묻기' 하나 — 어느 AI 가 답할지는 서버가 정한다(§B-3-1).
                   입력창 바로 아래에 둔다: 창 맨 아래에 붙이면 폰 키보드에 가린다.
                   답을 받은 뒤에는 보이지 않는다(앱은 한 번만 답한다). */}
+              {/* 말로 물었을 때의 자동 제출 셈(§B-13) — 글은 위 입력창에 보이는 채로 센다.
+                  '보고 누른다' 의 **보는 것**은 그대로 두고, 누르는 것만 셈이 대신한다. */}
+              {autoSend !== null && !asking && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--amber-tint)] px-3 py-2.5">
+                  <span className="text-[12.5px] font-semibold text-[var(--amber-deep)] tabular-nums">
+                    {autoSend}초 뒤에 묻습니다
+                  </span>
+                  <button
+                    type="button"
+                    onClick={stopAutoSend}
+                    className="ml-auto shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-white dark:bg-gray-800 text-[var(--ink-soft)] dark:text-gray-300 border border-[var(--line)] dark:border-gray-700"
+                  >
+                    잠깐, 고칠게요
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
-                onClick={() => ask()}
+                onClick={() => {
+                  stopAutoSend();
+                  void ask();
+                }}
                 disabled={asking || question.trim().length === 0}
                 className="mt-3 w-full py-2.5 rounded-xl text-[13.5px] font-semibold bg-[var(--amber)] text-white transition-colors hover:bg-[var(--amber-deep)] disabled:opacity-40 disabled:hover:bg-[var(--amber)]"
               >
