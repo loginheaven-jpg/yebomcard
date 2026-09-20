@@ -1455,7 +1455,7 @@ export default function SearchPanel({
 
     // 병기 ON: 영문 버전 조회
     const altVersion = subVersion;
-    let altMap = new Map<string, string>();
+    const altMap = new Map<string, string>();
     if (parallel) {
       try {
         const results = await Promise.all(groups.map((g) =>
