@@ -60,7 +60,7 @@ export interface PlanSummary {
   updatedAt: string | null;
 }
 
-export function builtinSummary(planId: string): PlanSummary | null {
+export function builtinSummary(planId: string, usedByGroups = 0): PlanSummary | null {
   const plan = BUILTIN_PLANS[planId];
   if (!plan) return null;
   const chapters = new Set<string>();
@@ -79,7 +79,7 @@ export function builtinSummary(planId: string): PlanSummary | null {
     createdByName: "예봄교회",
     locked: true,
     hidden: false,
-    usedByGroups: 0,
+    usedByGroups,
     reportCount: 0,
     updatedAt: null,
   };

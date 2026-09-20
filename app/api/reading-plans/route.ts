@@ -45,7 +45,7 @@ export async function GET() {
   return NextResponse.json({
     ready: list.ready,
     // 표준진도표는 언제나 첫 줄 — 표가 없어도 말씀의삶은 그대로 돈다.
-    plans: withBuiltins(list.others),
+    plans: withBuiltins(list.others, list.groupCounts),
     mine: list.mine,
     groupPlanIds,
   });

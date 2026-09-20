@@ -149,6 +149,8 @@ export interface PlanListResult {
   ready: boolean;
   mine: PlanSummary[];
   others: PlanSummary[];
+  /** 진도표 id → 그 진도표를 읽는 그룹 수. **파일 진도표(표준진도표)도 들어 있다** */
+  groupCounts: Map<string, number>;
 }
 
 /**
@@ -163,11 +165,17 @@ export async function listPlans(userId: string | null, groupPlanIds: string[] = 
     .order("updated_at", { ascending: false })
     .limit(300);
   if (error) {
-    if (isMissingTable(error)) return { ready: false, mine: [], others: [] };
-    return { ready: true, mine: [], others: [] };
+    // 표가 없어도 표준진도표를 읽는 그룹 수는 셀 수 있다 — 목록은 그대로 서야 한다.
+    const only = await groupUseCounts(Object.keys(BUILTIN_PLANS));
+    if (isMissingTable(error)) return { ready: false, mine: [], others: [], groupCounts: only };
+    return { ready: true, mine: [], others: [], groupCounts: only };
   }
   const rows = (data ?? []) as Partial<PlanRow>[];
-  const counts = await groupUseCounts(rows.map((r) => r.slug!).filter(Boolean));
+  // 파일 진도표(표준진도표)도 함께 센다 — 빼면 '교회 공식' 줄만 늘 '0개 그룹' 이 된다.
+  const counts = await groupUseCounts([
+    ...Object.keys(BUILTIN_PLANS),
+    ...rows.map((r) => r.slug!).filter(Boolean),
+  ]);
   const mine: PlanSummary[] = [];
   const others: PlanSummary[] = [];
   for (const row of rows) {
@@ -175,7 +183,7 @@ export async function listPlans(userId: string | null, groupPlanIds: string[] = 
     if (userId && row.created_by === userId) mine.push(s);
     else if (!s.hidden && (s.visibility === "public" || groupPlanIds.includes(s.planId))) others.push(s);
   }
-  return { ready: true, mine, others };
+  return { ready: true, mine, others, groupCounts: counts };
 }
 
 /**
@@ -230,9 +238,9 @@ export async function planLabels(planIds: (string | null)[]): Promise<Map<string
 }
 
 /** 표준진도표를 목록 맨 앞에 둔다. */
-export function withBuiltins(list: PlanSummary[]): PlanSummary[] {
+export function withBuiltins(list: PlanSummary[], groupCounts?: Map<string, number>): PlanSummary[] {
   const builtins = Object.keys(BUILTIN_PLANS)
-    .map((id) => builtinSummary(id))
+    .map((id) => builtinSummary(id, groupCounts?.get(id) ?? 0))
     .filter((s): s is PlanSummary => !!s);
   return [...builtins, ...list];
 }
