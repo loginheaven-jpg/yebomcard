@@ -286,6 +286,15 @@ export default function SettingsSheet({
                     로그아웃
                   </button>
                 </div>
+                {/* 나의 질문(§B-14, 2026-09-21) — 전에는 그 절로 다시 찾아가야만 자기 질문이 보였다.
+                    모든 교인의 질문과 이름은 아래 '성경 질문 기록'(수퍼어드민)에서 본다. */}
+                <a
+                  href="/my-questions"
+                  className="w-full mt-3 px-3 py-2 rounded-lg text-sm font-medium border bg-white dark:bg-gray-800 text-[var(--ink-soft)] border-[var(--line)] dark:border-gray-600 flex items-center justify-between hover:brightness-95"
+                >
+                  <span>나의 질문</span>
+                  <span className="text-[var(--ink-faint)]">›</span>
+                </a>
                 {adminMode && (
                   <>
                   <button

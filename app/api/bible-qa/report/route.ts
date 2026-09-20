@@ -47,19 +47,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "유효한 column이 필요합니다" }, { status: 400 });
   }
 
-  // 자기 질문인지 먼저 본다.
-  const { data: own, error: ownError } = await supabaseAdmin
+  // 신고할 수 있는 답인지 본다 — **내 질문**이거나 **함께보기로 내놓은 질문**(§B-14, 2026-09-21).
+  // 함께보기가 생기기 전에는 내 질문뿐이었다. 남의 답이 교인에게 보이는데 신고할 길이 없으면,
+  // 틀린 교리 답이 그 절에 그대로 걸려 있게 된다.
+  const { data: row, error: ownError } = await supabaseAdmin
     .from("ai_questions")
-    .select("id")
+    .select("id, user_id, shared, share_hidden_at")
     .eq("id", questionId)
-    .eq("user_id", session.user_id)
     .maybeSingle();
   if (ownError) {
-    return NextResponse.json({ error: ownError.message }, { status: 500 });
-  }
-  if (!own) {
-    // 남의 질문이거나 없는 질문. 어느 쪽인지 알려 주지 않는다.
-    return NextResponse.json({ error: "신고할 수 없는 답입니다" }, { status: 404 });
+    // 마이그레이션 전(공유 칸 없음)에는 예전 규칙 그대로 — 내 질문만.
+    const { data: own } = await supabaseAdmin
+      .from("ai_questions")
+      .select("id")
+      .eq("id", questionId)
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (!own) return NextResponse.json({ error: "신고할 수 없는 답입니다" }, { status: 404 });
+  } else {
+    const q = row as { user_id: string; shared?: boolean; share_hidden_at?: string | null } | null;
+    const mine = q?.user_id === session.user_id;
+    const openToAll = !!q?.shared && !q?.share_hidden_at;
+    if (!q || (!mine && !openToAll)) {
+      // 남의 비공개 질문이거나 없는 질문. 어느 쪽인지 알려 주지 않는다.
+      return NextResponse.json({ error: "신고할 수 없는 답입니다" }, { status: 404 });
+    }
   }
 
   const { error } = await supabaseAdmin

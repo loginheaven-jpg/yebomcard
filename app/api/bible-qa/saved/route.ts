@@ -14,6 +14,13 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 한 장에서 내려보내는 함께보기 개수 상한.
+ * 인기 절(요 3:16 · 시 23)에는 질문이 몇십 개씩 쌓인다 — 전부 내려보내면
+ * 질문 창을 여는 것만으로 본문보다 긴 글이 따라온다.
+ */
+const SHARED_LIMIT = 20;
+
 async function getSession(): Promise<SessionData | null> {
   try {
     const cookieStore = await cookies();
@@ -28,6 +35,15 @@ async function getSession(): Promise<SessionData | null> {
   }
 }
 
+/**
+ * 함께보기 칸(`shared`)이 아직 없는가 — `scripts/migration-qa-share.sql` 적용 전.
+ * PostgREST 는 없는 칸을 42703 으로 돌려준다. 이때도 **저장은 되어야 한다**.
+ */
+function isMissingShareColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703" || /shared/i.test(error.message ?? "");
+}
+
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -37,20 +53,51 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const id = Number(body.id);
   const saved = body.saved === true;
+  // 함께보기(§B-14). 안 적어 보내면 **공개가 기본**이다(지휘부 2026-09-21).
+  // 저장을 내리면 공유도 함께 내려간다 — 내가 버린 것이 남에게 남아 있으면 안 된다.
+  const wantShare = saved && body.shared !== false;
   if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ error: "유효한 id가 필요합니다" }, { status: 400 });
+  }
+
+  // 위기·거절은 **공유하지 않는다.** 화면에는 저장 단추 자체가 없지만 여기서 한 번 더 막는다 —
+  // 화면만 믿으면, 요청을 직접 만들어 보내는 길이 그대로 열려 있다.
+  let shared = wantShare;
+  if (wantShare) {
+    const { data: row } = await supabaseAdmin
+      .from("ai_questions")
+      .select("is_crisis, gate_result")
+      .eq("id", id)
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    const r = row as { is_crisis: boolean; gate_result: string } | null;
+    if (r?.is_crisis || r?.gate_result === "crisis" || r?.gate_result === "deny") shared = false;
   }
 
   // **반드시 user_id 로 스코프한다** — 남의 질문을 저장·해제하지 못하게.
   const { error } = await supabaseAdmin
     .from("ai_questions")
-    .update({ saved, saved_at: saved ? new Date().toISOString() : null })
+    .update({
+      saved,
+      saved_at: saved ? new Date().toISOString() : null,
+      shared,
+      shared_at: shared ? new Date().toISOString() : null,
+    })
     .eq("id", id)
     .eq("user_id", session.user_id);
   if (error) {
+    // 표에 칸이 아직 없으면(마이그레이션 전) 공유 없이 저장만이라도 되게 한다.
+    if (isMissingShareColumn(error)) {
+      const { error: retry } = await supabaseAdmin
+        .from("ai_questions")
+        .update({ saved, saved_at: saved ? new Date().toISOString() : null })
+        .eq("id", id)
+        .eq("user_id", session.user_id);
+      if (!retry) return NextResponse.json({ success: true, saved, shared: false });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ success: true, saved });
+  return NextResponse.json({ success: true, saved, shared });
 }
 
 /**
@@ -68,11 +115,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "book, chapter가 필요합니다" }, { status: 400 });
   }
 
+  const COLUMNS =
+    "id, verse_start, verse_end, verses_ref, question, mode, asked_at, ai_question_answers(column_key, model, ok, content)";
+
   const { data, error } = await supabaseAdmin
     .from("ai_questions")
-    .select(
-      "id, verse_start, verse_end, verses_ref, question, mode, asked_at, ai_question_answers(column_key, model, ok, content)",
-    )
+    .select(COLUMNS)
     .eq("user_id", session.user_id)
     .eq("book_code", bookCode)
     .eq("chapter", chapter)
@@ -80,6 +128,27 @@ export async function GET(request: NextRequest) {
     .order("asked_at", { ascending: false });
 
   // 표가 아직 없으면 기능이 없는 것처럼 조용히 빈 배열 — 절 화면이 깨지면 안 된다.
-  if (error) return NextResponse.json({ items: [] });
-  return NextResponse.json({ items: data ?? [] });
+  if (error) return NextResponse.json({ items: [], shared: [] });
+
+  /**
+   * 함께보기 — 다른 교인이 내놓은 질문(§B-14, 지휘부 2026-09-21).
+   * **누가 물었는지는 내려보내지 않는다** — `user_id` · `user_name` 을 select 에 넣지 않는다.
+   * 여기서 한 칸이라도 흘리면 화면에서 안 그려도 응답 본문에 남는다.
+   * 내 것은 위 목록에 이미 있으므로 뺀다. 수퍼어드민이 내린 것(`share_hidden_at`)도 뺀다.
+   */
+  let shared: unknown[] = [];
+  const { data: sharedRows, error: sharedError } = await supabaseAdmin
+    .from("ai_questions")
+    .select(COLUMNS)
+    .eq("book_code", bookCode)
+    .eq("chapter", chapter)
+    .eq("shared", true)
+    .neq("user_id", session.user_id)
+    .is("share_hidden_at", null)
+    .order("asked_at", { ascending: false })
+    .limit(SHARED_LIMIT);
+  // 마이그레이션 전이면 함께보기만 조용히 비어 있고 내 저장 목록은 그대로 나온다.
+  if (!sharedError) shared = sharedRows ?? [];
+
+  return NextResponse.json({ items: data ?? [], shared });
 }

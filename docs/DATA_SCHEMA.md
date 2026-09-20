@@ -188,10 +188,17 @@ PK `(group_id, user_id)` — 복합 PK 가 곧 "한 그룹에 한 번만" 제약
 ### `ai_questions` — 질문 한 건 = 한 행
 `(user_id, user_name, book_code, chapter, verse_start, verse_end?, version, verses_ref, question,
 input_kind, gate_result, is_crisis, crisis_reviewed?, crisis_note?, mode, housechurch,
-prompt_version, lists_synced_at?, saved, saved_at?, asked_at)`
+prompt_version, lists_synced_at?, saved, saved_at?, shared, shared_at?, share_hidden_at?,
+share_hidden_by?, asked_at)`
 **위기·거절 질문도 남긴다**(§B-10). 모델을 부르기 **전에** 이 행을 먼저 넣는다 — 표가 없으면
 돈을 쓰기 전에 503 으로 멈추고, 답이 늦게 실패해도 기록은 남는다.
 `gate_result='error'` 는 '선별이 고장나서 통과시킨 건' 이다. 이 값이 늘면 게이트가 죽은 것이다.
+
+**함께보기**(2026-09-21 · `scripts/migration-qa-share.sql` · **적용 대기**):
+`shared` 는 **`saved` 와 다른 뜻**이다 — `saved`='내 절에 둔다', `shared`='남에게 보인다'.
+저장을 내리면 공유도 함께 내려간다. 조회는 **`user_id`·`user_name` 을 select 에 넣지 않는다**
+(화면에서 안 그리는 것으로는 모자라다 — 응답 본문에 남는다). `share_hidden_at` 은 수퍼어드민이
+목록에서 내린 것으로, **행은 지우지 않는다**. 위기·거절 건은 서버가 공유를 거부한다.
 
 ### `ai_question_answers` — 모델 하나가 준 한 칸
 `(question_id→ai_questions, column_key, provider_alias, model, ok, content?, error?,
@@ -250,6 +257,7 @@ TTL: 7일. 만료 시 다음 페이지 로드의 `/api/auth/session` 이 `{ sess
 
 | 일자 | 변경 |
 |---|---|
+| 2026-09-21 | 성경 질문 함께보기 (`ai_questions.shared`/`shared_at`/`share_hidden_at`/`share_hidden_by`) — `scripts/migration-qa-share.sql` · **적용 대기** |
 | 2026-09-20 | 진도표 (`reading_plans`) 신설 + `reading_groups.plan_id`·`reading_unit_checks.plan_id` → text, `reading_groups.plan_id` NOT NULL 해제 — `scripts/migration-reading-plans.sql` · **적용 대기** |
 | 2026-09-18 | 성경 질문 7종 신설 (`ai_questions`/`ai_question_answers`/`ai_question_views`/`qa_lists`/`sermons`/`sermon_refs`/`sermon_ingest_runs`) — `scripts/migration-bible-qa.sql` · **적용 대기** |
 | 2026-09-09 | 말씀의삶 그룹 2종 신설 (`reading_groups`/`reading_group_members`) — `scripts/migration-reading-groups.sql` |

@@ -65,6 +65,12 @@ interface HandoffState {
   truncated: boolean;
 }
 
+/**
+ * 한 창에서 보여 줄 함께보기 개수. 서버는 한 장에서 20개까지 주고, 창에서는 그중 이만큼만 그린다 —
+ * 묻기 전 화면이 남의 질문으로 뒤덮이면 정작 물으러 온 사람이 입력창을 못 찾는다.
+ */
+const SHARED_SHOW = 5;
+
 /** 저장해 둔 답을 카드가 읽는 꼴로 */
 function savedToAnswer(a: SavedQa["ai_question_answers"][number]): QaAnswer {
   const col = QA_COLUMNS.find((c) => c.key === a.column_key);
@@ -99,6 +105,11 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   // 말로 물었는지 기록에 남긴다(관리자 화면에서 '음성' 으로 보인다)
   const [usedVoice, setUsedVoice] = useState(false);
+  /**
+   * 저장할 때 '비공개'(§B-14, 지휘부 2026-09-21). **기본은 공개** —
+   * 개인 신앙상담이 아니라 성경 구절 자체에 대한 질문이라 공유 가치가 보안 가치보다 높다는 판단이다.
+   */
+  const [keepPrivate, setKeepPrivate] = useState(false);
   // 이 구절을 다룬 우리 교회 설교. 답 **아래**에 붙는다 — 늦게 도착해도 읽는 중인 글이 밀리지 않게.
   const [sermons, setSermons] = useState<SermonCard[]>([]);
   const sermonAcRef = useRef<AbortController | null>(null);
@@ -126,6 +137,13 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
    */
   const [savedHere, setSavedHere] = useState<SavedQa[]>([]);
   const [savedOpen, setSavedOpen] = useState<Set<number>>(new Set());
+  /**
+   * 함께보기 — 다른 교인이 내놓은 질문(§B-14, 지휘부 2026-09-21). **누가 물었는지는 오지 않는다.**
+   * 묻기 전에 보이는 것이 핵심이다: 앱은 한 번만 답하므로, 같은 궁금증을 이미 누가 물었으면
+   * 그것을 읽는 것이 곧 '더 묻기' 가 되고 게이트웨이 호출도 한 번 줄어든다.
+   */
+  const [sharedHere, setSharedHere] = useState<SavedQa[]>([]);
+  const [sharedOpen, setSharedOpen] = useState<Set<number>>(new Set());
 
   useHardwareBack(true, onClose);
   useHardwareBack(!!handoff, () => setHandoff(null));
@@ -197,15 +215,19 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
     let alive = true;
     const from = target.verseStart;
     const to = target.verseEnd ?? target.verseStart;
-    fetchChapterQas(target.bookCode, target.chapter).then((items) => {
+    const overlaps = (q: SavedQa) => {
+      const qs = q.verse_start;
+      const qe = q.verse_end ?? q.verse_start;
+      return qs <= to && qe >= from;
+    };
+    fetchChapterQas(target.bookCode, target.chapter).then(({ mine, shared }) => {
       if (!alive) return;
-      setSavedHere(
-        items.filter((q) => {
-          const qs = q.verse_start;
-          const qe = q.verse_end ?? q.verse_start;
-          return qs <= to && qe >= from;
-        }),
-      );
+      setSavedHere(mine.filter(overlaps));
+      // 함께보기는 **고른 절과 겹치는 것부터**, 모자라면 같은 장의 다른 질문으로 채운다 —
+      // 같은 장을 읽다 생긴 질문은 절이 달라도 대개 맞닿아 있다.
+      const near = shared.filter(overlaps);
+      const rest = shared.filter((q) => !overlaps(q));
+      setSharedHere([...near, ...rest].slice(0, SHARED_SHOW));
     });
     return () => {
       alive = false;
@@ -334,15 +356,20 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
 
   const handleSave = useCallback(async () => {
     if (!result || result.kind !== "pending") return;
-    const ok = await setQaSaved(result.id, true);
+    const ok = await setQaSaved(result.id, true, !keepPrivate);
     if (ok) {
       setSaved(true);
       onSaved?.();
-      flash("저장했습니다. 이 절에서 다시 볼 수 있습니다.");
+      // **무엇이 일어났는지 글자로 말한다.** 체크박스를 못 보고 저장만 누르는 분이 있다.
+      flash(
+        keepPrivate
+          ? "저장했습니다. 나만 볼 수 있습니다."
+          : "저장했습니다. 다른 교인도 이 질문을 볼 수 있습니다(이름은 안 보입니다).",
+      );
     } else {
       flash("저장하지 못했습니다.");
     }
-  }, [result, flash, onSaved]);
+  }, [result, keepPrivate, flash, onSaved]);
 
   /**
    * '이 답이 이상합니다'. 지금 받은 답이면 이번 질문 id, 저장해 둔 답이면 그 질문 id 로 보낸다
@@ -479,69 +506,48 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
               {/* 이 절에 저장해 둔 질문 — 접혀 있다. 앱은 한 번만 답하므로 여기서 이어 묻지는 않고,
                   다시 읽거나 그 AI 로 이어간다(지휘부 2026-09-18). */}
               {savedHere.length > 0 && (
-                <div className="mb-3 rounded-xl border border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20 overflow-hidden">
-                  <div className="px-3 py-2 text-[11.5px] font-semibold text-violet-700 dark:text-violet-300">
-                    이 절에 저장한 질문 {savedHere.length}개
-                  </div>
-                  {savedHere.map((q) => {
-                    const open = savedOpen.has(q.id);
-                    const shown = (q.ai_question_answers ?? []).filter((a) => a.ok && a.content);
-                    return (
-                      <div key={q.id} className="border-t border-violet-100 dark:border-violet-900/40">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSavedOpen((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(q.id)) next.delete(q.id);
-                              else next.add(q.id);
-                              return next;
-                            })
-                          }
-                          className="w-full text-left px-3 py-2 flex items-start gap-1.5"
-                          aria-expanded={open}
-                        >
-                          <span className="shrink-0" aria-hidden>
-                            ❓
-                          </span>
-                          <span
-                            className={`min-w-0 flex-1 text-[12.5px] leading-snug text-gray-700 dark:text-gray-200 ${
-                              open ? "whitespace-pre-wrap break-words" : "truncate"
-                            }`}
-                          >
-                            {q.question}
-                          </span>
-                          <span className="shrink-0 text-violet-400 select-none" aria-hidden>
-                            {open ? "▾" : "▸"}
-                          </span>
-                        </button>
-                        {open && (
-                          <div className="px-3 pb-3">
-                            {shown.length === 0 && (
-                              <p className="text-[11.5px] text-gray-400">남아 있는 답이 없습니다.</p>
-                            )}
-                            {shown.map((raw) => {
-                              const a = savedToAnswer(raw);
-                              const key = `s${q.id}:${a.column}`;
-                              return (
-                                <AnswerCard
-                                  key={key}
-                                  answer={a}
-                                  open
-                                  onToggle={() => {}}
-                                  collapsible={false}
-                                  reported={!!reported[key]}
-                                  onReport={() => reportAnswer(q.id, a, key)}
-                                  onHandoff={() => handleHandoff(a, q.question)}
-                                />
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <QuestionFoldList
+                  title={`이 절에 저장한 질문 ${savedHere.length}개`}
+                  items={savedHere}
+                  openIds={savedOpen}
+                  onToggle={(id) =>
+                    setSavedOpen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  idPrefix="s"
+                  reported={reported}
+                  onReport={reportAnswer}
+                  onHandoff={handleHandoff}
+                />
+              )}
+
+              {/* 함께보기 — 다른 교인이 내놓은 질문(§B-14, 지휘부 2026-09-21).
+                  **묻기 전에** 보이는 자리가 중요하다: 같은 궁금증을 이미 누가 물었으면
+                  그것을 읽는 것이 곧 '더 묻기' 가 되고, 같은 질문이 한 번 덜 나간다. */}
+              {sharedHere.length > 0 && (
+                <QuestionFoldList
+                  title={`다른 교인의 질문 ${sharedHere.length}개`}
+                  note="이름은 보이지 않습니다. AI 답이라 참고용입니다."
+                  tone="sky"
+                  items={sharedHere}
+                  openIds={sharedOpen}
+                  onToggle={(id) =>
+                    setSharedOpen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    })
+                  }
+                  idPrefix="o"
+                  reported={reported}
+                  onReport={reportAnswer}
+                  onHandoff={handleHandoff}
+                />
               )}
               <textarea
                 value={question}
@@ -862,7 +868,19 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
             위기·거절 화면에는 고를 것을 두지 않는다. 특히 위기에 있는 사람에게
             '저장할까 버릴까' 를 묻는 것은 그 순간에 필요 없는 결정이다. */}
         {answered && (
-          <div className="shrink-0 px-4 py-2.5 border-t border-[var(--line)] dark:border-gray-700 flex gap-2">
+          <div className="shrink-0 px-4 py-2.5 border-t border-[var(--line)] dark:border-gray-700 flex items-center gap-2">
+            {/* 함께보기(§B-14, 지휘부 2026-09-21) — **기본은 공개**다.
+                체크를 못 보고 저장만 누르는 분이 있어, 저장 뒤 토스트로 무엇이 일어났는지 다시 말한다. */}
+            <label className="shrink-0 flex items-center gap-1.5 text-[12px] text-gray-600 dark:text-gray-300 select-none">
+              <input
+                type="checkbox"
+                checked={keepPrivate}
+                onChange={(e) => setKeepPrivate(e.target.checked)}
+                disabled={saved}
+                className="w-4 h-4"
+              />
+              비공개
+            </label>
             <button
               onClick={onClose}
               className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -902,6 +920,114 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── 접힌 질문 목록 ───────────────────────────────────────────────
+// 내가 저장한 질문과 **함께보기**(다른 교인의 질문)가 같은 꼴을 쓴다.
+// 한 벌로 둔 까닭: 두 곳에 같은 60줄을 두면 한쪽만 고치는 날이 온다.
+
+function QuestionFoldList({
+  title,
+  note,
+  tone = "violet",
+  items,
+  openIds,
+  onToggle,
+  idPrefix,
+  reported,
+  onReport,
+  onHandoff,
+}: {
+  title: string;
+  note?: string;
+  tone?: "violet" | "sky";
+  items: SavedQa[];
+  openIds: Set<number>;
+  onToggle: (id: number) => void;
+  /** 신고 표시를 가를 접두어 — 내 것과 남의 것의 id 가 겹칠 수 있다 */
+  idPrefix: string;
+  reported: Record<string, boolean>;
+  onReport: (questionId: number, answer: QaAnswer, key: string) => void;
+  onHandoff: (answer: QaAnswer, questionText: string) => void;
+}) {
+  const c =
+    tone === "sky"
+      ? {
+          box: "border-sky-200 dark:border-sky-900/50 bg-sky-50/60 dark:bg-sky-950/20",
+          head: "text-sky-700 dark:text-sky-300",
+          line: "border-sky-100 dark:border-sky-900/40",
+          mark: "text-sky-400",
+        }
+      : {
+          box: "border-violet-200 dark:border-violet-900/50 bg-violet-50/60 dark:bg-violet-950/20",
+          head: "text-violet-700 dark:text-violet-300",
+          line: "border-violet-100 dark:border-violet-900/40",
+          mark: "text-violet-400",
+        };
+  return (
+    <div className={`mb-3 rounded-xl border overflow-hidden ${c.box}`}>
+      <div className={`px-3 py-2 text-[11.5px] font-semibold ${c.head}`}>
+        {title}
+        {note && (
+          <span className="ml-1.5 font-normal text-[11px] text-gray-500 dark:text-gray-400">{note}</span>
+        )}
+      </div>
+      {items.map((q) => {
+        const open = openIds.has(q.id);
+        const shown = (q.ai_question_answers ?? []).filter((a) => a.ok && a.content);
+        return (
+          <div key={q.id} className={`border-t ${c.line}`}>
+            <button
+              type="button"
+              onClick={() => onToggle(q.id)}
+              className="w-full text-left px-3 py-2 flex items-start gap-1.5"
+              aria-expanded={open}
+            >
+              <span className="shrink-0" aria-hidden>
+                ❓
+              </span>
+              <span
+                className={`min-w-0 flex-1 text-[12.5px] leading-snug text-gray-700 dark:text-gray-200 ${
+                  open ? "whitespace-pre-wrap break-words" : "truncate"
+                }`}
+              >
+                {q.question}
+              </span>
+              <span className={`shrink-0 select-none ${c.mark}`} aria-hidden>
+                {open ? "▾" : "▸"}
+              </span>
+            </button>
+            {open && (
+              <div className="px-3 pb-3">
+                {q.verses_ref && (
+                  <p className="mb-1.5 text-[11px] text-gray-400">{q.verses_ref}</p>
+                )}
+                {shown.length === 0 && (
+                  <p className="text-[11.5px] text-gray-400">남아 있는 답이 없습니다.</p>
+                )}
+                {shown.map((raw) => {
+                  const a = savedToAnswer(raw);
+                  const key = `${idPrefix}${q.id}:${a.column}`;
+                  return (
+                    <AnswerCard
+                      key={key}
+                      answer={a}
+                      open
+                      onToggle={() => {}}
+                      collapsible={false}
+                      reported={!!reported[key]}
+                      onReport={() => onReport(q.id, a, key)}
+                      onHandoff={() => onHandoff(a, q.question)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

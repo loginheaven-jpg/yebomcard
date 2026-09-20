@@ -45,6 +45,9 @@ interface QuestionRow {
   housechurch: boolean;
   prompt_version: string;
   saved: boolean;
+  /** 함께보기로 내놓았는가(§B-14) */
+  shared?: boolean;
+  share_hidden_at?: string | null;
   asked_at: string;
   ai_question_answers: AnswerRow[];
 }
@@ -116,6 +119,21 @@ export default function AdminAiQuestionsPage() {
     }
     setBusy(true);
     await fetch(`/api/admin/ai-questions?id=${id}`, { method: "DELETE" });
+    setBusy(false);
+    load();
+  }
+
+  /**
+   * 함께보기 내리기·올리기(§B-14). **기록은 지우지 않는다** — 목록에서만 내려간다.
+   * 앱은 한 번만 답하므로 잘못 나간 답을 고칠 길이 없다. 내릴 수는 있어야 한다.
+   */
+  async function hideShare(id: number, hide: boolean) {
+    setBusy(true);
+    await fetch("/api/admin/ai-questions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, share_hidden: hide }),
+    });
     setBusy(false);
     load();
   }
@@ -282,6 +300,15 @@ export default function AdminAiQuestionsPage() {
                         className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50"
                       >
                         {row.crisis_reviewed ? "검토 해제" : "검토함으로 표시"}
+                      </button>
+                    )}
+                    {row.shared && (
+                      <button
+                        onClick={() => hideShare(row.id, !row.share_hidden_at)}
+                        disabled={busy}
+                        className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50"
+                      >
+                        {row.share_hidden_at ? "함께보기 올리기" : "함께보기 내리기"}
                       </button>
                     )}
                     <span className="flex-1" />

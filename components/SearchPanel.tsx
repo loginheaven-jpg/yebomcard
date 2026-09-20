@@ -415,8 +415,10 @@ export default function SearchPanel({
       return;
     }
     let alive = true;
-    fetchChapterQas(bookCode, chapter).then((items) => {
-      if (alive) setChapterQas(items);
+    // 본문 아래 줄에는 **내 질문만** 둔다(2026-09-21). 함께보기(남의 질문)는 질문 창 안에서 본다 —
+    // 인기 절에는 공개된 질문이 수십 개라, 본문에 붙이면 말씀보다 질문이 길어진다.
+    fetchChapterQas(bookCode, chapter).then(({ mine }) => {
+      if (alive) setChapterQas(mine);
     });
     // 장을 넘기는 사이 먼저 떠난 응답이 새 장에 붙지 않게 끊는다
     return () => {

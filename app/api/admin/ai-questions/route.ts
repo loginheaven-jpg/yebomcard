@@ -67,22 +67,30 @@ export async function GET(request: NextRequest) {
   const q = (searchParams.get("q") ?? "").trim();
   const offset = Math.max(0, Number(searchParams.get("offset") ?? 0));
 
-  let query = supabaseAdmin
-    .from("ai_questions")
-    .select(
-      "id, user_id, user_name, verses_ref, question, input_kind, gate_result, is_crisis, " +
-        "crisis_reviewed, crisis_note, mode, housechurch, prompt_version, saved, asked_at, " +
-        "ai_question_answers(column_key, provider_alias, model, ok, content, error, " +
-        "removed_refs, input_tokens, output_tokens, elapsed_ms, reported, report_reason)",
-      { count: "exact" },
-    )
-    .order("asked_at", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
+  // 함께보기 칸(§B-14)은 `scripts/migration-qa-share.sql` 뒤에 생긴다.
+  // 적용 전에도 이 화면은 서야 하므로, 없으면 그 두 칸만 빼고 다시 읽는다.
+  const BASE =
+    "id, user_id, user_name, verses_ref, question, input_kind, gate_result, is_crisis, " +
+    "crisis_reviewed, crisis_note, mode, housechurch, prompt_version, saved, asked_at, " +
+    "ai_question_answers(column_key, provider_alias, model, ok, content, error, " +
+    "removed_refs, input_tokens, output_tokens, elapsed_ms, reported, report_reason)";
+  const WITH_SHARE = BASE.replace("saved, asked_at", "saved, shared, share_hidden_at, asked_at");
 
-  if (filter === "crisis") query = query.eq("is_crisis", true);
-  if (q) query = query.ilike("question", `%${q}%`);
+  const run = (columns: string) => {
+    let query = supabaseAdmin
+      .from("ai_questions")
+      .select(columns, { count: "exact" })
+      .order("asked_at", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (filter === "crisis") query = query.eq("is_crisis", true);
+    if (q) query = query.ilike("question", `%${q}%`);
+    return query;
+  };
 
-  const { data, error, count } = await query;
+  let { data, error, count } = await run(WITH_SHARE);
+  if (error) {
+    ({ data, error, count } = await run(BASE));
+  }
   if (error) {
     // 표가 아직 없으면 화면이 '아직 준비 중' 을 보일 수 있게 분명히 알린다.
     return NextResponse.json({ error: error.message, ready: false }, { status: 503 });
@@ -119,6 +127,24 @@ export async function PATCH(request: NextRequest) {
   if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ error: "유효한 id가 필요합니다" }, { status: 400 });
   }
+  /**
+   * 함께보기 내리기·올리기(§B-14, 2026-09-21). **행은 지우지 않는다** — 기록은 무기한(§B-10).
+   * 앱은 한 번만 답하므로 잘못 나간 답을 고칠 길이 없다. 내릴 수는 있어야 한다.
+   */
+  if (typeof body.share_hidden === "boolean") {
+    const hide = body.share_hidden as boolean;
+    const { error: hideError } = await supabaseAdmin
+      .from("ai_questions")
+      .update({
+        share_hidden_at: hide ? new Date().toISOString() : null,
+        share_hidden_by: hide ? (gate.session.name ?? gate.session.user_id) : null,
+      })
+      .eq("id", id);
+    if (hideError) return NextResponse.json({ error: hideError.message }, { status: 500 });
+    await logView(gate.session, "share", id, hide ? "함께보기 내림" : "함께보기 올림");
+    return NextResponse.json({ success: true, share_hidden: hide });
+  }
+
   const reviewed = body.crisis_reviewed === true;
   const note = typeof body.crisis_note === "string" ? body.crisis_note.slice(0, 1000) : null;
 

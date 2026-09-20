@@ -112,12 +112,17 @@ export async function answerColumn(
 }
 
 /** 교인이 저장·버리기를 누른다. 저장한 것은 그 절에서 다시 볼 수 있다(§B-10). */
-export async function setQaSaved(id: number, saved: boolean): Promise<boolean> {
+/**
+ * 저장·해제. `shared` 는 함께보기(§B-14) — **안 적으면 공개가 기본**이다(지휘부 2026-09-21).
+ * 저장을 내리면 서버가 공유도 함께 내린다.
+ */
+export async function setQaSaved(id: number, saved: boolean, shared = true): Promise<boolean> {
   try {
     const res = await fetch("/api/bible-qa/saved", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, saved }),
+      // 내릴 때는 공유도 함께 내린다. 서버도 같은 판정을 하지만, 보내는 쪽 뜻이 분명해야 읽힌다.
+      body: JSON.stringify({ id, saved, shared: saved ? shared : false }),
     });
     return res.ok;
   } catch {
@@ -167,16 +172,56 @@ export interface SavedQa {
  * 이 장에서 내가 저장해 둔 질문. **장 단위로만 부른다** — 전체 페치 금지(노트와 같은 규칙).
  * 표가 없거나 비로그인이면 빈 배열이 온다(화면이 깨지지 않는다).
  */
-export async function fetchChapterQas(bookCode: string, chapter: number): Promise<SavedQa[]> {
+/**
+ * 이 장의 질문 — `mine`(내가 저장한 것)과 `shared`(다른 교인이 내놓은 것, §B-14).
+ * **`shared` 에는 누가 물었는지가 없다** — 서버가 이름도 id 도 내려보내지 않는다.
+ */
+export async function fetchChapterQas(
+  bookCode: string,
+  chapter: number,
+): Promise<{ mine: SavedQa[]; shared: SavedQa[] }> {
   try {
     const res = await fetch(
       `/api/bible-qa/saved?book=${encodeURIComponent(bookCode)}&chapter=${chapter}`,
     );
-    if (!res.ok) return [];
+    if (!res.ok) return { mine: [], shared: [] };
     const json = await res.json().catch(() => ({}));
-    return Array.isArray(json.items) ? (json.items as SavedQa[]) : [];
+    return {
+      mine: Array.isArray(json.items) ? (json.items as SavedQa[]) : [],
+      shared: Array.isArray(json.shared) ? (json.shared as SavedQa[]) : [],
+    };
   } catch {
-    return [];
+    return { mine: [], shared: [] };
+  }
+}
+
+/** '나의 질문' 화면 — 내가 한 모든 질문(저장하지 않은 것도 있다) */
+export interface MyQuestion extends SavedQa {
+  book_code: string;
+  chapter: number;
+  input_kind: string;
+  gate_result: string;
+  is_crisis: boolean;
+  saved: boolean;
+  shared?: boolean;
+  share_hidden_at?: string | null;
+}
+
+export async function fetchMyQuestions(
+  page = 0,
+): Promise<{ items: MyQuestion[]; total: number; pageSize: number; shareReady: boolean }> {
+  try {
+    const res = await fetch(`/api/bible-qa/mine?page=${page}`);
+    if (!res.ok) return { items: [], total: 0, pageSize: 50, shareReady: false };
+    const json = await res.json().catch(() => ({}));
+    return {
+      items: Array.isArray(json.items) ? (json.items as MyQuestion[]) : [],
+      total: Number(json.total) || 0,
+      pageSize: Number(json.pageSize) || 50,
+      shareReady: json.shareReady !== false,
+    };
+  } catch {
+    return { items: [], total: 0, pageSize: 50, shareReady: false };
   }
 }
 
