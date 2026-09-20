@@ -144,8 +144,22 @@ DDL: [scripts/migration-reading-plan.sql](../scripts/migration-reading-plan.sql)
 [scripts/migration-reading-groups.sql](../scripts/migration-reading-groups.sql). 설계는 [READING_PLAN.md](READING_PLAN.md).
 
 **세 테이블 모두 진도를 저장하지 않는다.** 회차 완료는 기존 `reading_progress`(장 단위)에서
-`computeUnitProgress`([lib/plans/yebom91.ts](../lib/plans/yebom91.ts))로 **매번 파생 계산**한다.
+`computeUnitProgress`([lib/plans/engine.ts](../lib/plans/engine.ts))로 **매번 파생 계산**한다.
 저장하면 두 값이 갈라지고, 갈라지면 어느 쪽이 맞는지 알 수 없다.
+
+### `reading_plans` — 진도표 (2026-09-20 신설 · 적용 대기)
+DDL: [scripts/migration-reading-plans.sql](../scripts/migration-reading-plans.sql).
+1행=1진도표. `(id, slug, name, description?, units jsonb, unit_count, chapter_count, visibility,
+created_by, created_by_name, copied_from?, locked_at?, hidden_at?, report_count, report_reason?, created_at, updated_at)`.
+**UNIQUE** `slug` — 화면·API 가 쓰는 진도표 id 는 이 `slug`(`p{id}`)이고, 표준진도표만 파일에 있는 `yebom91` 이다.
+
+- `units` 는 회차 배열 그대로(`[{seq,label,ranges:[{book,fromCh,toCh,fromVs?,toVs?}]}]`). **읽는 쪽에서 반드시 `sanitizeUnits`** 를
+  지난다 — 없는 책·장 수를 넘는 범위·거꾸로 된 범위를 DB 가 막아 주지 않는다
+- `locked_at` 은 **만든 사람 아닌 교인이 회차를 체크한 순간** 찍힌다(`lockIfOthersRead`). 그 뒤로는 이름·설명만 고쳐진다
+- `hidden_at` 은 **쓰는 그룹이 있어 지우지 못한 것**(목록에서만 내려감). 완전 삭제는 수퍼어드민 `?force=1` 이고,
+  그때 쓰던 그룹은 `reading_groups.plan_id → null`(**해제**)이 된다 — 임의로 다른 진도표로 옮기지 않는다
+- 같은 마이그레이션에서 `reading_groups.plan_id` · `reading_unit_checks.plan_id` 를 **text** 로 넓히고
+  (`yebom91` 과 `p{id}` 가 함께 들어간다) `reading_groups.plan_id` 의 NOT NULL 을 푼다(해제 상태)
 
 ### `reading_unit_checks` — 회차 수동 체크
 1행=1회차. `(user_id, plan_id, seq, checked_at)`. **UNIQUE** `(user_id, plan_id, seq)`.
@@ -236,6 +250,7 @@ TTL: 7일. 만료 시 다음 페이지 로드의 `/api/auth/session` 이 `{ sess
 
 | 일자 | 변경 |
 |---|---|
+| 2026-09-20 | 진도표 (`reading_plans`) 신설 + `reading_groups.plan_id`·`reading_unit_checks.plan_id` → text, `reading_groups.plan_id` NOT NULL 해제 — `scripts/migration-reading-plans.sql` · **적용 대기** |
 | 2026-09-18 | 성경 질문 7종 신설 (`ai_questions`/`ai_question_answers`/`ai_question_views`/`qa_lists`/`sermons`/`sermon_refs`/`sermon_ingest_runs`) — `scripts/migration-bible-qa.sql` · **적용 대기** |
 | 2026-09-09 | 말씀의삶 그룹 2종 신설 (`reading_groups`/`reading_group_members`) — `scripts/migration-reading-groups.sql` |
 | 2026-09-09 | 말씀의삶 회차 수동 체크 (`reading_unit_checks`) — `scripts/migration-reading-plan.sql` |

@@ -20,6 +20,8 @@
     "scripts/verify-bible-qa-prompt.ts",
     "scripts/verify-crisis-signal.ts",
     "scripts/ingest-sermons.ts",
+    "scripts/gen-verse-counts.ts",
+    "scripts/verify-plan-builder.ts",
     "lib/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", ".verify"]

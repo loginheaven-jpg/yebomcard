@@ -11,6 +11,7 @@ import PlanHeader from "@/components/PlanHeader";
 import UnitCompleteSheet, { wasUnitSheetShown } from "@/components/UnitCompleteSheet";
 import {
   YEBOM91,
+  YEBOM91_ID,
   flattenPlan,
   findPlanIndex,
   planStep,
@@ -19,8 +20,9 @@ import {
   chapterEntryVerse,
   chapterSegments,
 } from "@/lib/plans/yebom91";
+import type { ReadingPlan } from "@/lib/plans/engine";
 import { fetchReadChapters, computeProgress } from "@/lib/reading-progress";
-import { fetchUnitChecks } from "@/lib/reading-plan";
+import { fetchUnitChecks, loadPlanForClient } from "@/lib/reading-plan";
 import { getBookByCode } from "@/lib/books";
 import SettingsSheet from "@/components/SettingsSheet";
 import { readBookmarks } from "@/lib/bookmark";
@@ -39,6 +41,8 @@ import type { BibleVerse, ViewMode, BibleVersion } from "@/lib/types";
 import { useFont } from "@/contexts/FontContext";
 
 const MAIN_VERSION_KEY = "yebom_main_version";
+/** 지금 읽는 진도표를 기기에 기억한다(2026-09-20 — 그룹마다 다른 진도표) */
+const PLAN_ID_KEY = "yebom_plan_id";
 const SUB_VERSION_KEY = "yebom_sub_version";
 const AUTOHIDE_TABBAR_KEY = "yebom_autohide_tabbar";
 /** 본문에서 무조작 시 하단 탭바를 감추기까지의 시간 */
@@ -181,17 +185,63 @@ export default function Home() {
   const viewRef = useRef<ViewMode>("search");
   useEffect(() => { viewRef.current = view; }, [view]);
 
-  const [planMode, setPlanMode] = useState<{ planId: "yebom91"; seq: number } | null>(null);
+  /**
+   * 지금 읽는 진도표(2026-09-20 — 그룹마다 다른 진도표).
+   * 기억한 것 → 없으면 표준진도표. 진도표 객체는 **id 마다 하나**여야 엔진의 파생 캐시가 산다(registry).
+   */
+  const [planId, setPlanId] = useState<string>(YEBOM91_ID);
+  const [plan, setPlan] = useState<ReadingPlan>(YEBOM91);
+  const [planMode, setPlanMode] = useState<{ planId: string; seq: number } | null>(null);
+  /** deps 가 빈 콜백(handleUnitComplete)에서 최신 진도표를 읽기 위한 ref */
+  const planIdRef = useRef<string>(YEBOM91_ID);
   const [planPos, setPlanPos] = useState<{ book: string; chapter: number } | null>(null);
   const [planReadByBook, setPlanReadByBook] = useState<Record<string, Set<number>>>({});
   const [planManual, setPlanManual] = useState<Set<number>>(new Set());
   const [completedSeq, setCompletedSeq] = useState<number | null>(null);
   const [fullscreenCloseNonce, setFullscreenCloseNonce] = useState(0);
 
-  const planFlat = useMemo(() => flattenPlan(YEBOM91), []);
+  // 기기에 기억해 둔 진도표를 복원한다. 없거나 지워졌으면 표준진도표로 돌아간다.
+  useEffect(() => {
+    let alive = true;
+    let saved = "";
+    try {
+      saved = localStorage.getItem(PLAN_ID_KEY) ?? "";
+    } catch {}
+    if (!saved || saved === YEBOM91_ID) return;
+    (async () => {
+      const loaded = await loadPlanForClient(saved);
+      if (!alive) return;
+      if (loaded) {
+        setPlanId(loaded.id);
+        setPlan(loaded);
+      } else {
+        // 지워진 진도표를 기억하고 있었다 — 표준진도표로 돌아가고 기억을 지운다.
+        try { localStorage.removeItem(PLAN_ID_KEY); } catch {}
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  /** 진도표 바꾸기 — 패널의 고르기 창이 부른다 */
+  const changePlan = useCallback(async (nextId: string) => {
+    const loaded = await loadPlanForClient(nextId);
+    if (!loaded) return;
+    setPlanId(loaded.id);
+    setPlan(loaded);
+    // 옛 진도표의 회차 번호로 열려 있던 플랜 모드를 닫는다 — 그대로 두면 엉뚱한 장으로 이동한다.
+    setPlanMode(null);
+    setPlanPos(null);
+    setCompletedSeq(null);
+    try { localStorage.setItem(PLAN_ID_KEY, loaded.id); } catch {}
+  }, []);
+
+  /** seq 로 회차를 찾는다. **배열 인덱스로 찾지 않는다** — 회차 번호가 1부터 이어지지 않을 수 있다 */
+  const unitBySeq = useMemo(() => new Map(plan.units.map((u) => [u.seq, u])), [plan]);
+  const planFlat = useMemo(() => flattenPlan(plan), [plan]);
+  useEffect(() => { planIdRef.current = planId; }, [planId]);
   const planIdx =
     planMode && planPos ? findPlanIndex(planFlat, planMode.seq, planPos.book, planPos.chapter) : -1;
-  const planUnit = planMode ? YEBOM91.units[planMode.seq - 1] : null;
+  const planUnit = planMode ? unitBySeq.get(planMode.seq) ?? null : null;
   const planUnitChapters = useMemo(
     () => (planUnit ? unitChaptersOf(planUnit) : undefined),
     [planUnit],
@@ -199,10 +249,11 @@ export default function Home() {
 
   // 진도 — 플랜 헤더의 "n / total장" 과 완료 시트에 쓴다
   const reloadPlanProgress = useCallback(async () => {
-    const [read, seqs] = await Promise.all([fetchReadChapters(), fetchUnitChecks()]);
+    const [read, seqs] = await Promise.all([fetchReadChapters(), fetchUnitChecks(planId)]);
     setPlanReadByBook(computeProgress(read).readByBook);
     setPlanManual(new Set(seqs));
-  }, []);
+    // 체크는 진도표마다 따로 쌓인다 — planId 를 빠뜨리면 다른 진도표의 체크를 읽는다.
+  }, [planId]);
   useEffect(() => {
     if (planMode) void reloadPlanProgress();
   }, [planMode, reloadPlanProgress]);
@@ -210,15 +261,17 @@ export default function Home() {
   /** 회차로 진입 — entryChapter 로 간다 */
   const openPlanUnit = useCallback(
     (seq: number) => {
-      const progress = computeUnitProgress(YEBOM91, planReadByBook, planManual);
-      const unit = YEBOM91.units[seq - 1];
+      const progress = computeUnitProgress(plan, planReadByBook, planManual);
+      const unit = unitBySeq.get(seq);
+      if (!unit) return;
       const chs = unitChaptersOf(unit);
+      if (chs.length === 0) return;
       // 그 회차가 currentSeq 면 entryChapter 를, 아니면 회차 첫 장을 쓴다
       const target =
         progress.entryChapter && progress.entryChapter.seq === seq
           ? { book: progress.entryChapter.book, chapter: progress.entryChapter.chapter }
           : { book: chs[0].book, chapter: chs[0].chapter };
-      setPlanMode({ planId: "yebom91", seq });
+      setPlanMode({ planId, seq });
       setPlanPos(target);
       setView("search");
       setActiveTab("bible");
@@ -234,7 +287,7 @@ export default function Home() {
         verse: chapterEntryVerse(unit, target.book, target.chapter),
       });
     },
-    [planReadByBook, planManual],
+    [plan, planId, unitBySeq, planReadByBook, planManual],
   );
 
   /** 플랜 순서로 이동 — 도착 항목이 seq 를 결정한다 */
@@ -283,8 +336,8 @@ export default function Home() {
             book: prev.book,
             chapter: prev.chapter,
             seq: prev.seq,
-            verse: chapterEntryVerse(YEBOM91.units[prev.seq - 1], prev.book, prev.chapter),
-            segments: chapterSegments(YEBOM91.units[prev.seq - 1], prev.book, prev.chapter),
+            verse: chapterEntryVerse(unitBySeq.get(prev.seq)!, prev.book, prev.chapter),
+            segments: chapterSegments(unitBySeq.get(prev.seq)!, prev.book, prev.chapter),
           }
         : null,
       next: next
@@ -292,20 +345,20 @@ export default function Home() {
             book: next.book,
             chapter: next.chapter,
             seq: next.seq,
-            verse: chapterEntryVerse(YEBOM91.units[next.seq - 1], next.book, next.chapter),
+            verse: chapterEntryVerse(unitBySeq.get(next.seq)!, next.book, next.chapter),
             // 자동 다음 장 낭독이 도착 장의 순서를 그대로 따르게 한다
-            segments: chapterSegments(YEBOM91.units[next.seq - 1], next.book, next.chapter),
+            segments: chapterSegments(unitBySeq.get(next.seq)!, next.book, next.chapter),
           }
         : null,
       // 지금 보고 있는 장을 이 회차가 어떤 순서로 읽는가 — 낭독이 이 순서를 따른다
       segments: chapterSegments(planUnit, planPos?.book ?? "", planPos?.chapter ?? 0),
       onGo: (t: { book: string; chapter: number; seq?: number; verse?: number }) => {
         // 도착 항목의 seq 로 갱신한다(인접 중복 장은 planStep 이 이미 건너뛴다)
-        if (t.seq) setPlanMode({ planId: "yebom91", seq: t.seq });
+        if (t.seq) setPlanMode({ planId, seq: t.seq });
         goPlan(t);
       },
     };
-  }, [planMode, planUnit, planIdx, planFlat, planUnitChapters, planReadByBook, planPos, session, openPlanUnit, goPlan]);
+  }, [planMode, planUnit, planIdx, planFlat, planUnitChapters, planReadByBook, planPos, session, openPlanUnit, goPlan, planId, unitBySeq]);
 
   /** SearchPanel 이 보고한 현재 위치 — 본문을 볼 때만 받는다.
    *  SearchPanel 은 다른 뷰에서도 언마운트되지 않아 숨은 위치 변화까지 올라온다. */
@@ -319,7 +372,8 @@ export default function Home() {
 
   /** 회차 완료 — 이미 보여준 회차면 시트를 띄우지 않는다(새로고침 후에도) */
   const handleUnitComplete = useCallback((seq: number) => {
-    if (wasUnitSheetShown(seq)) return;
+    // 기억은 진도표마다 따로 — 진도표를 바꾸면 그 진도표의 1회차 시트가 처음처럼 뜬다.
+    if (wasUnitSheetShown(planIdRef.current, seq)) return;
     setFullscreenCloseNonce((n) => n + 1);   // 풀스크린이면 닫고 띄운다
     setCompletedSeq(seq);
     void reloadPlanProgress();
@@ -784,6 +838,8 @@ export default function Home() {
           진입할 때마다 마운트되므로 진도도 매번 최신으로 다시 읽는다. */}
       {view === "plan" && (
         <ReadingPlanPanel
+          plan={plan}
+          onPlanChange={(id) => void changePlan(id)}
           onOpenUnit={openPlanUnit}
           onLogin={() => ensureLogin("말씀의삶")}
           inviteCode={inviteCode}
@@ -797,13 +853,18 @@ export default function Home() {
 
       {/* 회차 완료 시트 — 풀스크린을 닫고 띄운다 */}
       {completedSeq !== null && (() => {
-        const unit = YEBOM91.units[completedSeq - 1];
-        const nextUnit = YEBOM91.units[completedSeq] ?? null;
+        const unit = unitBySeq.get(completedSeq);
+        if (!unit) return null;
+        // '다음 회차' 는 배열 인덱스가 아니라 **순서상 다음 항목**이다(회차 번호가 이어지지 않을 수 있다).
+        const at = plan.units.findIndex((u) => u.seq === completedSeq);
+        const nextUnit = at >= 0 ? plan.units[at + 1] ?? null : null;
         return (
           <UnitCompleteSheet
+            planId={planId}
             seq={completedSeq}
             label={unit.label}
             totalChapters={unitChaptersOf(unit).length}
+            totalUnits={plan.units.length}
             next={nextUnit ? { seq: nextUnit.seq, label: nextUnit.label } : null}
             onOpenPlan={() => { setCompletedSeq(null); setView("plan"); }}
             onReadNext={() => {

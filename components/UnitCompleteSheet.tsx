@@ -11,25 +11,38 @@ import { useEffect, useState } from "react";
 import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { fetchGroupSummary } from "@/lib/reading-plan";
 
+/**
+ * 보여준 회차 기억. **진도표마다 따로 센다**(2026-09-20 — 그룹마다 다른 진도표) —
+ * 진도표가 달라도 회차 번호는 1부터라, 한 배열에 담으면 새 진도표의 1회차 시트가 뜨지 않는다.
+ * 옛 값(회차 번호 배열)은 표준진도표 것으로 보고 한 번 옮긴다.
+ */
 const LS_KEY = "yebom_plan_unit_sheet_shown";
+const LEGACY_PLAN_ID = "yebom91";
 
-/** 이미 보여준 회차인가 */
-export function wasUnitSheetShown(seq: number): boolean {
+function readShown(): Record<string, number[]> {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? (JSON.parse(raw) as number[]).includes(seq) : false;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { [LEGACY_PLAN_ID]: parsed as number[] };
+    return (parsed ?? {}) as Record<string, number[]>;
   } catch {
-    return false;
+    return {};
   }
 }
 
-export function markUnitSheetShown(seq: number): void {
+/** 이미 보여준 회차인가 */
+export function wasUnitSheetShown(planId: string, seq: number): boolean {
+  return (readShown()[planId] ?? []).includes(seq);
+}
+
+export function markUnitSheetShown(planId: string, seq: number): void {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    const list: number[] = raw ? JSON.parse(raw) : [];
+    const all = readShown();
+    const list = all[planId] ?? [];
     if (!list.includes(seq)) {
-      list.push(seq);
-      localStorage.setItem(LS_KEY, JSON.stringify(list));
+      all[planId] = [...list, seq];
+      localStorage.setItem(LS_KEY, JSON.stringify(all));
     }
   } catch {
     /* 저장 못 해도 시트 자체는 떠야 한다 */
@@ -37,9 +50,13 @@ export function markUnitSheetShown(seq: number): void {
 }
 
 interface Props {
+  /** 어느 진도표의 회차인가 — 기억을 진도표별로 나눈다 */
+  planId: string;
   seq: number;
   label: string;
   totalChapters: number;
+  /** 이 진도표의 회차 수 — 완주 문구에 쓴다 */
+  totalUnits: number;
   /** 다음 회차 — 마지막 회차면 null */
   next: { seq: number; label: string } | null;
   onOpenPlan: () => void;
@@ -48,9 +65,11 @@ interface Props {
 }
 
 export default function UnitCompleteSheet({
+  planId,
   seq,
   label,
   totalChapters,
+  totalUnits,
   next,
   onOpenPlan,
   onReadNext,
@@ -59,8 +78,8 @@ export default function UnitCompleteSheet({
   useHardwareBack(true, onClose);
 
   useEffect(() => {
-    markUnitSheetShown(seq);
-  }, [seq]);
+    markUnitSheetShown(planId, seq);
+  }, [planId, seq]);
 
   // 그룹에 속해 있으면 "N명 중 R번째" 한 줄 — 함께 읽는다는 느낌이 이 시트의 목적이다.
   // 없으면 아무것도 붙지 않는다. 순위 조회는 시트를 여는 것을 막지 않는다.
@@ -114,7 +133,8 @@ export default function UnitCompleteSheet({
           </div>
         ) : (
           <div className="rounded-xl bg-[var(--amber-tint)] px-3.5 py-3 mb-4">
-            <p className="text-sm font-bold text-[var(--amber-deep)]">91회차 완주</p>
+            {/* 회차 수는 진도표마다 다르다(2026-09-20) — 91 로 굳으면 다른 진도표에서 틀린 말이 된다 */}
+            <p className="text-sm font-bold text-[var(--amber-deep)]">{totalUnits}회차 완주</p>
             <p className="text-[11px] text-[var(--ink-soft)] mt-0.5">
               진도표를 처음부터 끝까지 마치셨습니다.
             </p>

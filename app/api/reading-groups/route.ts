@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { planLabels, usablePlanId } from "@/lib/readingPlans";
 import {
   PLAN_ID,
   readSession,
@@ -28,6 +29,9 @@ export async function GET() {
   const groups = await myGroups(session.user_id);
   if (groups.length === 0) return NextResponse.json({ groups: [] });
 
+  // 그룹마다 진도표가 다를 수 있다(2026-09-20). 카드의 막대와 완주 판정이 **그 진도표의 회차 수**를 써야 한다.
+  const labels = await planLabels(groups.map((g) => g.plan_id));
+
   // 인원수는 그룹 수만큼 쿼리하지 않고 한 번에 세어 나눈다.
   const { data: members } = await supabaseAdmin
     .from("reading_group_members")
@@ -43,6 +47,9 @@ export async function GET() {
       inviteCode: g.invite_code,
       memberCount: counts.get(g.id) ?? 0,
       isOwner: g.created_by === session.user_id,
+      planId: g.plan_id ?? null,
+      planName: g.plan_id ? labels.get(g.plan_id)?.name ?? null : null,
+      unitCount: g.plan_id ? labels.get(g.plan_id)?.unitCount ?? 0 : 0,
     })),
   });
 }
@@ -58,6 +65,14 @@ export async function POST(request: NextRequest) {
   const name = String((body as { name?: unknown }).name ?? "").trim().slice(0, 30);
   if (!name) {
     return NextResponse.json({ error: "그룹 이름을 입력해 주세요" }, { status: 400 });
+  }
+
+  // 어느 진도표로 읽을까. 고르지 않으면 표준진도표다.
+  // **아무 문자열이나 넣으면 안 된다** — 없는 진도표를 가리키면 순위가 조용히 0 이 된다.
+  const wanted = String((body as { planId?: unknown }).planId ?? "").trim() || PLAN_ID;
+  const planId = await usablePlanId(wanted, session.user_id);
+  if (!planId) {
+    return NextResponse.json({ error: "고르신 진도표를 찾지 못했습니다" }, { status: 400 });
   }
 
   const { count } = await supabaseAdmin
@@ -77,8 +92,8 @@ export async function POST(request: NextRequest) {
     const invite_code = makeInviteCode();
     const { data, error } = await supabaseAdmin
       .from("reading_groups")
-      .insert({ name, invite_code, plan_id: PLAN_ID, created_by: session.user_id })
-      .select("id, name, invite_code")
+      .insert({ name, invite_code, plan_id: planId, created_by: session.user_id })
+      .select("id, name, invite_code, plan_id")
       .single();
 
     if (error) {
@@ -106,6 +121,8 @@ export async function POST(request: NextRequest) {
         inviteCode: data.invite_code,
         memberCount: 1,
         isOwner: true,
+        planId: data.plan_id ?? null,
+        planName: (await planLabels([data.plan_id])).get(data.plan_id ?? "")?.name ?? null,
       },
     });
   }

@@ -4,6 +4,11 @@
  * 회차 완료는 대부분 reading_progress 에서 파생 계산한다. 이 라우트가 담는 것은
  * **자동으로 알 수 없는 것 하나** — 앱이 아니라 종이 성경으로 읽은 경우다.
  *
+ * **진도표마다 따로 쌓인다**(2026-09-20 — 그룹마다 다른 진도표). `reading_unit_checks` 의 UNIQUE 는
+ * `(user_id, plan_id, seq)` 라 plan_id 가 다르면 같은 seq 도 다른 행이다.
+ * 그래서 **세 곳(GET 필터 · POST 확인 · DELETE 필터)에서 plan_id 를 빠뜨리면 안 된다** —
+ * 빠뜨리면 다른 진도표의 체크가 섞여 회차 완료가 부풀거나 해제가 먹지 않는다.
+ *
  * reading_unit_checks 는 RLS 를 켜고 정책을 두지 않았다(service_role 전용).
  * anon 클라이언트(lib/supabase)로 접근하면 오류 없이 빈 배열이 돌아오므로,
  * **반드시 supabaseAdmin 을 쓰고 항상 user_id 로 스코프한다.**
@@ -14,11 +19,9 @@ import { cookies } from "next/headers";
 import { unsealData } from "iron-session";
 import { sessionOptions, SessionData } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { DEFAULT_PLAN_ID, loadPlan } from "@/lib/readingPlans";
 
 export const dynamic = "force-dynamic";
-
-const PLAN_ID = "yebom91";
-const MAX_SEQ = 91;
 
 async function getSession(): Promise<SessionData | null> {
   try {
@@ -34,26 +37,40 @@ async function getSession(): Promise<SessionData | null> {
   }
 }
 
-/** 1..91 정수만 통과 */
-function parseSeq(v: unknown): number | null {
-  const n = Number(v);
-  return Number.isInteger(n) && n >= 1 && n <= MAX_SEQ ? n : null;
+/**
+ * 어느 진도표의 체크인가. 없는 진도표 키를 그대로 쓰면 **아무도 읽지 않는 행**이 쌓이므로
+ * 반드시 실재를 확인하고, 그 진도표의 회차 수로 seq 를 검사한다.
+ */
+async function resolvePlan(raw: string | null | undefined) {
+  const planId = (raw ?? "").trim() || DEFAULT_PLAN_ID;
+  const plan = await loadPlan(planId);
+  if (!plan) return null;
+  const maxSeq = plan.units.reduce((n, u) => Math.max(n, u.seq), 0);
+  return { planId: plan.id, maxSeq };
 }
 
-// GET: 내가 종이로 읽었다고 표시한 회차 목록
+function parseSeq(v: unknown, maxSeq: number): number | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= maxSeq ? n : null;
+}
+
+// GET ?plan= : 내가 종이로 읽었다고 표시한 회차 목록
 // 비로그인은 401 이 아니라 200 + 빈 배열 — 진도표는 로그인 없이도 열람할 수 있어야 한다.
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ seqs: [] });
   }
 
-  // 최대 91행이라 페이지네이션이 필요 없다.
+  const plan = await resolvePlan(new URL(request.url).searchParams.get("plan"));
+  if (!plan) return NextResponse.json({ seqs: [], error: "없는 진도표입니다" }, { status: 404 });
+
+  // 회차 수만큼의 행이라 페이지네이션이 필요 없다(상한 400).
   const { data, error } = await supabaseAdmin
     .from("reading_unit_checks")
     .select("seq")
     .eq("user_id", session.user_id)
-    .eq("plan_id", PLAN_ID)
+    .eq("plan_id", plan.planId)
     .order("seq");
 
   if (error) {
@@ -63,7 +80,7 @@ export async function GET() {
   return NextResponse.json({ seqs: (data || []).map((r) => r.seq) });
 }
 
-// POST { seq } : 체크. SELECT-then-INSERT (UNIQUE 인덱스는 동시 요청 백스탑)
+// POST { seq, planId } : 체크. SELECT-then-INSERT (UNIQUE 인덱스는 동시 요청 백스탑)
 export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -71,16 +88,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const seq = parseSeq((body as { seq?: unknown }).seq);
+  const plan = await resolvePlan((body as { planId?: string }).planId);
+  if (!plan) return NextResponse.json({ error: "없는 진도표입니다" }, { status: 404 });
+
+  const seq = parseSeq((body as { seq?: unknown }).seq, plan.maxSeq);
   if (seq === null) {
-    return NextResponse.json({ error: `seq 는 1~${MAX_SEQ} 정수여야 합니다` }, { status: 400 });
+    return NextResponse.json({ error: `seq 는 1~${plan.maxSeq} 정수여야 합니다` }, { status: 400 });
   }
 
   const { data: existing } = await supabaseAdmin
     .from("reading_unit_checks")
     .select("id")
     .eq("user_id", session.user_id)
-    .eq("plan_id", PLAN_ID)
+    .eq("plan_id", plan.planId)
     .eq("seq", seq)
     .limit(1)
     .maybeSingle();
@@ -92,7 +112,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await supabaseAdmin.from("reading_unit_checks").insert({
     user_id: session.user_id,
-    plan_id: PLAN_ID,
+    plan_id: plan.planId,
     seq,
   });
   if (error && error.code !== "23505") {
@@ -101,7 +121,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ success: true });
 }
 
-// DELETE ?seq= : 체크 해제
+// DELETE ?seq=&plan= : 체크 해제
 export async function DELETE(request: NextRequest) {
   const session = await getSession();
   if (!session) {
@@ -109,16 +129,19 @@ export async function DELETE(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const seq = parseSeq(searchParams.get("seq"));
+  const plan = await resolvePlan(searchParams.get("plan"));
+  if (!plan) return NextResponse.json({ error: "없는 진도표입니다" }, { status: 404 });
+
+  const seq = parseSeq(searchParams.get("seq"), plan.maxSeq);
   if (seq === null) {
-    return NextResponse.json({ error: `seq 는 1~${MAX_SEQ} 정수여야 합니다` }, { status: 400 });
+    return NextResponse.json({ error: `seq 는 1~${plan.maxSeq} 정수여야 합니다` }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin
     .from("reading_unit_checks")
     .delete()
     .eq("user_id", session.user_id)   // 절대 빠뜨리지 말 것 — service_role 은 전 행에 접근한다
-    .eq("plan_id", PLAN_ID)
+    .eq("plan_id", plan.planId)
     .eq("seq", seq);
 
   if (error) {

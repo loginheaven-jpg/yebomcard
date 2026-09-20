@@ -35,13 +35,22 @@ import {
 import ReadingGroupsView from "@/components/ReadingGroupsView";
 import GroupCodePrompt, { PromptToast } from "@/components/GroupCodePrompt";
 import {
-  YEBOM91,
   computeUnitProgress,
   type PlanProgress,
+  type ReadingPlan,
   type UnitProgress,
-} from "@/lib/plans/yebom91";
+} from "@/lib/plans/engine";
+import PlanPickerSheet from "@/components/PlanPickerSheet";
+import PlanBuilderSheet from "@/components/PlanBuilderSheet";
 
 interface Props {
+  /**
+   * 지금 읽는 진도표(2026-09-20 — 그룹마다 다른 진도표).
+   * page.tsx 가 어느 진도표인지 정해 내려준다. **객체는 id 마다 하나**여야 엔진 캐시가 산다.
+   */
+  plan: ReadingPlan;
+  /** 다른 진도표를 골랐다 */
+  onPlanChange?: (planId: string) => void;
   /** 행 탭 → 플랜 모드 진입. 단계 3 에서 연결한다 */
   onOpenUnit?: (seq: number) => void;
   /** 로그인 유도 (비로그인 상태에서 체크를 시도했을 때) */
@@ -60,7 +69,6 @@ interface Props {
 }
 
 const LONG_PRESS_MS = 500;
-const TOTAL = YEBOM91.units.length;
 
 /**
  * 진입 때 그룹 초대코드 창(GroupCodePrompt)의 기기 기억.
@@ -91,7 +99,22 @@ function rowState(u: UnitProgress, currentSeq: number): RowState {
   return u.status;
 }
 
-export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onInviteHandled, onLoginNow }: Props) {
+export default function ReadingPlanPanel({
+  plan,
+  onPlanChange,
+  onOpenUnit,
+  onLogin,
+  inviteCode,
+  onInviteHandled,
+  onLoginNow,
+}: Props) {
+  // 회차 수는 진도표마다 다르다 — 91 로 굳으면 막대와 완주 판정이 조용히 틀린다.
+  const TOTAL = plan.units.length;
+  /** seq 로 회차를 찾는다. **배열 인덱스로 찾지 않는다** — 회차 번호가 1부터가 아닐 수 있다 */
+  const unitBySeq = useMemo(() => new Map(plan.units.map((u) => [u.seq, u])), [plan]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** 만들기 창 — null 이면 닫힘, "" 이면 새로 만들기, 그 밖이면 그 진도표 고치기 */
+  const [builderFor, setBuilderFor] = useState<string | null>(null);
   const { loading: sessionLoading, isLoggedIn, deviceReady } = useSession();
 
   const [readByBook, setReadByBook] = useState<Record<string, Set<number>>>({});
@@ -124,7 +147,7 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
   useEffect(() => {
     let alive = true;
     (async () => {
-      const [read, seqs] = await Promise.all([fetchReadChapters(), fetchUnitChecks()]);
+      const [read, seqs] = await Promise.all([fetchReadChapters(), fetchUnitChecks(plan.id)]);
       if (!alive) return;
       setReadByBook(computeProgress(read).readByBook);
       setManualSeqs(new Set(seqs));
@@ -133,7 +156,8 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
     return () => {
       alive = false;
     };
-  }, []);
+    // 진도표를 바꾸면 그 진도표의 체크를 다시 읽는다(체크는 진도표마다 따로 쌓인다).
+  }, [plan.id]);
 
   // 요약 스트립의 그룹 1줄. 그룹이 없으면 아무것도 붙지 않는다.
   // 그룹 탭에서 참여·탈퇴하면 groupNonce 가 올라 다시 계산한다.
@@ -249,8 +273,8 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
   const clearPlanToast = useCallback(() => setPlanToast(null), []);
 
   const progress: PlanProgress = useMemo(
-    () => computeUnitProgress(YEBOM91, readByBook, manualSeqs),
-    [readByBook, manualSeqs],
+    () => computeUnitProgress(plan, readByBook, manualSeqs),
+    [plan, readByBook, manualSeqs],
   );
 
   // ── 마운트 시 '지금' 행을 화면 상단 1/3 에 ──
@@ -282,7 +306,7 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
         else s.delete(seq);
         return s;
       });
-      const ok = await setUnitCheck(seq, next);
+      const ok = await setUnitCheck(plan.id, seq, next);
       if (!ok) {
         setManualSeqs((prev) => {
           const s = new Set(prev);
@@ -293,7 +317,7 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
       }
       setBusySeq(null);
     },
-    [isLoggedIn, manualSeqs, onLogin],
+    [isLoggedIn, manualSeqs, onLogin, plan.id],
   );
 
   const startLongPress = useCallback(
@@ -361,6 +385,24 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
           ))}
         </div>
       </div>
+
+      {/* ── 1-1. 지금 읽는 진도표 (2026-09-20) ──
+          그룹마다 다른 진도표를 읽을 수 있게 되면서, 무엇을 읽는지 화면에 적어야 한다.
+          누르면 고르기 창이 열린다 — 내 것 · 공개된 것 · 새로 만들기. */}
+      {tab === "plan" && (
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="mx-4 mb-2 px-3 py-1.5 rounded-lg bg-[var(--paper-2)] dark:bg-gray-700 flex items-center gap-1.5 shrink-0 text-left"
+        >
+          <span className="text-[10px] font-semibold text-[var(--ink-faint)] shrink-0">진도표</span>
+          <span className="text-[12.5px] font-semibold text-[var(--ink)] dark:text-gray-100 truncate">
+            {plan.name}
+          </span>
+          <span className="text-[11px] text-[var(--ink-faint)] tabular-nums shrink-0">{TOTAL}회차</span>
+          <span className="ml-auto text-[11px] text-[var(--amber-deep)] font-semibold shrink-0">바꾸기 ›</span>
+        </button>
+      )}
 
       {/* ── 2. 요약 스트립 — 그룹 탭에서는 카드가 같은 정보를 담으므로 감춘다 ── */}
       {tab === "group" ? null : isLoggedIn ? (
@@ -444,7 +486,8 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
         ) : null}
         <ul>
           {progress.units.map((u) => {
-            const unit = YEBOM91.units[u.seq - 1];
+            const unit = unitBySeq.get(u.seq);
+            if (!unit) return null;
             // 비로그인은 진행 표시를 하지 않는다(지시서 §1). 진도가 없으니 모든 회차가
             // currentSeq=1 로 계산되는데, 그대로 두면 아무 근거 없이 "지금 1회차" 가 뜬다.
             const st: RowState = isLoggedIn ? rowState(u, progress.currentSeq) : "todo";
@@ -551,6 +594,43 @@ export default function ReadingPlanPanel({ onOpenUnit, onLogin, inviteCode, onIn
         />
       )}
       {planToast && <PromptToast text={planToast} onDone={clearPlanToast} />}
+
+      {/* 진도표 고르기 · 만들기 (2026-09-20) */}
+      {pickerOpen && (
+        <PlanPickerSheet
+          currentPlanId={plan.id}
+          onPick={(picked) => {
+            setPickerOpen(false);
+            if (picked.planId !== plan.id) {
+              onPlanChange?.(picked.planId);
+              setPlanToast(`'${picked.name}' 을(를) 읽습니다.`);
+            }
+          }}
+          onClose={() => setPickerOpen(false)}
+          onCreate={() => {
+            setPickerOpen(false);
+            setBuilderFor("");
+          }}
+          onEdit={(id) => {
+            setPickerOpen(false);
+            setBuilderFor(id);
+          }}
+          onLogin={onLogin}
+          onChanged={() => setGroupNonce((n) => n + 1)}
+        />
+      )}
+      {builderFor !== null && (
+        <PlanBuilderSheet
+          planId={builderFor || null}
+          onClose={() => setBuilderFor(null)}
+          onSaved={(saved) => {
+            setBuilderFor(null);
+            // 만든 사람은 곧바로 그 진도표를 읽는다 — 만들어 놓고 다시 고르게 하지 않는다.
+            onPlanChange?.(saved.planId);
+            setPlanToast(`'${saved.name}' 을(를) 저장했습니다.`);
+          }}
+        />
+      )}
     </div>
   );
 }

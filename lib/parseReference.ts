@@ -91,7 +91,11 @@ const BOOK_ALIASES: Record<string, string> = {
  * 책 이름/약어 → book_code 변환
  * 긴 이름부터 먼저 매칭 (예: "사도행전" vs "사")
  */
-function resolveBookCode(input: string): string | null {
+/**
+ * 책 이름·약어를 코드로. 진도표 만들기(`lib/plans/builder.ts`)도 이 표를 그대로 쓴다 —
+ * 66권 별칭을 두 벌 두면 한쪽만 고쳐져 "창세기는 되는데 창은 안 되는" 일이 생긴다.
+ */
+export function resolveBookCode(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 

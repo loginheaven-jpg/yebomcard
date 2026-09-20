@@ -19,11 +19,17 @@ import {
   createGroup,
   joinGroup,
   leaveGroup,
+  setGroupPlan,
   type ReadingGroup,
   type GroupStanding,
+  type PlanSummary,
 } from "@/lib/reading-plan";
+import PlanPickerSheet from "@/components/PlanPickerSheet";
+import PlanBuilderSheet from "@/components/PlanBuilderSheet";
+import { BUILTIN_PLANS, DEFAULT_PLAN_ID } from "@/lib/plans/registry";
 
-const TOTAL = 91;
+/** 고르지 않으면 표준진도표. 회차 수는 **그룹마다 다르므로** 카드에서 group.unitCount 를 쓴다. */
+const DEFAULT_PLAN_NAME = BUILTIN_PLANS[DEFAULT_PLAN_ID]?.name ?? "표준진도표";
 
 interface Props {
   isLoggedIn: boolean;
@@ -46,6 +52,14 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
   // (react-hooks/set-state-in-effect) 조회는 전부 effect 안에 두고 이 값으로만 다시 돌린다.
   const [reloadNonce, setReloadNonce] = useState(0);
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
+  /** 그룹을 만들 때 고른 진도표(2026-09-20). 고르지 않으면 표준진도표 */
+  const [newPlan, setNewPlan] = useState<{ id: string; name: string }>({
+    id: DEFAULT_PLAN_ID,
+    name: DEFAULT_PLAN_NAME,
+  });
+  /** 진도표 고르기 창 — "create" 면 만들 때, 숫자면 그 그룹의 진도표를 바꾸는 중 */
+  const [pickerFor, setPickerFor] = useState<"create" | number | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -126,13 +140,33 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
 
   const onSubmitSheet = useCallback(
     async (kind: "join" | "create", value: string): Promise<string | null> => {
-      const res = kind === "create" ? await createGroup(value) : await joinGroup(value);
+      const res = kind === "create" ? await createGroup(value, newPlan.id) : await joinGroup(value);
       if ("error" in res) return res.error;
       setSheet(null);
-      setNotice(kind === "create" ? "그룹을 만들었습니다" : `${res.group.name} 에 참여했습니다`);
+      setNotice(
+        kind === "create"
+          ? `그룹을 만들었습니다 · ${res.group.planName ?? newPlan.name}`
+          : // 다른 진도표를 읽는 그룹에 들어가는 것을 교인이 알아야 한다.
+            `${res.group.name} 에 참여했습니다${res.group.planName ? ` · ${res.group.planName}` : ""}`,
+      );
       reload();
       onGroupsChanged?.();
       return null;
+    },
+    [reload, onGroupsChanged, newPlan],
+  );
+
+  /** 그룹이 읽는 진도표 바꾸기 — 그룹을 만든 사람만(서버가 다시 확인한다) */
+  const changeGroupPlan = useCallback(
+    async (groupId: number, plan: PlanSummary) => {
+      const res = await setGroupPlan(groupId, plan.planId);
+      if (!res.ok) {
+        setNotice(res.error);
+        return;
+      }
+      setNotice(`진도표를 '${res.planName ?? plan.name}' 로 바꿨습니다`);
+      reload();
+      onGroupsChanged?.();
     },
     [reload, onGroupsChanged],
   );
@@ -182,6 +216,7 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
               onCopy={() => void copyCode(g)}
               onShare={() => void shareInvite(g)}
               onLeave={() => void onLeave(g)}
+              onChangePlan={() => setPickerFor(g.id)}
             />
           ))
         )}
@@ -217,6 +252,46 @@ export default function ReadingGroupsView({ isLoggedIn, onLogin, onGroupsChanged
           kind={sheet}
           onClose={() => setSheet(null)}
           onSubmit={(v) => onSubmitSheet(sheet, v)}
+          planName={newPlan.name}
+          onPickPlan={() => setPickerFor("create")}
+        />
+      )}
+
+      {/* 진도표 고르기 — 그룹을 만들 때와, 그룹의 진도표를 바꿀 때 같은 창을 쓴다 */}
+      {pickerFor !== null && (
+        <PlanPickerSheet
+          currentPlanId={
+            pickerFor === "create"
+              ? newPlan.id
+              : groups.find((g) => g.id === pickerFor)?.planId ?? ""
+          }
+          onPick={(plan) => {
+            const target = pickerFor;
+            setPickerFor(null);
+            if (target === "create") setNewPlan({ id: plan.planId, name: plan.name });
+            else if (typeof target === "number") void changeGroupPlan(target, plan);
+          }}
+          onClose={() => setPickerFor(null)}
+          onCreate={() => {
+            setPickerFor(null);
+            setBuilderOpen(true);
+          }}
+          onEdit={() => {
+            setPickerFor(null);
+            setBuilderOpen(true);
+          }}
+          onLogin={onLogin}
+        />
+      )}
+      {builderOpen && (
+        <PlanBuilderSheet
+          onClose={() => setBuilderOpen(false)}
+          onSaved={(plan) => {
+            setBuilderOpen(false);
+            // 만든 진도표를 곧바로 '만들 그룹' 의 진도표로 삼는다.
+            setNewPlan({ id: plan.planId, name: plan.name });
+            setNotice(`'${plan.name}' 을(를) 만들었습니다`);
+          }}
         />
       )}
     </>
@@ -233,6 +308,7 @@ function GroupCard({
   onCopy,
   onShare,
   onLeave,
+  onChangePlan,
 }: {
   group: ReadingGroup;
   rows: GroupStanding[] | undefined;
@@ -242,13 +318,16 @@ function GroupCard({
   onCopy: () => void;
   onShare: () => void;
   onLeave: () => void;
+  onChangePlan: () => void;
 }) {
+  // 회차 수는 **이 그룹의 진도표**에서 온다. 91 로 굳으면 막대가 100% 를 넘거나 완주가 안 뜬다.
+  const TOTAL = group.unitCount ?? 0;
   const n = rows?.length ?? group.memberCount;
   const avg =
     rows && rows.length > 0
       ? Math.round(rows.reduce((s, r) => s + r.doneCount, 0) / rows.length)
       : null;
-  const finished = rows ? rows.filter((r) => r.doneCount >= TOTAL).length : 0;
+  const finished = rows && TOTAL > 0 ? rows.filter((r) => r.doneCount >= TOTAL).length : 0;
 
   return (
     <div className="mt-2.5 px-3.5 py-3 rounded-xl border border-[var(--line)] bg-[var(--paper)]">
@@ -266,6 +345,15 @@ function GroupCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-7 z-20 min-w-[120px] rounded-lg border border-[var(--line)] bg-[var(--paper)] shadow-lg py-1">
+              {group.isOwner && (
+                <button
+                  type="button"
+                  onClick={onChangePlan}
+                  className="w-full text-left text-xs px-3 py-2 text-[var(--ink-soft)]"
+                >
+                  진도표 바꾸기
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onLeave}
@@ -277,6 +365,23 @@ function GroupCard({
           )}
         </div>
       </div>
+
+      {/* 이 그룹이 읽는 진도표(2026-09-20). 해제된 그룹은 다시 골라야 한다 */}
+      {group.planId ? (
+        <p className="text-[11px] text-[var(--ink-soft)] mt-0.5 truncate">
+          진도표 <b className="font-semibold">{group.planName ?? "알 수 없음"}</b>
+          {TOTAL > 0 ? ` · ${TOTAL}회차` : ""}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={group.isOwner ? onChangePlan : undefined}
+          className="mt-0.5 text-[11px] text-left text-[var(--amber-deep)] font-semibold"
+        >
+          진도표가 해제되었습니다 —{" "}
+          {group.isOwner ? "다시 고르기 ›" : "그룹을 만든 분이 다시 골라야 합니다"}
+        </button>
+      )}
 
       <div className="flex items-center justify-between gap-2 mt-1">
         <span className="text-[11px] text-[var(--ink-faint)]">
@@ -327,7 +432,9 @@ function GroupCard({
               <span className="h-1.5 rounded-full bg-[var(--line)] overflow-hidden">
                 <span
                   className="block h-full rounded-full bg-[var(--amber)]"
-                  style={{ width: `${Math.min(100, (r.doneCount / TOTAL) * 100).toFixed(1)}%` }}
+                  style={{
+                    width: `${TOTAL > 0 ? Math.min(100, (r.doneCount / TOTAL) * 100).toFixed(1) : 0}%`,
+                  }}
                 />
               </span>
               <span className="text-[11px] text-[var(--ink-soft)] text-right tabular-nums">
@@ -346,10 +453,15 @@ function InputSheet({
   kind,
   onClose,
   onSubmit,
+  planName,
+  onPickPlan,
 }: {
   kind: "join" | "create";
   onClose: () => void;
   onSubmit: (value: string) => Promise<string | null>;
+  /** 만들 때 고른 진도표 이름 — 그룹마다 다른 진도표를 읽을 수 있다(2026-09-20) */
+  planName?: string;
+  onPickPlan?: () => void;
 }) {
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -409,6 +521,17 @@ function InputSheet({
             isJoin ? "font-mono tracking-[3px] uppercase" : ""
           }`}
         />
+        {!isJoin && (
+          <button
+            type="button"
+            onClick={onPickPlan}
+            className="w-full mt-2 px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--paper-2)] flex items-center gap-1.5 text-left"
+          >
+            <span className="text-[10px] font-semibold text-[var(--ink-faint)] shrink-0">진도표</span>
+            <span className="text-[12.5px] font-semibold text-[var(--ink)] truncate">{planName}</span>
+            <span className="ml-auto text-[11px] font-semibold text-[var(--amber-deep)] shrink-0">고르기 ›</span>
+          </button>
+        )}
         {error && <p className="text-[11px] text-red-500 mt-2">{error}</p>}
         <button
           type="button"

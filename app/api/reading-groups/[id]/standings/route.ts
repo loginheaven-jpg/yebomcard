@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { readSession, groupStandings } from "@/lib/readingGroups";
+import { loadPlan } from "@/lib/readingPlans";
 
 export const dynamic = "force-dynamic";
 
@@ -40,14 +41,17 @@ export async function GET(
 
   const { data: group } = await supabaseAdmin
     .from("reading_groups")
-    .select("id, name, invite_code, created_by")
+    .select("id, name, invite_code, plan_id, created_by")
     .eq("id", groupId)
     .maybeSingle();
   if (!group) {
     return NextResponse.json({ error: "그룹을 찾지 못했습니다" }, { status: 404 });
   }
 
-  const rows = await groupStandings(groupId, Date.now());
+  // 이 그룹이 읽는 진도표로 센다(2026-09-20). 진도표가 **해제**된 그룹(지워진 진도표를 쓰던 그룹)은
+  // 회차를 셀 기준이 없다 — 빈 진도표로 계산해 완료 0 으로 두고, 화면이 "진도표를 고르세요" 를 띄운다.
+  const plan = (await loadPlan(group.plan_id)) ?? { id: group.plan_id ?? "none", name: "", units: [] };
+  const rows = await groupStandings(groupId, plan, Date.now());
   const myRank = rows.findIndex((r) => r.user_id === session.user_id);
 
   return NextResponse.json({
@@ -57,6 +61,9 @@ export async function GET(
       inviteCode: group.invite_code,
       memberCount: rows.length,
       isOwner: group.created_by === session.user_id,
+      planId: group.plan_id ?? null,
+      planName: plan.units.length > 0 ? plan.name : null,
+      unitCount: plan.units.length,
     },
     // 동점자는 같은 등수다 (1,1,3). 이름순은 같은 등수 안의 표시 순서일 뿐이다 —
     // 이름이 앞선다고 등수가 앞서면 순위가 이름 경쟁이 된다.

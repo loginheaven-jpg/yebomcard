@@ -9,11 +9,17 @@ import { cookies } from "next/headers";
 import { unsealData } from "iron-session";
 import { sessionOptions, SessionData } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { DEFAULT_PLAN_ID } from "@/lib/plans/registry";
 import { fetchAllRows } from "@/lib/supabasePaged";
-import { YEBOM91, computeUnitProgress } from "@/lib/plans/yebom91";
+import { computeUnitProgress } from "@/lib/plans/engine";
+import type { ReadingPlan } from "@/lib/plans/engine";
 import { CHAPTER_COUNTS } from "@/lib/books";
 
-export const PLAN_ID = "yebom91";
+/**
+  * 그룹을 만들 때 고르지 않으면 읽는 진도표(표준진도표).
+  * 예전에는 이 상수가 "유일한 진도표" 였다 — 지금은 **기본값일 뿐**이고, 그룹마다 다를 수 있다.
+  */
+export const PLAN_ID = DEFAULT_PLAN_ID;
 
 /** 그룹 라우트 4개가 공유하는 세션 판독 (다른 라우트들의 getSession 과 동일 동작) */
 export async function readSession(): Promise<SessionData | null> {
@@ -53,6 +59,11 @@ export interface GroupRow {
   id: number;
   name: string;
   invite_code: string;
+  /**
+   * 이 그룹이 읽는 진도표(2026-09-20). null 이면 **해제 상태** — 쓰던 진도표가 지워진 뒤다.
+   * 임의로 표준진도표로 돌리지 않는다(지휘부). 그룹이 다시 고른다.
+   */
+  plan_id: string | null;
   created_by: string;
   created_at: string;
 }
@@ -73,7 +84,7 @@ export async function myGroups(userId: string): Promise<GroupRow[]> {
   if (ids.length === 0) return [];
   const { data } = await supabaseAdmin
     .from("reading_groups")
-    .select("id, name, invite_code, created_by, created_at")
+    .select("id, name, invite_code, plan_id, created_by, created_at")
     .in("id", ids)
     .order("created_at");
   return (data || []) as GroupRow[];
@@ -97,7 +108,8 @@ export interface Standing {
 
 // 순위는 60초 캐시한다. 멤버 전원의 진도를 매번 읽는 조회라 화면을 열 때마다 돌 필요가 없다.
 // 지금 규모(1인 평균 28장)에서는 성능 문제가 아니지만, 통독이 진행되면 커진다.
-const standingsCache = new Map<number, { at: number; rows: Standing[] }>();
+// 키에 **진도표를 넣는다** — 그룹이 진도표를 바꾸면 옛 기준 순위가 60초 동안 남는다.
+const standingsCache = new Map<string, { at: number; rows: Standing[] }>();
 const CACHE_MS = 60_000;
 
 /**
@@ -107,8 +119,13 @@ const CACHE_MS = 60_000;
  * 갱신하므로 그것은 "마지막으로 연 시각"이고, 이미 읽은 장을 한 번 다시 열면 순위가 뒤집힌다.
  * 이름순은 단순하고 조작이 불가능하다.
  */
-export async function groupStandings(groupId: number, now: number): Promise<Standing[]> {
-  const hit = standingsCache.get(groupId);
+export async function groupStandings(
+  groupId: number,
+  plan: ReadingPlan,
+  now: number,
+): Promise<Standing[]> {
+  const key = `${groupId}:${plan.id}`;
+  const hit = standingsCache.get(key);
   if (hit && now - hit.at < CACHE_MS) return hit.rows;
 
   const members = await groupMembers(groupId);
@@ -130,7 +147,8 @@ export async function groupStandings(groupId: number, now: number): Promise<Stan
       .from("reading_unit_checks")
       .select("user_id, seq")
       .in("user_id", ids)
-      .eq("plan_id", PLAN_ID)
+      // **진도표별로 따로 센다** — 필터를 빠뜨리면 다른 진도표의 체크가 섞여 완료 수가 부푼다.
+      .eq("plan_id", plan.id)
       .order("id")
       .range(from, to),
   );
@@ -152,7 +170,7 @@ export async function groupStandings(groupId: number, now: number): Promise<Stan
 
   const rows: Standing[] = members.map((m) => {
     const rb = readBy.get(m.user_id) ?? {};
-    const p = computeUnitProgress(YEBOM91, rb, manualBy.get(m.user_id) ?? new Set());
+    const p = computeUnitProgress(plan, rb, manualBy.get(m.user_id) ?? new Set());
     return {
       user_id: m.user_id,
       user_name: m.user_name || "이름 없음",
@@ -164,11 +182,20 @@ export async function groupStandings(groupId: number, now: number): Promise<Stan
   rows.sort(
     (a, b) => b.doneCount - a.doneCount || a.user_name.localeCompare(b.user_name, "ko"),
   );
-  standingsCache.set(groupId, { at: now, rows });
+  standingsCache.set(key, { at: now, rows });
   return rows;
 }
 
-/** 그룹이 바뀌면(참여·탈퇴) 캐시를 버린다 */
-export function invalidateStandings(groupId: number): void {
-  standingsCache.delete(groupId);
+/**
+  * 캐시를 버린다. 그룹이 바뀌면(참여·탈퇴·진도표 교체) 그 그룹만,
+  * 진도표 자체가 바뀌면(회차 수정·삭제) 인자 없이 불러 **전부** 버린다.
+  */
+export function invalidateStandings(groupId?: number): void {
+  if (groupId === undefined) {
+    standingsCache.clear();
+    return;
+  }
+  for (const key of [...standingsCache.keys()]) {
+    if (key.startsWith(`${groupId}:`)) standingsCache.delete(key);
+  }
 }

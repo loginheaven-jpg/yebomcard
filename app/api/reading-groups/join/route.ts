@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { readSession, normalizeCode, invalidateStandings } from "@/lib/readingGroups";
+import { planLabels } from "@/lib/readingPlans";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const { data: group } = await supabaseAdmin
     .from("reading_groups")
-    .select("id, name, invite_code, created_by")
+    .select("id, name, invite_code, plan_id, created_by")
     .eq("invite_code", code)
     .maybeSingle();
 
@@ -71,6 +72,9 @@ export async function POST(request: NextRequest) {
       inviteCode: group.invite_code,
       memberCount: memberCount ?? 1,
       isOwner: group.created_by === session.user_id,
+      // 다른 진도표를 읽는 그룹에 들어가는 것을 교인이 알아야 한다.
+      planId: group.plan_id ?? null,
+      planName: (await planLabels([group.plan_id])).get(group.plan_id ?? "")?.name ?? null,
     },
     already: !!error,
   });
