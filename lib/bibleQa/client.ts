@@ -124,7 +124,9 @@ export async function setQaSaved(id: number, saved: boolean, shared = true): Pro
       // 내릴 때는 공유도 함께 내린다. 서버도 같은 판정을 하지만, 보내는 쪽 뜻이 분명해야 읽힌다.
       body: JSON.stringify({ id, saved, shared: saved ? shared : false }),
     });
-    return res.ok;
+    if (!res.ok) return false;
+    const result = await res.json();
+    return result.success === true && result.saved === saved && result.shared === (saved && shared);
   } catch {
     return false;
   }

@@ -65,6 +65,13 @@ export async function GET(request: NextRequest) {
   }
   out.tables = ready;
 
+  // 표가 있어도 공유 칸이 빠지면 공개 저장은 작동하지 않는다.
+  const { error: shareError } = await supabaseAdmin
+    .from("ai_questions")
+    .select("shared, shared_at, share_hidden_at, share_hidden_by")
+    .limit(1);
+  out.sharing = { ok: !shareError };
+
   // 목록이 심겼는가 — 이단 목록이 비면 답이 스스로 이단을 규정하려 든다(§9 를 지키는 장치가 목록이다)
   if (ready.qa_lists) {
     const { data: listRows } = await supabaseAdmin
@@ -123,7 +130,8 @@ export async function GET(request: NextRequest) {
   const okAll =
     (out.doctrine as { ok: boolean }).ok &&
     (out.gate as { ok: boolean }).ok &&
-    Object.values(ready).every(Boolean);
+    Object.values(ready).every(Boolean) &&
+    !shareError;
   out.ok = okAll;
 
   return NextResponse.json(out, {

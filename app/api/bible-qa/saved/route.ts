@@ -62,20 +62,24 @@ export async function POST(request: NextRequest) {
 
   // 위기·거절은 **공유하지 않는다.** 화면에는 저장 단추 자체가 없지만 여기서 한 번 더 막는다 —
   // 화면만 믿으면, 요청을 직접 만들어 보내는 길이 그대로 열려 있다.
-  let shared = wantShare;
+  const shared = wantShare;
   if (wantShare) {
-    const { data: row } = await supabaseAdmin
+    const { data: row, error: readError } = await supabaseAdmin
       .from("ai_questions")
       .select("is_crisis, gate_result")
       .eq("id", id)
       .eq("user_id", session.user_id)
       .maybeSingle();
+    if (readError) return NextResponse.json({ error: "질문을 확인하지 못했습니다" }, { status: 500 });
+    if (!row) return NextResponse.json({ error: "질문을 찾을 수 없습니다" }, { status: 404 });
     const r = row as { is_crisis: boolean; gate_result: string } | null;
-    if (r?.is_crisis || r?.gate_result === "crisis" || r?.gate_result === "deny") shared = false;
+    if (r?.is_crisis || r?.gate_result === "crisis" || r?.gate_result === "deny") {
+      return NextResponse.json({ error: "이 질문은 공개할 수 없습니다" }, { status: 409 });
+    }
   }
 
   // **반드시 user_id 로 스코프한다** — 남의 질문을 저장·해제하지 못하게.
-  const { error } = await supabaseAdmin
+  const { data: updated, error } = await supabaseAdmin
     .from("ai_questions")
     .update({
       saved,
@@ -84,19 +88,30 @@ export async function POST(request: NextRequest) {
       shared_at: shared ? new Date().toISOString() : null,
     })
     .eq("id", id)
-    .eq("user_id", session.user_id);
+    .eq("user_id", session.user_id)
+    .select("id")
+    .maybeSingle();
   if (error) {
-    // 표에 칸이 아직 없으면(마이그레이션 전) 공유 없이 저장만이라도 되게 한다.
+    // 공개 요청을 개인 저장으로 바꿔 성공 처리하면 화면이 공개됐다고 거짓 안내한다.
     if (isMissingShareColumn(error)) {
-      const { error: retry } = await supabaseAdmin
+      if (wantShare) {
+        return NextResponse.json({ error: "공개 저장을 준비 중입니다. 잠시 후 다시 시도해 주세요" }, { status: 503 });
+      }
+      const { data: retried, error: retry } = await supabaseAdmin
         .from("ai_questions")
         .update({ saved, saved_at: saved ? new Date().toISOString() : null })
         .eq("id", id)
-        .eq("user_id", session.user_id);
-      if (!retry) return NextResponse.json({ success: true, saved, shared: false });
+        .eq("user_id", session.user_id)
+        .select("id")
+        .maybeSingle();
+      if (!retry) {
+        if (!retried) return NextResponse.json({ error: "질문을 찾을 수 없습니다" }, { status: 404 });
+        return NextResponse.json({ success: true, saved, shared: false });
+      }
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!updated) return NextResponse.json({ error: "질문을 찾을 수 없습니다" }, { status: 404 });
   return NextResponse.json({ success: true, saved, shared });
 }
 
