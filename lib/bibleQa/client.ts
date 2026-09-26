@@ -32,7 +32,7 @@ export type QaResult =
       disclaimer: string;
       /** 서버가 정한 칸(§B-3-1) — 두 칸, 교리가 걸리면 세 칸 */
       columns: { column: ColumnKey; label: string }[];
-      /** Claude 가 더해졌을 때의 한 줄(없으면 null) */
+      /** Terra 가 더해졌을 때의 한 줄(없으면 null) */
       extended_note?: string | null;
     }
   | { kind: "refused"; id: number; message: string }
@@ -97,15 +97,28 @@ export async function answerColumn(
     elapsed_ms: 0,
   });
   try {
-    const res = await fetch("/api/bible-qa/answer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, column }),
-      signal,
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) return failed(json.error || `HTTP ${res.status}`);
-    return json as QaAnswer;
+    const deadline = Date.now() + 165_000;
+    while (Date.now() < deadline) {
+      const res = await fetch("/api/bible-qa/answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, column }),
+        signal,
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 202) {
+        await new Promise<void>((resolve, reject) => {
+          if (signal?.aborted) { reject(new Error("aborted")); return; }
+          const abort = () => { clearTimeout(timer); reject(new Error("aborted")); };
+          const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, 3000);
+          signal?.addEventListener("abort", abort, { once: true });
+        });
+        continue;
+      }
+      if (!res.ok) return failed(json.error || `HTTP ${res.status}`);
+      return json as QaAnswer;
+    }
+    return failed("답변을 기다리는 시간이 지났습니다. 잠시 뒤 다시 확인해 주세요.");
   } catch {
     return failed("연결이 끊겼습니다");
   }

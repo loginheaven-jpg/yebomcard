@@ -160,6 +160,8 @@ export function handoffUrl(column: string, text: string): string | null {
   const q = encodeURIComponent(short);
   switch (column) {
     case "chatgpt":
+    case "luna":
+    case "terra":
       return `https://chatgpt.com/?q=${q}`;
     case "claude":
       return `https://claude.ai/new?q=${q}`;
@@ -173,7 +175,7 @@ export function handoffUrl(column: string, text: string): string | null {
 
 /** 그 AI 가 주소로 질문을 받아 주는가 — 화면 안내 문구가 갈린다. */
 export function supportsPrefill(column: string): boolean {
-  return column === "chatgpt" || column === "claude";
+  return ["chatgpt", "luna", "terra", "claude"].includes(column);
 }
 
 /** 주소창에 다 못 싣고 앞부분만 채우는가 — 그러면 '전체는 붙여넣기' 를 안내해야 한다. */

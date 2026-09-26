@@ -1,19 +1,8 @@
-/**
- * 성경 질문 — 칸(모델) 정의와 답 받아 오기
- *
- * 화면은 Gemini · ChatGPT 두 칸(교리 질문이면 Claude 까지 세 칸)이고, 답을 합치지 않는다.
- * 그래서 **칸 라벨이 사실이어야 한다** — Gemini 칸에 Claude 답이 들어가면
- * "답이 갈리는 이유가 모델이 달라서" 라는 전제가 무너진다(docs/BIBLE_QA_DOCTRINE.md §B-4).
- *
- * 그 보장은 두 겹이다.
- *  1. `use_fallback: false` — 게이트웨이의 자동 대체를 끈다(2026-09-18 실측으로 실제 동작 확인).
- *  2. 응답의 **`model`** 이 그 칸의 것인지 대조 — 응답의 `provider` 로는 안 된다.
- *     그 필드는 계열명으로 정규화돼 와서(`gemini-flash` → `"gemini"`),
- *     정상 응답과 강등된 응답이 **같은 문자열**로 온다(같은 날 실측).
- */
+/** 성경 질문: 일반 Flash·Luna, 교리/어려운 해석 Flash·Luna·Terra.
+ * 과거 chatgpt·claude 키와 응답은 별도로 보존한다. */
 import { callAI } from "@/lib/aiGateway";
 
-export type ColumnKey = "gemini" | "chatgpt" | "claude";
+export type ColumnKey = "gemini" | "luna" | "terra" | "chatgpt" | "claude";
 
 export interface QaColumn {
   key: ColumnKey;
@@ -21,35 +10,41 @@ export interface QaColumn {
   label: string;
   /** 게이트웨이에 요청하는 별칭 */
   provider: string;
+  model?: string;
   /** 응답 `model` 이 이 가운데 하나로 시작해야 그 칸의 답으로 인정한다 */
   modelPrefixes: string[];
 }
 
-/**
- * 칸마다 게이트웨이 별칭을 부른다 — 모델은 게이트웨이가 정한다(2026-09-19: gemini-3.8-flash ·
- * gpt-5.6-terra · claude-sonnet-5). Gemini 칸은 6초 안에 답이 없으면 게이트웨이가 같은 Gemini 의
- * flash-lite 로 바꿔 부른다 — `model` 이 `gemini-` 로 시작하므로 라벨은 그대로 참이다.
- */
+/** 공용 게이트웨이 별칭은 그대로 두고 GPT 모델만 요청별로 지정한다. */
 export const QA_COLUMNS: QaColumn[] = [
-  { key: "gemini", label: "Gemini", provider: "gemini-flash", modelPrefixes: ["gemini-"] },
+  { key: "gemini", label: "Gemini Flash", provider: "gemini-flash", modelPrefixes: ["gemini-"] },
+  { key: "luna", label: "GPT Luna", provider: "chatgpt", model: "gpt-5.6-luna", modelPrefixes: ["gpt-5.6-luna"] },
+  { key: "terra", label: "GPT Terra", provider: "chatgpt", model: "gpt-5.6-terra", modelPrefixes: ["gpt-5.6-terra"] },
+];
+
+// 이미 저장된 질문·배포 전에 열어 둔 창의 키는 별도로 유지한다.
+const LEGACY_COLUMNS: QaColumn[] = [
   { key: "chatgpt", label: "ChatGPT", provider: "chatgpt", modelPrefixes: ["gpt-"] },
   { key: "claude", label: "Claude", provider: "claude-sonnet", modelPrefixes: ["claude-"] },
 ];
 
 export function columnOf(key: string): QaColumn | undefined {
-  return QA_COLUMNS.find((c) => c.key === key);
+  return [...QA_COLUMNS, ...LEGACY_COLUMNS].find((c) => c.key === key);
 }
 
-/**
- * **어느 칸이 답하는가 — 앱이 정한다**(지휘부 2026-09-19, docs/BIBLE_QA_DOCTRINE.md §B-3-1).
- * 교인은 AI 를 고르지 않는다. 늘 Gemini · ChatGPT 두 칸이 답하고, 교리가 걸린 질문(선별 `doctrine`,
- * 또는 선별이 실패해 모를 때)에는 Claude 를 더한다.
- *
- * 왜 Claude 를 늘 부르지 않나 — 세 칸을 가린 채 채점해 보니(질문 14개, 대결과 무관한 심사자)
- * 교리 질문에서도 세 모델이 비슷했고, Claude 는 한 답에 약 $0.04 로 다른 두 칸을 합친 값의 두 배가 넘는다.
- */
-export const BASE_COLUMNS: ColumnKey[] = ["gemini", "chatgpt"];
-export const DOCTRINE_COLUMNS: ColumnKey[] = ["gemini", "chatgpt", "claude"];
+/** 새 칸 이름을 과거 답변에 덮어쓰지 않는다. 응답 모델이 표시의 기준이다. */
+export function answerLabel(key: string, model?: string | null): string {
+  if (model?.startsWith("claude-")) return "Claude";
+  if (model?.startsWith("gpt-5.6-luna")) return "GPT Luna";
+  if (model?.startsWith("gpt-5.6-terra")) return "GPT Terra";
+  if (model?.startsWith("gpt-")) return "ChatGPT";
+  if (model?.startsWith("gemini-")) return "Gemini Flash";
+  return columnOf(key)?.label ?? key;
+}
+
+/** 교리·어려운 해석·선별 실패는 Terra까지 세 칸. */
+export const BASE_COLUMNS: ColumnKey[] = ["gemini", "luna"];
+export const DOCTRINE_COLUMNS: ColumnKey[] = ["gemini", "luna", "terra"];
 
 export function columnsFor(doctrine: boolean): ColumnKey[] {
   return doctrine ? DOCTRINE_COLUMNS : BASE_COLUMNS;
@@ -114,6 +109,7 @@ export async function askColumn(input: AskColumnInput): Promise<AnswerResult> {
   try {
     const res = await callAI([{ role: "user", content: input.question }], {
       provider: column.provider,
+      ...(column.model ? { model: column.model } : {}),
       system_prompt: input.systemPrompt,
       max_tokens: ANSWER_MAX_TOKENS,
       temperature: 0.7,

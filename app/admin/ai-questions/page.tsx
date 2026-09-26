@@ -1,5 +1,7 @@
 "use client";
 
+import { answerLabel } from "@/lib/bibleQa/columns";
+
 /**
  * 성경 질문 기록 — 수퍼어드민 화면
  *
@@ -60,11 +62,7 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "reported", label: "신고된 답" },
 ];
 
-const COLUMN_LABEL: Record<string, string> = {
-  gemini: "Gemini",
-  chatgpt: "ChatGPT",
-  claude: "Claude",
-};
+
 
 function fmt(ts: string): string {
   const d = new Date(ts);
@@ -332,7 +330,7 @@ export default function AdminAiQuestionsPage() {
                         <div key={a.column_key}>
                           <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] text-gray-400 mb-0.5">
                             <b className="text-gray-600 dark:text-gray-300">
-                              {COLUMN_LABEL[a.column_key] ?? a.column_key}
+                              {answerLabel(a.column_key, a.model)}
                             </b>
                             <span>{a.model || a.provider_alias}</span>
                             {a.elapsed_ms != null && <span>{(a.elapsed_ms / 1000).toFixed(1)}초</span>}

@@ -48,6 +48,7 @@ function describeGatewayError(body: unknown): string {
 
 export interface CallAIOptions {
   provider?: string;
+  model?: string;
   system_prompt?: string;
   max_tokens?: number;
   temperature?: number;

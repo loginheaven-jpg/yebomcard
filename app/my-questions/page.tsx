@@ -1,5 +1,7 @@
 "use client";
 
+import { answerLabel } from "@/lib/bibleQa/columns";
+
 /**
  * 나의 질문 (§B-14, 지휘부 2026-09-21)
  *
@@ -203,11 +205,11 @@ export default function MyQuestionsPage() {
                   ) : (
                     answers.map((a) => (
                       <div
-                        key={a.column_key}
+                        key={answerLabel(a.column_key, a.model)}
                         className="rounded-lg bg-[var(--paper-2)] dark:bg-gray-900 px-3 py-2"
                       >
                         <div className="text-[11px] font-semibold text-[var(--ink-faint)] mb-1">
-                          {a.column_key}
+                          {answerLabel(a.column_key, a.model)}
                           {a.model ? ` · ${a.model}` : ""}
                         </div>
                         <p className="text-[12.5px] leading-relaxed text-[var(--ink-soft)] dark:text-gray-300 whitespace-pre-wrap break-words">

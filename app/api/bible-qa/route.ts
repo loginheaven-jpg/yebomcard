@@ -10,7 +10,7 @@
  * 선별이 끝나야 모델을 부른다는 규칙(§A — crisis 면 모델을 부르지 않는다)은 그대로다.
  *
  * **어느 칸이 답할지는 이 라우트가 정한다**(지휘부 2026-09-19, §B-3-1). 교인은 AI 를 고르지 않는다 —
- * 선별이 `basic` 이면 Gemini · ChatGPT, `doctrine` 이거나 선별이 실패했으면 Claude 까지.
+ * 선별이 `basic` 이면 Gemini · ChatGPT, `doctrine` 이거나 선별이 실패했으면 Terra 까지.
  * 요청에 `columns` 가 실려 와도(옛 화면) 따르지 않는다.
  *
  * 설교 카드도 이 라우트가 하지 않는다 — 별도 GET(`/api/bible-qa/sermons`)이다.
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
   const housechurch = shouldCallModels(verdict)
     ? needsHouseChurch(question, lifeStudyNames(lists.rows))
     : false;
-  // 어느 칸이 답할지 — 교리가 걸렸으면(또는 선별이 실패해 모르면) Claude 까지(§B-3-1).
+  // 어느 칸이 답할지 — 교리가 걸렸으면(또는 선별이 실패해 모르면) Terra 까지(§B-3-1).
   const extended = wantsDoctrineColumns(verdict, gate.kind);
   const columns = columnsFor(extended);
   // 이제 늘 두 칸 이상이다. 기록의 mode 는 옛 값('chorus')을 그대로 쓴다(관리자 화면과 같은 값).
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
       column: key,
       label: QA_COLUMNS.find((c) => c.key === key)?.label ?? key,
     })),
-    // Claude 가 더해졌으면 화면이 왜 칸이 셋인지 한 줄로 알린다
+    // Terra 가 더해졌으면 화면이 왜 칸이 셋인지 한 줄로 알린다
     extended_note: extended ? EXTENDED_NOTE : null,
     disclaimer: DISCLAIMER,
   });

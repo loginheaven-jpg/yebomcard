@@ -1,5 +1,7 @@
 "use client";
 
+import { answerLabel } from "@/lib/bibleQa/columns";
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { BOOKS, CHAPTER_COUNTS, OLD_TESTAMENT, NEW_TESTAMENT, getBookByCode, getBookByName, bookBarName } from "@/lib/books";
@@ -488,11 +490,7 @@ export default function SearchPanel({
                       .map((a) => (
                         <div key={a.column_key}>
                           <div className="text-[10px] font-bold text-violet-500/80 mb-0.5">
-                            {a.column_key === "gemini"
-                              ? "Gemini"
-                              : a.column_key === "chatgpt"
-                                ? "ChatGPT"
-                                : "Claude"}
+                            {answerLabel(a.column_key, a.model)}
                           </div>
                           <div className="whitespace-pre-wrap break-words text-[12.5px] text-gray-700 dark:text-gray-300">
                             {a.content}

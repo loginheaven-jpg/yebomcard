@@ -12,8 +12,8 @@ export const DISCLAIMER =
 /** §B-3 여러 답이 갈릴 때. 이제 늘 두 칸 이상이 답한다(§B-3-1) — '세 답' 이 아니라 '답'. */
 export const DIVERGENCE_NOTE = "답이 갈리는 대목이 바로 목회자와 나눌 자리입니다.";
 
-/** §B-3-1 교리가 걸려 Claude 가 더해졌을 때 — 칸이 왜 셋인지 알린다. */
-export const EXTENDED_NOTE = "교리가 걸린 질문이라 세 AI 가 함께 답합니다.";
+/** §B-3-1 교리가 걸려 Terra 가 더해졌을 때 — 칸이 왜 셋인지 알린다. */
+export const EXTENDED_NOTE = "교리나 깊은 해석이 필요한 질문이라 세 모델이 함께 답합니다.";
 
 /** §B-7 주의 한 줄(지휘부 2026-09-19). 입력창 아래, 외부 전송 고지 위 — 묻기 전에 읽게 한다. */
 export const CAUTION_NOTICE =

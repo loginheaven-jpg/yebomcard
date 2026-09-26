@@ -63,9 +63,13 @@
 - 상세: [docs/IA_5TAB.md](docs/IA_5TAB.md)
 
 ### 성경 질문 (2026-09-18)
+- **2026-09-27 모델 구성 우선 규칙**: 일반 = Gemini Flash·GPT Luna(`gemini,luna`), 교리·어려운 해석·선별 실패 = Flash·Luna·GPT Terra(`gemini,luna,terra`). GPT는 `chatgpt` 별칭 + 요청별 `gpt-5.6-luna`/`gpt-5.6-terra` 모델 지정. 공용 게이트웨이 별칭 변경 금지. 옛 `chatgpt`·`claude` 답변/신고는 유지하고 `answerLabel(key,model)`로 실제 모델을 표시한다.
+- **답변 중복 호출 방지**: `ai_question_answers` UNIQUE로 호출 전에 `ANSWER_PENDING` 선점. 중복은 202 + 3초 재확인, 150초 임대 후 조건부 회수. 새 테이블 불필요. 선별 `doctrine`은 원어 논쟁·모순/조화·과학과 신앙까지 포함.
+- **사진 검색어·색상 배경은 AI 없음**: 정적 키워드 매핑·`lib/gradientBackgrounds.ts`. 이미지 생성 자체는 기존 게이트웨이 사용.
+
 - 절을 고르고 **질문**을 누르면 열리는 창(`BibleQaSheet`). **로그인 전용.** **AI 를 고르지 않는다**(지휘부 2026-09-19) —
-  '묻기' 하나이고 **서버가 선별 결과로 칸을 정한다**: 늘 Gemini · ChatGPT 두 칸, 교리가 걸린 질문(선별 `doctrine`,
-  또는 선별 실패)이면 Claude 까지 세 칸(`columnsFor` · `wantsDoctrineColumns`, 교리 기준 §B-3-1). 입력창 아래 주의 한 줄
+  '묻기' 하나이고 **서버가 선별 결과로 칸을 정한다**: 늘 Gemini Flash · GPT Luna 두 칸, 교리·어려운 질문(선별 `doctrine`,
+  또는 선별 실패)이면 GPT Terra 까지 세 칸(`columnsFor` · `wantsDoctrineColumns`, 교리 기준 §B-3-1). 입력창 아래 주의 한 줄
   (`CAUTION_NOTICE`). **앱은 한 번만 답한다** — 이어서 묻고 싶으면 그 AI 로 넘긴다(ChatGPT·Claude 는 주소로, Gemini 는 클립보드)
 - **모델 비교(2026-09-19, 가린 채점)**: 세 칸끼리는 교리 질문에서도 비슷하다 → Claude(한 답 약 $0.04)는 교리 질문에만.
   Mistral Large 3 · DeepSeek 은 재 보았으나 넣지 않았다(`plan.md`)

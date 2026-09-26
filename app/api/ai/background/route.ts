@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callImage, callAI } from "@/lib/aiGateway";
+import { callImage } from "@/lib/aiGateway";
+import { gradientBackgrounds } from "@/lib/gradientBackgrounds";
 import { rateLimit } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (mode === "gradient") {
+      return NextResponse.json({ type: "gradient", backgrounds: gradientBackgrounds(verseText), provider: "local" });
+    }
     const kw = keywords.length > 0 ? keywords.join(", ") : "peaceful";
 
     // ─── 이미지 생성 ───
@@ -70,38 +74,10 @@ export async function POST(request: NextRequest) {
       console.error("Image generation failed, falling back to gradient:", imageError);
     }
 
-    // ─── Gradient fallback ───
-    const result = await callAI(
-      [
-        {
-          role: "user",
-          content: `"${verseText}" 말씀에 어울리는 CSS gradient 배경 2개. ${kw ? `키워드:${kw}.` : ""} JSON만:
-[{"name":"이름","gradient":"linear-gradient(...)","textColor":"white"}]
-textColor: white 또는 dark. 설명 금지.`,
-        },
-      ],
-      {
-        provider: "gemini-flash",
-        max_tokens: 4096,
-        temperature: 0.8,
-        caller: "yebom-card:background",
-      }
-    );
-
-    const content = result.content.trim();
-    const backgrounds = parsePartialJsonArray(content);
-
-    if (backgrounds.length === 0) {
-      return NextResponse.json(
-        { error: "배경 생성 실패" },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       type: "gradient",
-      backgrounds,
-      provider: result.provider,
+      backgrounds: gradientBackgrounds(verseText),
+      provider: "local",
     });
   } catch (error) {
     const message =
@@ -110,44 +86,5 @@ textColor: white 또는 dark. 설명 금지.`,
       { error: `배경 생성 실패: ${message}` },
       { status: 500 }
     );
-  }
-}
-
-function parsePartialJsonArray(
-  raw: string
-): { name: string; gradient: string; textColor: string }[] {
-  const fullMatch = raw.match(/\[[\s\S]*\]/);
-  if (fullMatch) {
-    try {
-      return JSON.parse(fullMatch[0]);
-    } catch {
-      // fall through
-    }
-  }
-
-  const startIdx = raw.indexOf("[");
-  if (startIdx === -1) return [];
-
-  let jsonStr = raw.slice(startIdx);
-  const lastBrace = jsonStr.lastIndexOf("}");
-  if (lastBrace === -1) return [];
-
-  jsonStr = jsonStr.slice(0, lastBrace + 1) + "]";
-
-  try {
-    return JSON.parse(jsonStr);
-  } catch {
-    const objRegex =
-      /\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"gradient"\s*:\s*"([^"]+)"\s*,\s*"textColor"\s*:\s*"([^"]+)"[^}]*\}/g;
-    const results: { name: string; gradient: string; textColor: string }[] = [];
-    let match;
-    while ((match = objRegex.exec(raw)) !== null) {
-      results.push({
-        name: match[1],
-        gradient: match[2],
-        textColor: match[3],
-      });
-    }
-    return results;
   }
 }

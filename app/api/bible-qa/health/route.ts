@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
       key: c.key,
       label: c.label,
       provider: c.provider,
+      model: c.model ?? null,
       expects: c.modelPrefixes,
     })),
   };

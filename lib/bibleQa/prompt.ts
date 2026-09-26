@@ -19,7 +19,7 @@ import path from "path";
  *  - v2 — 마지막 줄을 '목회자와 나눠 볼 질문' → '더 깊은 묵상' 으로. 교인이 스스로 묵상하거나
  *         목장에서 나눌 수 있는 물음으로 바꿨다(지휘부 2026-09-18)
  */
-export const PROMPT_VERSION = "v2";
+export const PROMPT_VERSION = "v3"; // 어려운 해석의 선별 기준 확장(2026-09-27)
 
 const DOCTRINE_FILE = "docs/BIBLE_QA_DOCTRINE.md";
 const DOCTRINE_START = "<!-- 프롬프트 시작 -->";

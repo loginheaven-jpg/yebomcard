@@ -13,7 +13,7 @@
  *  - §B-9 답에 나온 구절의 본문은 앱이 붙인다(서버가 확인해 보내 준다)
  *
  * **AI 를 고르지 않는다**(지휘부 2026-09-19, §B-3-1). '묻기' 하나만 있고, 서버가 선별 결과로 칸을 정한다 —
- * 늘 Gemini · ChatGPT 두 칸, 교리가 걸린 질문이면 Claude 까지 세 칸. (예전에는 AI 단추 넷 — Gemini ·
+ * 늘 Gemini Flash · GPT Luna 두 칸, 교리가 걸린 질문이면 Terra 까지 세 칸. (예전에는 AI 단추 넷 — Gemini ·
  * ChatGPT · Claude · 합창 — 이 곧 '묻기' 였고 마지막에 고른 것을 기억했다.)
  * 화면은 폰에서 위에서 아래로 카드, PC 에서 좌우로 칸(지휘부 2026-09-18).
  * **앱은 한 번만 답한다** — 이어서 묻고 싶으면 그 AI 로 넘긴다.
@@ -23,7 +23,7 @@ import { useHardwareBack } from "@/hooks/useHardwareBack";
 import { useQaVoiceInput } from "@/hooks/useQaVoiceInput";
 import { stripNotes, type BibleVerse } from "@/lib/types";
 import { getVersionLabel } from "@/lib/versions";
-import { QA_COLUMNS, type ColumnKey } from "@/lib/bibleQa/columns";
+import { columnOf, answerLabel, type ColumnKey } from "@/lib/bibleQa/columns";
 import {
   AUTO_SEND_SECONDS,
   CAUTION_NOTICE,
@@ -73,10 +73,10 @@ const SHARED_SHOW = 5;
 
 /** 저장해 둔 답을 카드가 읽는 꼴로 */
 function savedToAnswer(a: SavedQa["ai_question_answers"][number]): QaAnswer {
-  const col = QA_COLUMNS.find((c) => c.key === a.column_key);
+  const col = columnOf(a.column_key);
   return {
     column: (col?.key ?? "gemini") as ColumnKey,
-    label: col?.label ?? a.column_key,
+    label: answerLabel(a.column_key, a.model),
     ok: a.ok,
     content: a.content,
     model: a.model,
@@ -749,7 +749,7 @@ export default function BibleQaSheet({ verses, version, onClose, onSaved }: Prop
             <>
               {isChorus && (
                 <p className="mb-2.5 text-[11.5px] text-center text-gray-500 dark:text-gray-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg py-1.5 px-2">
-                  {/* Claude 가 더해졌으면 왜 칸이 셋인지 먼저 알린다(§B-3-1) */}
+                  {/* Terra 가 더해졌으면 왜 칸이 셋인지 먼저 알린다(§B-3-1) */}
                   {answered.extended_note ? (
                     <>
                       {answered.extended_note}

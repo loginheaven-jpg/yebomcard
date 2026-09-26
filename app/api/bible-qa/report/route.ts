@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
 import { unsealData } from "iron-session";
 import { sessionOptions, SessionData } from "@/lib/auth/session";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { QA_COLUMNS } from "@/lib/bibleQa/columns";
+import { columnOf } from "@/lib/bibleQa/columns";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(questionId) || questionId <= 0) {
     return NextResponse.json({ error: "유효한 question_id가 필요합니다" }, { status: 400 });
   }
-  if (!QA_COLUMNS.some((c) => c.key === column)) {
+  if (!columnOf(column)) {
     return NextResponse.json({ error: "유효한 column이 필요합니다" }, { status: 400 });
   }
 

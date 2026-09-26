@@ -25,7 +25,7 @@ import { rateLimit } from "@/lib/rateLimit";
 import { getVersionLabel } from "@/lib/versions";
 import { stripNotes, type BibleVersion } from "@/lib/types";
 import { buildAnswerPrompt, type QaListRow } from "@/lib/bibleQa/prompt";
-import { askColumn, columnOf } from "@/lib/bibleQa/columns";
+import { askColumn, columnOf, answerLabel } from "@/lib/bibleQa/columns";
 import { extractRefs, stripMissingRefs, verifyRefs } from "@/lib/bibleQa/verseRefs";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +41,12 @@ const COLUMN_TIMEOUT_MS = 100_000;
 
 /** 답 아래에 본문을 붙이는 구절 수(교리 기준 §4 — 한 답에 세 개까지). */
 const MAX_ATTACHED_REFS = 3;
+const PENDING = "ANSWER_PENDING";
+// 플랫폼 실행 상한보다 길어야 진행 중인 호출의 권한을 빼앗지 않는다.
+const LEASE_MS = 150_000;
+const pendingResponse = () => NextResponse.json({ pending: true }, {
+  status: 202, headers: { "Retry-After": "3" },
+});
 
 async function getSession(): Promise<SessionData | null> {
   try {
@@ -58,8 +64,6 @@ async function getSession(): Promise<SessionData | null> {
 
 export async function POST(request: NextRequest) {
   // 칸 하나 = AI 호출 하나. 질문 상한(20회/10분)에 세 칸을 곱한 값이다.
-  const limited = rateLimit(request, "bible-qa-answer", 60, 10 * 60_000);
-  if (limited) return limited;
 
   const session = await getSession();
   if (!session) {
@@ -96,16 +100,17 @@ export async function POST(request: NextRequest) {
   }
 
   // 이미 만든 칸이면 그대로 돌려준다(새로고침·두 번 누름). 다시 부르지 않는다.
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: existingError } = await supabaseAdmin
     .from("ai_question_answers")
-    .select("column_key, model, ok, content, error, elapsed_ms")
+    .select("column_key, model, ok, content, error, elapsed_ms, created_at")
     .eq("question_id", questionId)
     .eq("column_key", column.key)
     .maybeSingle();
-  if (existing) {
+  if (existingError) return NextResponse.json({ error: "답변 기록을 확인하지 못했습니다" }, { status: 503 });
+  if (existing && existing.error !== PENDING) {
     return NextResponse.json({
       column: column.key,
-      label: column.label,
+      label: answerLabel(column.key, existing.model),
       ok: existing.ok,
       content: existing.content,
       model: existing.model,
@@ -116,97 +121,125 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // ── 프롬프트 — 1단계가 남긴 질문 행으로 다시 조립한다 ────────────────
-  // 본문은 서버가 DB 에서 가져온다(클라이언트 글을 프롬프트에 넣지 않는다).
-  const version = (q.version || "rnksv") as BibleVersion;
-  const lastVerse = q.verse_end ?? q.verse_start;
-  const [{ data: verseRows }, { data: listRows }] = await Promise.all([
-    supabaseAdmin
-      .from("bible_verses")
-      .select("verse, text")
-      .eq("version", version)
-      .eq("book_code", q.book_code)
-      .eq("chapter", q.chapter)
-      .gte("verse", q.verse_start)
-      .lte("verse", lastVerse)
-      .order("verse"),
-    supabaseAdmin
-      .from("qa_lists")
-      .select("kind, title, body, sort_order")
-      .eq("enabled", true),
-  ]);
-  const versesText = (verseRows ?? [])
-    .map((v) => `${v.verse} ${stripNotes(v.text ?? "")}`)
-    .join("\n");
+  if (existing && Date.now() - Date.parse(existing.created_at) < LEASE_MS) return pendingResponse();
+  const limited = rateLimit(request, "bible-qa-answer", 60, 10 * 60_000);
+  if (limited) return limited;
+  const lease = new Date().toISOString();
+  if (existing) {
+    // 중단된 요청만 원래 임대 시각과 비교해 한 요청이 회수한다.
+    const { data: reclaimed, error } = await supabaseAdmin.from("ai_question_answers")
+      .update({ created_at: lease })
+      .eq("question_id", questionId).eq("column_key", column.key)
+      .eq("error", PENDING).eq("created_at", existing.created_at).select("id").maybeSingle();
+    if (error) return NextResponse.json({ error: "답변을 준비하지 못했습니다" }, { status: 503 });
+    if (!reclaimed) return pendingResponse();
+  } else {
+    // 기존 UNIQUE(question_id, column_key)로 여러 서버에서도 한 번만 호출한다.
+    const { error } = await supabaseAdmin.from("ai_question_answers").insert({
+      question_id: questionId, column_key: column.key, provider_alias: column.provider,
+      ok: false, error: PENDING, created_at: lease,
+    });
+    if (error?.code === "23505") return pendingResponse();
+    if (error) return NextResponse.json({ error: "답변을 준비하지 못했습니다" }, { status: 503 });
+  }
 
-  const built = await buildAnswerPrompt({
-    versesRef: q.verses_ref ?? "",
-    versesText,
-    versionName: getVersionLabel(version),
-    question: q.question,
-    lists: (listRows ?? []) as QaListRow[],
-  });
+  try {
 
-  // ── 답 ─────────────────────────────────────────────────────────
-  const answer = await askColumn({
-    column,
-    systemPrompt: built.systemPrompt,
-    question: q.question,
-    useCache: !retry,
-    timeoutMs: COLUMN_TIMEOUT_MS,
-  });
+    // ── 프롬프트 — 1단계가 남긴 질문 행으로 다시 조립한다 ────────────────
+    // 본문은 서버가 DB 에서 가져온다(클라이언트 글을 프롬프트에 넣지 않는다).
+    const version = (q.version || "rnksv") as BibleVersion;
+    const lastVerse = q.verse_end ?? q.verse_start;
+    const [{ data: verseRows }, { data: listRows }] = await Promise.all([
+      supabaseAdmin
+        .from("bible_verses")
+        .select("verse, text")
+        .eq("version", version)
+        .eq("book_code", q.book_code)
+        .eq("chapter", q.chapter)
+        .gte("verse", q.verse_start)
+        .lte("verse", lastVerse)
+        .order("verse"),
+      supabaseAdmin
+        .from("qa_lists")
+        .select("kind, title, body, sort_order")
+        .eq("enabled", true).order("kind").order("sort_order").order("title"),
+    ]);
+    const versesText = (verseRows ?? [])
+      .map((v) => `${v.verse} ${stripNotes(v.text ?? "")}`)
+      .join("\n");
 
-  // ── 구절 검증과 본문 붙이기 (§B-5 · §B-9) ─────────────────────────
-  let shownContent = answer.content;
-  let refs: { ref: string; text: string }[] = [];
-  let removed: string[] = [];
-  if (answer.ok && answer.content) {
-    const found = extractRefs(answer.content);
-    if (found.length > 0) {
-      const { resolved, missing } = await verifyRefs(found, version);
-      if (missing.length > 0) shownContent = stripMissingRefs(answer.content, missing);
-      // 없는 구절 지우기(§B-5)는 **전부** 검사하고, 본문을 붙이는 것(§B-9)은 **앞의 셋까지만**.
-      // 교리 기준 §4 가 "한 답에 세 개까지" 인데 모델이 어긴다 — 2026-09-18 비교 측정에서
-      // ChatGPT 가 한 답에 6개를 달았고, 앱이 여섯 본문을 다 붙여 카드가 답보다 길어졌다.
-      refs = resolved.slice(0, MAX_ATTACHED_REFS).map((r) => ({
-        ref:
-          r.verseEnd > r.verseStart
-            ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`
-            : `${r.bookName} ${r.chapter}:${r.verseStart}`,
-        text: r.text,
-      }));
-      removed = missing.map((r) => r.raw);
+    const built = await buildAnswerPrompt({
+      versesRef: q.verses_ref ?? "",
+      versesText,
+      versionName: getVersionLabel(version),
+      question: q.question,
+      lists: (listRows ?? []) as QaListRow[],
+    });
+
+    // ── 답 ─────────────────────────────────────────────────────────
+    const answer = await askColumn({
+      column,
+      systemPrompt: built.systemPrompt,
+      question: q.question,
+      useCache: !retry,
+      timeoutMs: COLUMN_TIMEOUT_MS,
+    });
+
+    // ── 구절 검증과 본문 붙이기 (§B-5 · §B-9) ─────────────────────────
+    let shownContent = answer.content;
+    let refs: { ref: string; text: string }[] = [];
+    let removed: string[] = [];
+    if (answer.ok && answer.content) {
+      const found = extractRefs(answer.content);
+      if (found.length > 0) {
+        const { resolved, missing } = await verifyRefs(found, version);
+        if (missing.length > 0) shownContent = stripMissingRefs(answer.content, missing);
+        // 없는 구절 지우기(§B-5)는 **전부** 검사하고, 본문을 붙이는 것(§B-9)은 **앞의 셋까지만**.
+        // 교리 기준 §4 가 "한 답에 세 개까지" 인데 모델이 어긴다 — 2026-09-18 비교 측정에서
+        // ChatGPT 가 한 답에 6개를 달았고, 앱이 여섯 본문을 다 붙여 카드가 답보다 길어졌다.
+        refs = resolved.slice(0, MAX_ATTACHED_REFS).map((r) => ({
+          ref:
+            r.verseEnd > r.verseStart
+              ? `${r.bookName} ${r.chapter}:${r.verseStart}-${r.verseEnd}`
+              : `${r.bookName} ${r.chapter}:${r.verseStart}`,
+          text: r.text,
+        }));
+        removed = missing.map((r) => r.raw);
+      }
     }
-  }
 
-  // ── 기록 — 모델이 실제로 준 글을 그대로 남긴다 ─────────────────────
-  const { error: saveError } = await supabaseAdmin.from("ai_question_answers").insert({
-    question_id: questionId,
-    column_key: column.key,
-    provider_alias: answer.providerAlias,
-    model: answer.model,
-    ok: answer.ok,
-    content: answer.content,
-    removed_refs: removed.length > 0 ? removed : null,
-    error: answer.error,
-    input_tokens: answer.inputTokens,
-    output_tokens: answer.outputTokens,
-    elapsed_ms: answer.elapsedMs,
-  });
-  // 같은 칸이 동시에 두 번 들어오면 UNIQUE 가 막는다(23505) — 답은 그대로 돌려준다.
-  if (saveError && saveError.code !== "23505") {
-    console.error("[bible-qa/answer] 기록 실패", questionId, column.key, saveError.message);
-  }
+    // ── 기록 — 모델이 실제로 준 글을 그대로 남긴다 ─────────────────────
+    const { error: saveError } = await supabaseAdmin.from("ai_question_answers").update({
+      question_id: questionId,
+      column_key: column.key,
+      provider_alias: answer.providerAlias,
+      model: answer.model,
+      ok: answer.ok,
+      content: answer.content,
+      removed_refs: removed.length > 0 ? removed : null,
+      error: answer.error,
+      input_tokens: answer.inputTokens,
+      output_tokens: answer.outputTokens,
+      elapsed_ms: answer.elapsedMs,
+    }).eq("question_id", questionId).eq("column_key", column.key).eq("created_at", lease);
+    if (saveError) throw new Error("답변을 저장하지 못했습니다");
 
-  return NextResponse.json({
-    column: column.key,
-    label: column.label,
-    ok: answer.ok,
-    content: shownContent,
-    // 화면 라벨의 진실은 model 뿐이다(응답 provider 는 계열명으로 정규화돼 온다).
-    model: answer.model,
-    error: answer.ok ? null : answer.error,
-    elapsed_ms: answer.elapsedMs,
-    refs,
-  });
+    return NextResponse.json({
+      column: column.key,
+      label: answerLabel(column.key, answer.model),
+      ok: answer.ok,
+      content: shownContent,
+      // 화면 라벨의 진실은 model 뿐이다(응답 provider 는 계열명으로 정규화돼 온다).
+      model: answer.model,
+      error: answer.ok ? null : answer.error,
+      elapsed_ms: answer.elapsedMs,
+      refs,
+    });
+  } catch (error) {
+    console.error("[bible-qa/answer] 처리 실패", questionId, column.key, error);
+    await supabaseAdmin.from("ai_question_answers")
+      .update({ ok: false, error: "ANSWER_FAILED" })
+      .eq("question_id", questionId).eq("column_key", column.key).eq("created_at", lease);
+    return NextResponse.json({ error: "답변을 처리하지 못했습니다. 다시 질문해 주세요." }, { status: 500 });
+  }
 }
